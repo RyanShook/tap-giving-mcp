@@ -29,6 +29,6 @@ The server will be publicly reachable on the open web: any agent, anywhere, can 
 
 ## Status
 
-Spec and tool contracts land today, Friday November 6, 2026. V1 goes live by end of Saturday, November 7, 2026.
+Spec and tool contracts land today, Friday November 6, 2026, and v1 is being built, deployed, and run through its acceptance today, Friday November 6, 2026.
 
 SPEC PENDING: the full spec and tool contracts are being finalized today and will be committed to this repo as they land.
