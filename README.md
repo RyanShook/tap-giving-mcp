@@ -11,7 +11,9 @@ invoice link a person pays.
   returns a short self-description for people and agents.
 - **Spec:** the published design and tool contracts live in
   [docs/spec.md](docs/spec.md). The server is built and accepted
-  against it.
+  on every leg except the invoice legs, which wait on the Stripe
+  test key and the field-for-field parity check; live-mode invoice
+  minting is refused until parity passes.
 - **This repo stays clean:** README, the published spec, and the
   released server code. Working notes and anything touching private
   business operations live elsewhere by design.

@@ -291,3 +291,63 @@ test("writes without a key are unauthorized; garbage keys are unauthorized", asy
   await assert.rejects(() => runTool(env, req("tg_test_nope_short"), "get_order_questions", {}, fetchFn),
     (e: Error & { code?: string }) => e.code === "unauthorized");
 });
+
+// ─── parity gate: live-mode request_invoice refusal ─────────────────
+
+const LIVE_KEY = `tg_live_live-org-church_${"C".repeat(43)}`;
+
+async function seedLiveKey(keys: MemoryKV): Promise<void> {
+  const now = new Date().toISOString();
+  const rec: KeyRecord = {
+    orgSlug: "live-org-church", orgName: "live-org-church", contactEmail: "live@example.com",
+    mode: "live", scopes: ["orders"], status: "active", createdAt: now,
+    issuedTo: "live@example.com", issuedBy: "test", issuedAt: now,
+  };
+  await keys.put(`KEYHASH:${await sha256Hex(LIVE_KEY)}`, JSON.stringify(rec));
+}
+
+test("request_invoice refuses a live-mode key (invoice_parity_pending) before any fetch or Stripe call", async () => {
+  const { env, keys } = await makeEnv();
+  await seedLiveKey(keys);
+  // Even with a live Stripe secret configured, the refusal fires first.
+  (env as unknown as Record<string, unknown>).STRIPE_API_KEY_LIVE = "sk_live_stub";
+  const calls: Array<{ url: string; body?: string }> = [];
+  await assert.rejects(
+    () => runTool(env, req(LIVE_KEY), "request_invoice", { orderRef: "mcp:live-org-church:abc123", idempotencyKey: "live-invoice-0001" }, stubFetch(calls) as typeof fetch),
+    (e: unknown) => {
+      assert.equal((e as { code?: string }).code, "invoice_parity_pending");
+      assert.match((e as Error).message, /parity check passes/);
+      return true;
+    },
+  );
+  assert.equal(calls.length, 0, "no fetch of any kind: no Stripe call, no door call");
+});
+
+test("request_invoice in test mode still stops at stripe_unavailable while no test secret is set", async () => {
+  const { env } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  const fetchFn = stubFetch(calls) as typeof fetch;
+  const sha = await pngSha();
+  const art = await runTool(env, req(TEST_KEY), "submit_artwork", {
+    file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
+  }, fetchFn);
+  const recapArgs = {
+    quantity: 250, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
+    artworkRef: art.structured.artworkRef as string, contactEmail: "mcp-acceptance@example.com",
+  };
+  const recap = await runTool(env, req(TEST_KEY), "get_recap", recapArgs, fetchFn);
+  const order = await runTool(env, req(TEST_KEY), "create_order", {
+    ...recapArgs, contactName: "Test Pastor", contactPhone: "+17135550199",
+    recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: "parity-probe-order-0001",
+  }, fetchFn);
+  const orderRef = order.structured.orderRef as string;
+  (env as unknown as Record<string, unknown>).STRIPE_API_KEY_TEST = undefined;
+  await assert.rejects(
+    () => runTool(env, req(TEST_KEY), "request_invoice", { orderRef, idempotencyKey: "parity-probe-invoice-0001" }, fetchFn),
+    (e: unknown) => {
+      assert.equal((e as { code?: string }).code, "stripe_unavailable");
+      return true;
+    },
+  );
+  assert.equal(calls.filter((c) => c.url.includes("api.stripe.com")).length, 0);
+});
