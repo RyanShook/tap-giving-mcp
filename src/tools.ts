@@ -492,7 +492,7 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
       email,
       ...(church ? { church } : {}),
       source: INTENT_SOURCE,
-      ...(quantityHint ? { quantity: quantityHint } : {}),
+      ...(quantityHint ? { quantity: String(quantityHint) } : {}),
       ...(sourceNote ? { note: sourceNote } : {}),
     }),
   });

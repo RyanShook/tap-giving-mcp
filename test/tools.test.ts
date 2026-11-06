@@ -168,12 +168,13 @@ test("submit_artwork: masquerade and hash mismatch are refused", async () => {
 test("start_order_intent posts to /api/lead with the mcp:intent source", async () => {
   const { env } = await makeEnv();
   const calls: Array<{ url: string; body?: string }> = [];
-  const r = await runTool(env, req(), "start_order_intent", { email: "mcp-acceptance@example.com", church: "MCP Acceptance Test Church" }, stubFetch(calls) as typeof fetch);
+  const r = await runTool(env, req(), "start_order_intent", { email: "mcp-acceptance@example.com", church: "MCP Acceptance Test Church", quantityHint: 250 }, stubFetch(calls) as typeof fetch);
   assert.equal(r.structured.captured, true);
   const lead = calls.find((c) => c.url.includes("/api/lead"));
   assert.ok(lead);
   const body = JSON.parse(lead!.body!);
   assert.equal(body.source, "mcp:intent");
+  assert.equal(body.quantity, "250", "the lead door's quantity field is a string (LeadCoreData)");
   assert.ok(!("hp" in body) && !("formStartedAt" in body), "no honeypot or timing fields are fabricated");
 });
 
