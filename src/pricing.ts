@@ -17,13 +17,23 @@
 //     door (and this server, per spec 2.3) distinguishes "unknown"
 //     (the caller omitted the count): unknown bills 0 and is reported
 //     as the string "unknown"; a positive count clamps to quantity.
-//   discount: eligible unless explicitly false; BAKED (arithmetic)
-//     whenever an add-on is present or bakeDiscount is true. The MCP
-//     always calls with the invoice door's shape (bakeDiscount: true),
-//     so plateUnitCents = round(unitCents * 0.9) when eligible.
+//   discount: the invoice door's quoteFor BAKES the discount into its
+//     arithmetic (bakeDiscount: true). That baked figure is the door's
+//     internal record figure, NOT the MCP's headline: Marketing's
+//     content check (2026-11-06) ruled the MCP quote must headline LIST
+//     totals (the llms.txt published worked totals: 100 = $500,
+//     200 = $800, 400 = $1,400) and carry the first-order discount only
+//     as a conditional WELCOME10 line. So this contract keeps both:
+//     grandTotalCents is the LIST total (unitCents * qty + addOnCents),
+//     and discountedTotalCents is the conditional figure the discount
+//     produces when it applies at invoice time, computed with the door's
+//     own per-unit rounding, round(unitCents * 0.9) * qty + addOnCents.
+//     discountEligible and discountBaked still mirror the door's flags
+//     (the stored order record carries them for the invoice leg's parity
+//     read-back); they are never asserted to an unverified caller.
 //   redirect: adds the free Redirect Dashboard add-on line at 0 cents.
 
-export const PRICE_CONTRACT_VERSION = "2026-11-06.1";
+export const PRICE_CONTRACT_VERSION = "2026-11-06.2";
 export const PRICE_SOURCE =
   "shared/business-rules.ts (PRICING_TIERS, ORDER_POLICY), computed by worker/tap-order/src/pricing.ts quoteFor";
 
@@ -60,8 +70,9 @@ export function discountedTotalCents(subtotalCents: number): number {
 export interface Quote {
   qty: number;
   unitCents: number;
-  plateUnitCents: number;
-  plateSubtotalCents: number;
+  discUnitCents: number;
+  discSubtotalCents: number;
+  discountedTotalCents: number;
   addOns: { name: string; amountCents: number; quantity: number }[];
   addOnCents: number;
   grandTotalCents: number;
@@ -110,19 +121,23 @@ export function quoteFor(p: {
   }
   const hasAddOn = addOns.length > 0;
   // The invoice door always bakes (bakeDiscount: true in
-  // invoice-request.ts), so the MCP quote bakes identically:
-  // bake = discountEligible && (hasAddOn || bakeDiscount), with
-  // bakeDiscount true on this call shape.
+  // invoice-request.ts): bake = discountEligible && (hasAddOn ||
+  // bakeDiscount), with bakeDiscount true on this call shape. The flag
+  // and the door's baked per-unit figure stay computed here because the
+  // stored order record carries them for the invoice leg; the MCP's
+  // headline total, however, is the LIST total (see the header note).
   const bakeDiscount = true;
   const bake = discountEligible && (hasAddOn || bakeDiscount);
-  const plateUnitCents = bake ? discountedTotalCents(unitCents) : unitCents;
-  const plateSubtotalCents = plateUnitCents * qty;
+  const bakedUnitCents = bake ? discountedTotalCents(unitCents) : unitCents;
   const addOnCents = addOns.reduce((s, a) => s + a.amountCents * a.quantity, 0);
 
   return {
-    qty, unitCents, plateUnitCents, plateSubtotalCents,
+    qty, unitCents,
+    discUnitCents: unitCents,
+    discSubtotalCents: unitCents * qty,
+    discountedTotalCents: bakedUnitCents * qty + addOnCents,
     addOns, addOnCents,
-    grandTotalCents: plateSubtotalCents + addOnCents,
+    grandTotalCents: unitCents * qty + addOnCents,
     discountEligible, discountBaked: bake,
     antiMetalCount, antiMetalMeta, redirectApplies,
     antiMetalClamped,

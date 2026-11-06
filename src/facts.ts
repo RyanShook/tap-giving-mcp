@@ -8,7 +8,7 @@
 export const SERVER_NAME = "NFC Tap Builder by Tap.Giving";
 export const SERVER_TITLE = "NFC Tap Builder by Tap.Giving";
 export const SERVER_DESCRIPTION =
-  "Build and order custom NFC tap discs, tap plates, and tap tags for churches and nonprofits: " +
+  "Build and order custom NFC tap discs and tap tags for churches and nonprofits: " +
   "NFC tap to give, designed by your own agent, priced from the published tiers, ordered up to the " +
   "human payment and proof gates. This server moves no money itself: it returns a hosted invoice " +
   "link for a person to pay.";
@@ -28,6 +28,7 @@ export const BENEFITS: string[] = [
   "Durable waterproof PVC with a locked NTAG213 chip",
   "Custom branding from 100 discs",
   "Free shipping",
+  "Covered by our 30-day money-back guarantee",
 ];
 
 export const PRODUCT = {
@@ -47,7 +48,8 @@ export const PRODUCT = {
   metalCaveat:
     "Discs do not work on metal surfaces without the anti-metal shielding layer: a ferrite layer at $1.00 per shielded disc, decided before printing because it cannot be added afterwards.",
   redirectDashboard:
-    "The Redirect Dashboard is included free on every order, permanently: re-point where a tap lands anytime, and see tap counts.",
+    "The Redirect Dashboard is included free on every order, permanently: re-point where a tap lands anytime (change where any disc points in seconds), and see tap counts.",
+  guarantee: "Covered by our 30-day money-back guarantee.",
   worksWith: "Works with any giving platform. No subscription fees.",
   stands: [
     { name: "Table stand, small", size: "70 x 100 mm", priceCents: 700, minimum: 100 },
@@ -88,7 +90,10 @@ export const ARTWORK_GEOMETRY = {
     bleedHalfWidthMm: 53,
     safeHalfWidthMm: 47,
   },
-  formatWanted: "Vector source: SVG preferred; AI or vector PDF accepted; never raster for production.",
+  formatWanted:
+    "Artwork is created as vector where the agent can (SVG preferred; AI or vector PDF accepted), " +
+    "and intake accepts any real image up to 5 MB (5,242,880 bytes decoded): raster images are accepted at intake, " +
+    "and production fitness is judged later in the normal proof flow, never at intake.",
   background: "Flat solid colour background (a standing production rule).",
   minimumLogoMm: 18,
   encoding:
@@ -98,7 +103,7 @@ export const ARTWORK_GEOMETRY = {
 export const ARTWORK_GUIDELINES: string[] = [
   "Design edge to edge on the 106 mm square artboard; the cut is the inner 100 mm shape.",
   "Keep important elements inside the safe zone so nothing risks edge clipping.",
-  "Send vector artwork back: SVG preferred, AI or vector PDF accepted.",
+  "Vector artwork is preferred back (SVG preferred, AI or vector PDF accepted), but intake accepts any real image up to 5 MB (5,242,880 bytes decoded); production fitness is judged later in the normal proof flow.",
   "Use a flat solid colour background.",
   "A logo in a lockup should be at least 18 mm at final size (the smallest size with a shipped precedent).",
   "Production fitness is judged later in the normal proof flow; intake accepts any real image that passes the sanity checks.",

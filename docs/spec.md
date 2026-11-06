@@ -370,11 +370,20 @@ Inputs (JSON Schema):
   order support in phase 2 (section 2.9).
 
 Outputs:
-- quantity, tier label, unitCents, plateSubtotalCents.
+- quantity, tier label, unitCents, discUnitCents, discSubtotalCents.
 - discount: the first-order 10 percent (WELCOME10, coupon YHlScIh4),
-  applied as quoteFor applies it (baked when add-ons are present or the
-  invoice door is in play); discountEligible and discountBaked booleans
-  carried verbatim from the Quote interface.
+  carried as a conditional line only (Marketing content check,
+  2026-11-06): the headline totals are LIST totals (the llms.txt worked
+  totals), and the discount is never baked into them and never asserted
+  eligible for an unverified caller. The discount object names the code,
+  the 10 percent, the first-order scope, and the 7-day renewing window,
+  and carries conditionalTotalCents and
+  grandTotalWithFirstOrderDiscountCents as the figure the discount
+  produces when it applies at invoice time. The Quote interface's
+  discountEligible and discountBaked flags (the invoice door's internal
+  baking flags) stay on the stored order record for the invoice leg's
+  parity read-back (section 2.7); they are not surfaced as assertions in
+  the quote output.
 - addOns: array of {name, amountCents, quantity} exactly as quoteFor
   returns (anti-metal "Metal-surface shielding layer" at 100 cents per
   shielded disc, ORDER_POLICY.antiMetalUnitCents; the Redirect Dashboard
@@ -389,8 +398,8 @@ Outputs:
   quote's totals are merchandise totals before tax and the output says
   so (taxNote: "Tax, where it applies, surfaces at Stripe checkout and
   on the invoice.").
-- grandTotalCents: the merchandise total, discount included, before tax
-  as stated above.
+- grandTotalCents: the merchandise LIST total, before tax as stated
+  above (the discount is the conditional line, never inside it).
 - currency: "USD".
 - priceSource: "shared/business-rules.ts (PRICING_TIERS, ORDER_POLICY),
   computed by worker/tap-order/src/pricing.ts quoteFor", so an agent can
