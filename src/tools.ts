@@ -1437,7 +1437,10 @@ export function toolByName(name: string): ToolDef | undefined {
 
 export async function runTool(
   env: Env, request: Request, name: string, args: Record<string, unknown>,
-  fetchFn: typeof fetch = fetch,
+  // The default must wrap the global: a bare `fetch` reference loses
+  // its receiver in the Workers runtime ("Illegal invocation") when
+  // the caller passes it through as a value.
+  fetchFn: typeof fetch = (input, init) => fetch(input, init),
 ): Promise<ToolResult> {
   const def = toolByName(name);
   if (!def) throw new ToolError("not_found", `Unknown tool: ${name}.`);
