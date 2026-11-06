@@ -24,18 +24,23 @@ test("tier boundaries equal the llms.txt figures", () => {
 });
 
 test("quote math matches the invoice door's quoteFor shape", () => {
-  // 250 discs, no add-ons, invoice-door baking: 400 * 0.9 = 360.
+  // 250 discs, no add-ons. The door's baked per-unit figure is
+  // 400 * 0.9 = 360, carried as the conditional discounted total
+  // (90000); the headline is the LIST total (Marketing content check
+  // 2026-11-06: llms.txt worked totals are list, 250 at $4.00 = 100000).
   const q = quoteFor({ qty: 250 });
   assert.equal(q.unitCents, 400);
-  assert.equal(q.plateUnitCents, 360);
-  assert.equal(q.plateSubtotalCents, 90000);
-  assert.equal(q.grandTotalCents, 90000);
+  assert.equal(q.discUnitCents, 400);
+  assert.equal(q.discSubtotalCents, 100000);
+  assert.equal(q.discountedTotalCents, 90000);
+  assert.equal(q.grandTotalCents, 100000);
   assert.equal(q.discountBaked, true);
   assert.equal(q.antiMetalMeta, "unknown");
   // Known anti-metal count rides at full price, undiscounted.
   const q2 = quoteFor({ qty: 250, antiMetal: 40 });
   assert.equal(q2.addOnCents, 4000);
-  assert.equal(q2.grandTotalCents, 94000);
+  assert.equal(q2.grandTotalCents, 104000);
+  assert.equal(q2.discountedTotalCents, 94000);
   assert.equal(q2.antiMetalMeta, "40");
   // Over-quantity count clamps and reports the clamp.
   const q3 = quoteFor({ qty: 100, antiMetal: 500 });

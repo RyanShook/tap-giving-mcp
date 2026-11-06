@@ -131,12 +131,29 @@ test("cold leg: discovery, quote, product, artwork spec need no key", async () =
   const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
   assert.equal((d.structured.server as { name: string }).name, "NFC Tap Builder by Tap.Giving");
   const q = await runTool(env, req(), "get_quote", { quantity: 250 }, fetchFn);
-  assert.equal(q.structured.grandTotalCents, 90000);
+  // Headline totals are LIST totals (Marketing content check 2026-11-06);
+  // the WELCOME10 figure is a conditional line, never asserted eligible
+  // for an unverified keyless caller.
+  assert.equal(q.structured.grandTotalCents, 100000);
+  assert.equal(q.structured.grandTotalWithFirstOrderDiscountCents, 90000);
+  assert.equal(q.structured.discUnitCents, 400);
+  assert.equal(q.structured.discSubtotalCents, 100000);
+  const disc = q.structured.discount as Record<string, unknown>;
+  assert.equal(disc.code, "WELCOME10");
+  assert.equal(disc.appliedInHeadlineTotals, false);
+  assert.ok(!("eligible" in disc) && !("baked" in disc), "no eligibility assertion to an unverified caller");
   assert.equal(q.structured.shippingLine, "Shipping: Free");
   const p = await runTool(env, req(), "get_product", {}, fetchFn);
   assert.ok(JSON.stringify(p.structured).includes("NTAG213"));
+  assert.ok(JSON.stringify(p.structured).includes("30-day money-back guarantee"), "guarantee named in product facts");
+  assert.ok(JSON.stringify(p.structured).includes("in seconds"), "dashboard changes-in-seconds claim present");
+  assert.ok(JSON.stringify(d.structured).includes("30-day money-back guarantee"), "guarantee named in discovery");
+  assert.ok(JSON.stringify(d.structured).includes("WELCOME10"), "discount code named in discovery");
+  assert.ok(JSON.stringify(d.structured).includes("7-day renewing window"), "discount window named in discovery");
   const a = await runTool(env, req(), "get_artwork_spec", { shape: "round" }, fetchFn);
   assert.equal((a.structured.examples as unknown[]).length, 3);
+  assert.ok(JSON.stringify(a.structured).includes("5 MB"), "artwork spec states the 5 MB intake cap");
+  assert.ok(!JSON.stringify(a.structured).includes("never raster"), "intake wording is permissive, no raster refusal");
   await assert.rejects(() => runTool(env, req(), "get_quote", { quantity: 99 }, fetchFn), /minimum order is 100/);
 });
 
@@ -148,7 +165,7 @@ test("submit_artwork: keyless PNG accepted, hash echoed, benefits present", asyn
   }, stubFetch([]) as typeof fetch);
   assert.equal(r.structured.received, true);
   assert.equal(r.structured.sha256, sha);
-  assert.ok(Array.isArray(r.structured.benefits) && (r.structured.benefits as string[]).length === 5);
+  assert.ok(Array.isArray(r.structured.benefits) && (r.structured.benefits as string[]).length === 6);
   assert.ok(r.image, "raster submission returns image content");
 });
 
@@ -193,7 +210,7 @@ test("keyed journey: recap, create_order (idempotent), request_invoice, status",
     artworkRef, contactEmail: "mcp-acceptance@example.com",
   };
   const recap = await runTool(env, req(TEST_KEY), "get_recap", recapArgs, fetchFn);
-  assert.equal((recap.structured.cost as { grandTotalCents: number }).grandTotalCents, 90000);
+  assert.equal((recap.structured.cost as { grandTotalCents: number }).grandTotalCents, 100000);
   assert.deepEqual(recap.structured.notes, [
     "Shipping usually takes two to three weeks.",
     "We send a final proof via email before any order is placed.",

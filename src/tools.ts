@@ -55,14 +55,20 @@ function quoteOutput(quote: Quote): Record<string, unknown> {
     quantity: quote.qty,
     tier: tier.label,
     unitCents: quote.unitCents,
-    plateUnitCents: quote.plateUnitCents,
-    plateSubtotalCents: quote.plateSubtotalCents,
+    discUnitCents: quote.discUnitCents,
+    discSubtotalCents: quote.discSubtotalCents,
     discount: {
-      eligible: quote.discountEligible,
-      baked: quote.discountBaked,
-      description: quote.discountBaked
-        ? "The first-order 10 percent discount is already in these figures."
-        : "No discount applied to these figures.",
+      code: "WELCOME10",
+      percentOff: 10,
+      scope: "first order",
+      window: "7-day renewing window",
+      appliedInHeadlineTotals: false,
+      conditionalTotalCents: quote.discountedTotalCents,
+      description:
+        "First-order discount: 10 percent off with code WELCOME10, inside a 7-day renewing window. " +
+        "It is a conditional first-order line, not a price gate: the headline totals above are list totals, " +
+        "and the discount applies at invoice time only when the order is the organization's first. " +
+        `conditionalTotalCents (${dollars(quote.discountedTotalCents)}) is what the total becomes when that first-order discount applies.`,
     },
     addOns: quote.addOns,
     addOnCents: quote.addOnCents,
@@ -73,6 +79,7 @@ function quoteOutput(quote: Quote): Record<string, unknown> {
     shippingLine: "Shipping: Free",
     taxNote: TAX_NOTE,
     grandTotalCents: quote.grandTotalCents,
+    grandTotalWithFirstOrderDiscountCents: quote.discountedTotalCents,
     currency: "USD",
     priceSource: PRICE_SOURCE,
   };
@@ -87,7 +94,7 @@ function quoteText(q: Record<string, unknown>): string {
     .map((a) => `  ${a.name} x${a.quantity}: ${dollars(a.amountCents * a.quantity)}`).join("\n");
   return [
     `Quote for ${q.quantity} discs (${q.tier}): ${dollars(q.grandTotalCents as number)} total.`,
-    `Discs: ${q.quantity} at ${dollars(q.unitCents as number)} list, ${dollars(q.plateSubtotalCents as number)} after the first-order discount where it applies.`,
+    `Discs: ${q.quantity} at ${dollars(q.unitCents as number)} list, ${dollars(q.discSubtotalCents as number)} list subtotal. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window: ${dollars(q.grandTotalWithFirstOrderDiscountCents as number)} when it applies.`,
     addOns ? `Add-ons:\n${addOns}` : "Add-ons: none.",
     `Shipping: Free`,
     `${q.taxNote}`,
@@ -175,7 +182,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     pricing: {
       tiers: boundaries,
       minimumQuantity: MIN_QTY,
-      discount: "10 percent off the first order, applied in every quote this server returns.",
+      discount: "10 percent off the first order with code WELCOME10, inside a 7-day renewing window; a conditional first-order line, never a price gate. Quotes headline list totals.",
       shipping: "Free on every order.",
       note: "Call get_quote for the binding quote at an exact quantity.",
     },
@@ -190,13 +197,14 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       howToGetAKey: KEY_REQUEST_LINE,
       kickoff: "start_order_intent",
       benefits: BENEFITS,
+      guarantee: "Covered by our 30-day money-back guarantee.",
     },
     ...(typeof args.intent === "string" && args.intent ? { guidance: `Noted intent: ${args.intent.slice(0, 200)}. Start with the shape choice, then get_artwork_spec.` } : {}),
   };
   const text = [
     `${SERVER_NAME}: ${SERVER_DESCRIPTION}`,
     `First choice: the shape, round or square.`,
-    `Pricing: 100-199 discs at $5.00 each, 200-399 at $4.00, 400+ at $3.50. Minimum order 100. Free shipping. 10 percent off the first order.`,
+    `Pricing: 100-199 discs at $5.00 each, 200-399 at $4.00, 400+ at $3.50. Minimum order 100. Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. Every order is covered by our 30-day money-back guarantee.`,
     `Writes need an organization API key. ${KEY_REQUEST_LINE}`,
     `Gates: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself.`,
   ].join("\n");
@@ -236,6 +244,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       metalCaveat: p.metalCaveat,
       redirectDashboard: p.redirectDashboard,
       worksWith: p.worksWith,
+      guarantee: p.guarantee,
     },
     stands: { products: p.stands, ordering: "Stands are quoted here as information in v1; ordering stands rides a later phase. Discs are the orderable product today." },
     badges: { products: p.badges, ordering: "Badges are quoted here as information in v1; ordering badges rides a later phase." },
@@ -252,6 +261,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       p.metalCaveat,
       p.redirectDashboard,
       p.worksWith,
+      p.guarantee,
       `Table stands: 70 x 100 mm at $7, 120 x 140 mm at $9, minimum 100. Lanyard badges: 90 x 130 mm at $5, minimum 100.`,
       `${p.shipping.cost} ${p.shipping.terms}`,
     ].join("\n");
@@ -1238,7 +1248,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_quote",
     description:
-      "The binding quote for a prospective order (also known as get_pricing): quantity, tier, the first-order 10 percent discount as the machinery applies it, " +
+      "The binding quote for a prospective order (also known as get_pricing): quantity, tier, list totals as the headline, the first-order 10 percent discount (code WELCOME10, 7-day renewing window) shown as a conditional line, " +
       "add-ons, free shipping as its own line, and the exact grand total. No tax line: tax surfaces at Stripe checkout and on the invoice. " +
       "Quantities below the 100-disc minimum are refused by this tool itself. No key needed.",
     inputSchema: {
