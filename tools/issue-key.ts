@@ -100,18 +100,23 @@ if (cmd === "issue") {
     console.error("issue needs --slug, --email, --mode live|test");
     process.exit(2);
   }
-  const orgName = arg("name") || slug;
+  // process.exit is typed as returning void here, so narrow
+  // explicitly instead of relying on control-flow analysis.
+  const orgSlug = slug as string;
+  const contactEmail = email as string;
+  const keyMode = mode as "live" | "test";
+  const orgName = arg("name") || orgSlug;
   const crmCsv = arg("crm-csv");
   if (crmCsv) {
     const deals = parseDealsContacts(readFileSync(crmCsv, "utf8"));
-    const canon = canonEmail(email);
+    const canon = canonEmail(contactEmail);
     for (const d of deals) {
-      if (d.contacts.includes(canon) && d.slug !== slug) {
-        console.error(`REFUSED: the CRM resolves ${email} to slug "${d.slug}", not "${slug}". One organization, one key identity (spec 3.6).`);
+      if (d.contacts.includes(canon) && d.slug !== orgSlug) {
+        console.error(`REFUSED: the CRM resolves ${contactEmail} to slug "${d.slug}", not "${orgSlug}". One organization, one key identity (spec 3.6).`);
         process.exit(3);
       }
-      if (d.slug === slug && d.contacts.length && !d.contacts.includes(canon) && !flag("force-new-slug")) {
-        console.error(`REFUSED: the CRM carries slug "${slug}" under different contacts (${d.contacts.join(", ")}). Pass --force-new-slug only when this is a genuinely different organization.`);
+      if (d.slug === orgSlug && d.contacts.length && !d.contacts.includes(canon) && !flag("force-new-slug")) {
+        console.error(`REFUSED: the CRM carries slug "${orgSlug}" under different contacts (${d.contacts.join(", ")}). Pass --force-new-slug only when this is a genuinely different organization.`);
         process.exit(3);
       }
     }
@@ -123,31 +128,31 @@ if (cmd === "issue") {
     .map((k) => kvGet(k))
     .filter((v): v is string => !!v)
     .map((v) => JSON.parse(v) as KeyRecord)
-    .filter((r) => r.orgSlug === slug && r.mode === mode && r.status === "active");
+    .filter((r) => r.orgSlug === orgSlug && r.mode === keyMode && r.status === "active");
   if (existing.length >= 2) {
-    console.error(`REFUSED: ${slug} already has two active ${mode} keys (the rotation maximum). Revoke one first.`);
+    console.error(`REFUSED: ${orgSlug} already has two active ${keyMode} keys (the rotation maximum). Revoke one first.`);
     process.exit(3);
   }
   const secret = randomToken(32);
-  const key = `tg_${mode}_${slug}_${secret}`;
+  const key = `tg_${keyMode}_${orgSlug}_${secret}`;
   const keyHash = await sha256Hex(key);
   const now = new Date().toISOString();
   const record: KeyRecord = {
-    orgSlug: slug,
+    orgSlug: orgSlug,
     orgName,
-    contactEmail: email.toLowerCase(),
-    mode,
+    contactEmail: contactEmail.toLowerCase(),
+    mode: keyMode,
     scopes: ["orders"],
     status: "active",
     createdAt: now,
-    issuedTo: arg("issued-to") || email,
+    issuedTo: arg("issued-to") || contactEmail,
     issuedBy: arg("issued-by") || "engineering-cli",
     issuedAt: now,
   };
   kvPut(`KEYHASH:${keyHash}`, JSON.stringify(record));
   console.log("KEY ISSUED (shown once, store it in the client's configuration, never in a repo):");
   console.log(key);
-  console.log(`org: ${slug} (${orgName}), contact ${email.toLowerCase()}, mode ${mode}, scopes orders`);
+  console.log(`org: ${orgSlug} (${orgName}), contact ${contactEmail.toLowerCase()}, mode ${keyMode}, scopes orders`);
 } else if (cmd === "revoke") {
   const slug = arg("slug");
   const reason = arg("reason") || "revoked";
