@@ -165,7 +165,7 @@ async function handleRpc(env: Env, request: Request): Promise<Response> {
       });
     } catch (e) {
       if (e instanceof ToolError) return toolErrorResult(id, e);
-      console.error(`tools/call ${name} failed:`, (e as Error).message);
+      console.error(`tools/call ${name} failed:`, (e as Error).stack || (e as Error).message);
       return toolErrorResult(id, new ToolError("internal", "An internal error occurred. Nothing about this call was recorded as completed; retrying is safe for idempotent tools."));
     }
   }
