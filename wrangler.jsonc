@@ -17,12 +17,9 @@
 		{ "pattern": "tap.giving/mcp/*", "zone_name": "tap.giving" }
 	],
 
-	// .svg/.png example sources are imported as text modules; the PNG
-	// modules are generated base64 strings (tools/build-examples.py),
-	// so only the Text rule is needed.
-	"rules": [
-		{ "type": "Text", "globs": ["**/*.svg"], "fallthrough": true }
-	],
+	// No module rules are needed: the example assets ship as
+	// generated TypeScript string modules under src/example-assets/
+	// (tools/build-examples.py), portable in every bundler.
 
 	"kv_namespaces": [
 		{
@@ -31,13 +28,13 @@
 			// and the MCP's own order records. Created with:
 			//   npx wrangler kv namespace create MCP_KEYS
 			"binding": "MCP_KEYS",
-			"id": "MCP_KEYS_ID_PLACEHOLDER"
+			"id": "873d314e83d744189d180f7984080c2e"
 		},
 		{
 			// This server's own namespace: submitted artwork bytes.
 			//   npx wrangler kv namespace create MCP_ARTWORK
 			"binding": "MCP_ARTWORK",
-			"id": "MCP_ARTWORK_ID_PLACEHOLDER"
+			"id": "783b4906a0f24564962eb6521211f08c"
 		},
 		{
 			// The business side's production ORDERS namespace: live
