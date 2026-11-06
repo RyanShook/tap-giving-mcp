@@ -1,0 +1,246 @@
+// tap-mcp: the Tap.Giving MCP server, "NFC Tap Builder by Tap.Giving".
+//
+// MCP over Streamable HTTP, JSON-RPC 2.0, stateless per request.
+// Implements initialize, tools/list, tools/call. Notifications are
+// accepted and ignored. The endpoint is POST https://tap.giving/mcp;
+// a plain GET on it returns the human-and-agent readable
+// self-description, GET /mcp/artwork/<ref> serves stored submission
+// bytes at a capability URL, and GET /mcp/examples/<id>.png serves
+// the house template examples.
+//
+// Spec: documentation/mcp-connector-surface-spec-2026-11-06.md in the
+// business repo; the published copy is docs/spec.md in this repo.
+
+import type { Env } from "./env.ts";
+import { ENDPOINT, GATES, KEY_REQUEST_LINE, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME } from "./facts.ts";
+import { TOOLS, artworkBytesKey, readArtworkRecord, runTool } from "./tools.ts";
+import { ToolError, isRecord } from "./errors.ts";
+import { DETECTED_MEDIA_TYPE } from "./sniff.ts";
+import { EXAMPLES, exampleById } from "./examples.ts";
+
+const PROTOCOL_VERSION = "2025-03-26";
+const UNAUTH_LIMIT = 120; // per IP per 10 minutes on the keyless surface
+const INTENT_LIMIT = 10; // per IP per hour, mirroring /api/lead's own cap
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+async function rateLimit(env: Env, request: Request, toolName: string | null): Promise<boolean> {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const now = Date.now();
+  const checks: Array<{ key: string; limit: number; windowMs: number }> = [
+    { key: `RL:${ip}:${Math.floor(now / 600_000)}`, limit: UNAUTH_LIMIT, windowMs: 600_000 },
+  ];
+  if (toolName === "start_order_intent") {
+    checks.push({ key: `RLI:${ip}:${Math.floor(now / 3_600_000)}`, limit: INTENT_LIMIT, windowMs: 3_600_000 });
+  }
+  for (const c of checks) {
+    const raw = await env.MCP_KEYS.get(c.key);
+    const count = raw ? parseInt(raw, 10) || 0 : 0;
+    if (count >= c.limit) return false;
+    if (!request.headers.get("Authorization")) {
+      await env.MCP_KEYS.put(c.key, String(count + 1), { expirationTtl: Math.ceil(c.windowMs / 1000) + 60 });
+    }
+  }
+  return true;
+}
+
+function selfDescription(): string {
+  const toolLines = TOOLS.map((t) => `- ${t.name}: ${t.description.split(". ")[0]}.`).join("\n");
+  return [
+    `# ${SERVER_NAME}`,
+    ``,
+    SERVER_DESCRIPTION,
+    ``,
+    `Endpoint: POST ${ENDPOINT} (MCP over Streamable HTTP, JSON-RPC 2.0, stateless).`,
+    `Repository: ${REPO_URL}`,
+    ``,
+    `## Tools`,
+    toolLines,
+    ``,
+    `## Auth`,
+    `Read tools (get_discovery, get_quote, get_product, get_artwork_spec) need no key.`,
+    `Write and status tools need the organization's API key: Authorization: Bearer tg_live_<orgslug>_<secret> (or tg_test_ for the test seat).`,
+    KEY_REQUEST_LINE,
+    ``,
+    `## Human gates`,
+    ...Object.values(GATES).map((g) => `- ${g}`),
+    ``,
+    `This server moves no money itself: it returns a hosted invoice link for a person to pay.`,
+  ].join("\n");
+}
+
+function rpcError(id: unknown, code: number, message: string, data?: unknown): Response {
+  return json({ jsonrpc: "2.0", id: id ?? null, error: { code, message, ...(data !== undefined ? { data } : {}) } });
+}
+
+function toolErrorResult(id: unknown, err: ToolError): Response {
+  return json({
+    jsonrpc: "2.0",
+    id,
+    result: {
+      content: [
+        { type: "text", text: `${err.code}: ${err.message}` },
+      ],
+      structuredContent: { error: err.structured() },
+      isError: true,
+    },
+  });
+}
+
+async function handleRpc(env: Env, request: Request): Promise<Response> {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return rpcError(null, -32700, "Parse error: the body must be a JSON-RPC 2.0 request.");
+  }
+  if (Array.isArray(body)) {
+    return rpcError(null, -32600, "Batch requests are not supported in v1; send one JSON-RPC request per POST.");
+  }
+  if (!isRecord(body) || body.jsonrpc !== "2.0" || typeof body.method !== "string") {
+    return rpcError(isRecord(body) ? body.id : null, -32600, "Invalid request: a JSON-RPC 2.0 object with a method is required.");
+  }
+  const id = body.id;
+  const method = body.method;
+
+  if (method.startsWith("notifications/")) {
+    return new Response(null, { status: 202 });
+  }
+  if (method === "ping") return json({ jsonrpc: "2.0", id, result: {} });
+
+  if (method === "initialize") {
+    const params = isRecord(body.params) ? body.params : {};
+    const clientVersion = typeof params.protocolVersion === "string" ? params.protocolVersion : PROTOCOL_VERSION;
+    return json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        protocolVersion: clientVersion,
+        capabilities: { tools: {} },
+        serverInfo: { name: SERVER_NAME, title: SERVER_NAME, version: "1.0.0" },
+        instructions: SERVER_DESCRIPTION,
+      },
+    });
+  }
+
+  if (method === "tools/list") {
+    return json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        tools: TOOLS.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema,
+          annotations: t.annotations,
+        })),
+      },
+    });
+  }
+
+  if (method === "tools/call") {
+    const params = isRecord(body.params) ? body.params : {};
+    const name = typeof params.name === "string" ? params.name : "";
+    const args = isRecord(params.arguments) ? params.arguments : {};
+    const def = TOOLS.find((t) => t.name === name);
+    if (!def) return toolErrorResult(id, new ToolError("not_found", `Unknown tool: ${name}.`));
+    if (!(await rateLimit(env, request, name))) {
+      return toolErrorResult(id, new ToolError("rate_limited", "Rate limit reached for this caller. Wait and retry."));
+    }
+    try {
+      const result = await runTool(env, request, name, args);
+      const content: Array<Record<string, unknown>> = [{ type: "text", text: result.text }];
+      if (result.image) {
+        content.push({ type: "image", data: result.image.data, mimeType: result.image.mimeType });
+      }
+      return json({
+        jsonrpc: "2.0",
+        id,
+        result: { content, structuredContent: result.structured, isError: false },
+      });
+    } catch (e) {
+      if (e instanceof ToolError) return toolErrorResult(id, e);
+      console.error(`tools/call ${name} failed:`, (e as Error).message);
+      return toolErrorResult(id, new ToolError("internal", "An internal error occurred. Nothing about this call was recorded as completed; retrying is safe for idempotent tools."));
+    }
+  }
+
+  return rpcError(id, -32601, `Method not found: ${method}. This server implements initialize, tools/list, and tools/call.`);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+  return btoa(bin);
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/mcp" || url.pathname === "/") {
+      if (request.method === "GET") {
+        return new Response(selfDescription(), {
+          status: 200,
+          headers: { "Content-Type": "text/markdown; charset=utf-8" },
+        });
+      }
+      if (request.method === "POST") return handleRpc(env, request);
+      return new Response("Method not allowed. POST JSON-RPC to this endpoint; GET returns its description.", { status: 405 });
+    }
+
+    // House template examples, served for display.
+    const exMatch = /^\/mcp\/examples\/([a-z0-9-]+)\.png$/.exec(url.pathname);
+    if (exMatch && request.method === "GET") {
+      const ex = exampleById(exMatch[1]);
+      if (!ex) return new Response("not found", { status: 404 });
+      const bytes = Uint8Array.from(atob(ex.pngBase64), (c) => c.charCodeAt(0));
+      return new Response(bytes as unknown as BodyInit, {
+        status: 200,
+        headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
+      });
+    }
+    const exSvgMatch = /^\/mcp\/examples\/([a-z0-9-]+)\.svg$/.exec(url.pathname);
+    if (exSvgMatch && request.method === "GET") {
+      const ex = exampleById(exSvgMatch[1]);
+      if (!ex) return new Response("not found", { status: 404 });
+      return new Response(ex.svgText, {
+        status: 200,
+        headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" },
+      });
+    }
+    void EXAMPLES;
+
+    // Stored submission bytes at a capability URL. The artworkRef is
+    // the capability (unguessable, hash-derived); the bytes are never
+    // served from a tap.giving origin AS A PAGE: the response is a
+    // download-typed image/document with script execution sandboxed
+    // off, per the intake boundary in spec 2.6.
+    const artMatch = /^\/mcp\/artwork\/(art_[a-z0-9]+)$/.exec(url.pathname);
+    if (artMatch && request.method === "GET") {
+      const ref = artMatch[1];
+      const record = await readArtworkRecord(env, ref);
+      if (!record) return new Response("not found", { status: 404 });
+      const bytes = await env.MCP_ARTWORK.get(artworkBytesKey(ref), "arrayBuffer");
+      if (!bytes) return new Response("not found", { status: 404 });
+      const contentType = DETECTED_MEDIA_TYPE[record.detectedType] || record.mediaType;
+      return new Response(bytes, {
+        status: 200,
+        headers: {
+          "Content-Type": contentType,
+          "Content-Disposition": `inline; filename="${record.filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`,
+          "Content-Security-Policy": "sandbox",
+          "X-Content-Type-Options": "nosniff",
+          "Cache-Control": "private, max-age=3600",
+        },
+      });
+    }
+
+    return new Response("not found", { status: 404 });
+  },
+};

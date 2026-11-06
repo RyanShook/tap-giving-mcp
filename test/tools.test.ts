@@ -1,0 +1,275 @@
+// Behavior tests for the tool implementations against in-memory KV
+// fakes and a recording fetch stub (the business doors and Stripe are
+// stubbed at the fetch seam; the acceptance run exercises the real
+// deployed surfaces).
+
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { runTool } from "../src/tools.ts";
+import { sha256Hex } from "../src/keys.ts";
+import type { Env } from "../src/env.ts";
+import type { KeyRecord } from "../src/keys.ts";
+
+class MemoryKV {
+  store = new Map<string, string>();
+  async get(key: string, type?: string): Promise<unknown> {
+    const raw = this.store.get(key) ?? null;
+    if (raw === null) return null;
+    if (type === "json") return JSON.parse(raw);
+    if (type === "arrayBuffer") {
+      const bin = atob(raw);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+      return u8.buffer;
+    }
+    return raw;
+  }
+  async put(key: string, value: unknown): Promise<void> {
+    if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+      const u8 = value instanceof ArrayBuffer ? new Uint8Array(value) : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+      let bin = "";
+      for (const b of u8) bin += String.fromCharCode(b);
+      this.store.set(key, btoa(bin));
+    } else {
+      this.store.set(key, String(value));
+    }
+  }
+  async delete(key: string): Promise<void> { this.store.delete(key); }
+  async list(): Promise<{ keys: Array<{ name: string }>; list_complete: boolean }> {
+    return { keys: [...this.store.keys()].map((name) => ({ name })), list_complete: true };
+  }
+}
+
+const TEST_KEY = `tg_test_mcp-acceptance-test-church_${"A".repeat(43)}`;
+const LIVE_KEY_WRONG_ORG = `tg_test_other-church_${"B".repeat(43)}`;
+
+async function makeEnv(): Promise<{ env: Env; keys: MemoryKV }> {
+  const keys = new MemoryKV();
+  const now = new Date().toISOString();
+  const mk = async (key: string, slug: string, email: string, mode: "live" | "test") => {
+    const rec: KeyRecord = {
+      orgSlug: slug, orgName: slug, contactEmail: email, mode, scopes: ["orders"],
+      status: "active", createdAt: now, issuedTo: email, issuedBy: "test", issuedAt: now,
+    };
+    await keys.put(`KEYHASH:${await sha256Hex(key)}`, JSON.stringify(rec));
+  };
+  await mk(TEST_KEY, "mcp-acceptance-test-church", "mcp-acceptance@example.com", "test");
+  await mk(LIVE_KEY_WRONG_ORG, "other-church", "other@example.com", "test");
+  const env = {
+    MCP_KEYS: keys as unknown as KVNamespace,
+    MCP_ARTWORK: new MemoryKV() as unknown as KVNamespace,
+    ORDERS: new MemoryKV() as unknown as KVNamespace,
+    DEV_ORDERS: new MemoryKV() as unknown as KVNamespace,
+    STRIPE_API_KEY_TEST: "sk_test_stub",
+    MCP_INVOKE_SECRET: "<MASKED_SECRET_003>",
+  } as unknown as Env;
+  return { env, keys };
+}
+
+function req(key?: string): Request {
+  return new Request("https://tap.giving/mcp", {
+    method: "POST",
+    headers: key ? { Authorization: `Bearer ${key}` } : {},
+  });
+}
+
+// A fetch stub: business doors record their calls; Stripe INVOKED
+// returns canned objects; everything else 404s.
+function stubFetch(calls: Array<{ url: string; body?: string }>) {
+  return async (input: unknown, init?: { method?: string; body?: string }): Promise<Response> => {
+    const url = String((input as { url?: string })?.url ?? input);
+    calls.push({ url, body: init?.body });
+    if (url.includes("/api/lead")) return new Response(JSON.stringify({ queued: true }), { status: 200 });
+    if (url.includes("/api/invoice-request")) return new Response(JSON.stringify({ ok: true, totalUsd: "900.00" }), { status: 200 });
+    if (url.includes("/api/mcp-invoke")) {
+      const parsed = JSON.parse(init?.body || "{}");
+      if (parsed.op === "recordArtworkSubmission") return new Response(JSON.stringify({ ok: true, recordKey: "STEPCAP:1:x" }), { status: 200 });
+      if (parsed.op === "readOrderRecords") return new Response(JSON.stringify({ ok: true, found: false, crmRow: null, fulfillment: null }), { status: 200 });
+      return new Response(JSON.stringify({ ok: false }), { status: 400 });
+    }
+    if (url.includes("api.stripe.com")) {
+      if (url.includes("/customers") && (!init || init.method === "GET" || !init.method)) {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
+      if (url.includes("/customers")) return new Response(JSON.stringify({ id: "cus_stub" }), { status: 200 });
+      if (url.includes("/invoices") && init?.method !== "POST") {
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
+      if (url.includes("/invoices") && init?.method === "POST" && !url.includes("finalize")) {
+        return new Response(JSON.stringify({ id: "in_stub" }), { status: 200 });
+      }
+      if (url.includes("/invoiceitems")) return new Response(JSON.stringify({ id: "ii_stub" }), { status: 200 });
+      if (url.includes("finalize")) {
+        return new Response(JSON.stringify({ id: "in_stub", number: "TEST-0001", status: "open", hosted_invoice_url: "https://invoice.stripe.com/i/stub", total: 90000 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    }
+    return new Response("nope", { status: 404 });
+  };
+}
+
+// 1x1 PNG (a real decodable PNG).
+const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+async function pngSha(): Promise<string> {
+  const bin = atob(PNG_B64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return sha256HexBytes(u8);
+}
+async function sha256HexBytes(u8: Uint8Array): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", u8 as BufferSource);
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const SHIP_TO = { name: "MCP Acceptance Test Church", street: "100 Test Way", city: "Spring", state: "TX", postalCode: "77380", country: "US", phone: "+17135550199" };
+
+test("cold leg: discovery, quote, product, artwork spec need no key", async () => {
+  const { env } = await makeEnv();
+  const calls: Array<{ url: string }> = [];
+  const fetchFn = stubFetch(calls) as typeof fetch;
+  const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
+  assert.equal((d.structured.server as { name: string }).name, "NFC Tap Builder by Tap.Giving");
+  const q = await runTool(env, req(), "get_quote", { quantity: 250 }, fetchFn);
+  assert.equal(q.structured.grandTotalCents, 90000);
+  assert.equal(q.structured.shippingLine, "Shipping: Free");
+  const p = await runTool(env, req(), "get_product", {}, fetchFn);
+  assert.ok(JSON.stringify(p.structured).includes("NTAG213"));
+  const a = await runTool(env, req(), "get_artwork_spec", { shape: "round" }, fetchFn);
+  assert.equal((a.structured.examples as unknown[]).length, 3);
+  await assert.rejects(() => runTool(env, req(), "get_quote", { quantity: 99 }, fetchFn), /minimum order is 100/);
+});
+
+test("submit_artwork: keyless PNG accepted, hash echoed, benefits present", async () => {
+  const { env } = await makeEnv();
+  const sha = await pngSha();
+  const r = await runTool(env, req(), "submit_artwork", {
+    file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
+  }, stubFetch([]) as typeof fetch);
+  assert.equal(r.structured.received, true);
+  assert.equal(r.structured.sha256, sha);
+  assert.ok(Array.isArray(r.structured.benefits) && (r.structured.benefits as string[]).length === 5);
+  assert.ok(r.image, "raster submission returns image content");
+});
+
+test("submit_artwork: masquerade and hash mismatch are refused", async () => {
+  const { env } = await makeEnv();
+  const sha = await pngSha();
+  const exeB64 = btoa("MZ" + "x".repeat(100));
+  await assert.rejects(() => runTool(env, req(), "submit_artwork", {
+    file: { filename: "disc.png", mediaType: "image/png", contentBase64: exeB64 }, sha256: "0".repeat(64),
+  }, stubFetch([]) as typeof fetch), /sha256 does not match|bytes are a/);
+  await assert.rejects(() => runTool(env, req(), "submit_artwork", {
+    file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: "0".repeat(64),
+  }, stubFetch([]) as typeof fetch), /does not match/);
+  void sha;
+});
+
+test("start_order_intent posts to /api/lead with the mcp:intent source", async () => {
+  const { env } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  const r = await runTool(env, req(), "start_order_intent", { email: "mcp-acceptance@example.com", church: "MCP Acceptance Test Church" }, stubFetch(calls) as typeof fetch);
+  assert.equal(r.structured.captured, true);
+  const lead = calls.find((c) => c.url.includes("/api/lead"));
+  assert.ok(lead);
+  const body = JSON.parse(lead!.body!);
+  assert.equal(body.source, "mcp:intent");
+  assert.ok(!("hp" in body) && !("formStartedAt" in body), "no honeypot or timing fields are fabricated");
+});
+
+test("keyed journey: recap, create_order (idempotent), request_invoice, status", async () => {
+  const { env } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  const fetchFn = stubFetch(calls) as typeof fetch;
+  const sha = await pngSha();
+  const art = await runTool(env, req(TEST_KEY), "submit_artwork", {
+    file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
+  }, fetchFn);
+  const artworkRef = art.structured.artworkRef as string;
+
+  const recapArgs = {
+    quantity: 250, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
+    artworkRef, contactEmail: "mcp-acceptance@example.com",
+  };
+  const recap = await runTool(env, req(TEST_KEY), "get_recap", recapArgs, fetchFn);
+  assert.equal((recap.structured.cost as { grandTotalCents: number }).grandTotalCents, 90000);
+  assert.deepEqual(recap.structured.notes, [
+    "Shipping usually takes two to three weeks.",
+    "We send a final proof via email before any order is placed.",
+  ]);
+  const recapRef = recap.structured.recapRef as string;
+
+  const orderArgs = {
+    ...recapArgs, contactName: "Test Pastor", contactPhone: "+17135550199",
+    recapRef, exit: "pay_now", idempotencyKey: "acceptance-order-0001",
+  };
+  const order = await runTool(env, req(TEST_KEY), "create_order", orderArgs, fetchFn);
+  const orderRef = order.structured.orderRef as string;
+  assert.ok(orderRef.startsWith("mcp:mcp-acceptance-test-church:"));
+  // The test seat got the INVREQ-shaped record (DEV_ORDERS write).
+  const devOrders = (env.DEV_ORDERS as unknown as MemoryKV).store;
+  assert.equal([...devOrders.keys()].filter((k) => k.startsWith("INVREQ:")).length, 1);
+
+  // Retry with the same key and payload returns the original, no second write.
+  const replay = await runTool(env, req(TEST_KEY), "create_order", orderArgs, fetchFn);
+  assert.equal(replay.structured.orderRef, orderRef);
+  assert.equal([...devOrders.keys()].filter((k) => k.startsWith("INVREQ:")).length, 1);
+
+  // Same key, different payload: conflict naming the field.
+  await assert.rejects(
+    () => runTool(env, req(TEST_KEY), "create_order", { ...orderArgs, quantity: 300 }, fetchFn),
+    /differing fields are: quantity/);
+
+  const inv = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef, idempotencyKey: "acceptance-invoice-0001" }, fetchFn);
+  assert.equal(inv.structured.status, "open");
+  assert.equal(inv.structured.handoffLine, "Review your invoice: https://invoice.stripe.com/i/stub");
+  assert.equal(inv.structured.totalCents, 90000);
+
+  const status = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef }, fetchFn);
+  assert.equal(status.structured.stage, "received"); // seat says no CRM row yet
+  assert.ok(JSON.stringify(status.structured).includes("invoice.stripe.com"));
+
+  // Another org's key reads not_found for this orderRef.
+  await assert.rejects(
+    () => runTool(env, req(LIVE_KEY_WRONG_ORG), "get_order_status", { orderRef }, fetchFn),
+    /not an order this key/);
+});
+
+test("create_order refuses below minimum, bad size is manual_exception, no recap is refused", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const base = {
+    contactName: "T", contactEmail: "mcp-acceptance@example.com", contactPhone: "+17135550199",
+    quantity: 250, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
+    recapRef: "recap_missing", idempotencyKey: "acceptance-order-0002",
+  };
+  await assert.rejects(() => runTool(env, req(TEST_KEY), "create_order", { ...base, quantity: 50 }, fetchFn), /minimum order is 100/);
+  await assert.rejects(() => runTool(env, req(TEST_KEY), "create_order", { ...base, size: "150mm-round" }, fetchFn),
+    (e: Error & { code?: string }) => e.code === "manual_exception");
+  await assert.rejects(() => runTool(env, req(TEST_KEY), "create_order", base, fetchFn), /not a recap/);
+  // Email mismatch with the key's org: forbidden.
+  await assert.rejects(() => runTool(env, req(TEST_KEY), "create_order", { ...base, contactEmail: "someoneelse@example.com" }, fetchFn),
+    (e: Error & { code?: string }) => e.code === "forbidden");
+});
+
+test("register_webhook stores the subscription and says delivery is pending", async () => {
+  const { env, keys } = await makeEnv();
+  const r = await runTool(env, req(TEST_KEY), "register_webhook", {
+    callbackUrl: "https://example.com/hook", events: ["proof_ready", "shipped"],
+  }, stubFetch([]) as typeof fetch);
+  assert.equal(r.structured.delivery, "pending");
+  assert.ok(String(r.structured.subscriptionSecret).startsWith("whsec_"));
+  assert.ok(keys.store.has("WEBHOOK:mcp-acceptance-test-church"));
+  await assert.rejects(() => runTool(env, req(TEST_KEY), "register_webhook", {
+    callbackUrl: "http://example.com/hook", events: ["proof_ready"],
+  }, stubFetch([]) as typeof fetch), /https/);
+});
+
+test("writes without a key are unauthorized; garbage keys are unauthorized", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  await assert.rejects(() => runTool(env, req(), "get_order_questions", {}, fetchFn),
+    (e: Error & { code?: string }) => e.code === "unauthorized");
+  await assert.rejects(() => runTool(env, req("tg_test_nope_short"), "get_order_questions", {}, fetchFn),
+    (e: Error & { code?: string }) => e.code === "unauthorized");
+});
