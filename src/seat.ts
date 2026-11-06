@@ -25,7 +25,7 @@ export async function callSeat(
   env: SeatEnv,
   op: string,
   input: Record<string, unknown>,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: typeof fetch = (input, init) => fetch(input, init),
 ): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
   if (!env.MCP_INVOKE_SECRET) return { ok: false, status: 0, body: { error: "seat secret not configured" } };
   const url = env.MCP_INVOKE_URL || DEFAULT_INVOKE_URL;

@@ -57,7 +57,7 @@ export async function stripeCall(
   path: string,
   data?: Record<string, unknown>,
   idempotencyKey?: string,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: typeof fetch = (input, init) => fetch(input, init),
 ): Promise<any> {
   let url = `${STRIPE_API}${path}`;
   const headers: Record<string, string> = { Authorization: `Bearer ${key}` };
@@ -149,7 +149,7 @@ export interface MintResult {
 
 export async function mintInvoice(
   input: MintInput,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: typeof fetch = (input, init) => fetch(input, init),
 ): Promise<MintResult> {
   const key = input.stripeKey;
   const email = input.email;
