@@ -1,0 +1,55 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "tap-mcp",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-05-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"workers_dev": true,
+	"observability": {
+		"enabled": true
+	},
+
+	// The public endpoint: POST https://tap.giving/mcp (spec 2.0).
+	// Zone routes are config on this estate, as tap-order's api routes
+	// are. The workers.dev URL stays as the rollback and debug surface.
+	"routes": [
+		{ "pattern": "tap.giving/mcp", "zone_name": "tap.giving" },
+		{ "pattern": "tap.giving/mcp/*", "zone_name": "tap.giving" }
+	],
+
+	// No module rules are needed: the example assets ship as
+	// generated TypeScript string modules under src/example-assets/
+	// (tools/build-examples.py), portable in every bundler.
+
+	"kv_namespaces": [
+		{
+			// This server's own namespace: key hash records,
+			// idempotency records, recaps, webhooks, rate counters,
+			// and the MCP's own order records. Created with:
+			//   npx wrangler kv namespace create MCP_KEYS
+			"binding": "MCP_KEYS",
+			"id": "873d314e83d744189d180f7984080c2e"
+		},
+		{
+			// This server's own namespace: submitted artwork bytes.
+			//   npx wrangler kv namespace create MCP_ARTWORK
+			"binding": "MCP_ARTWORK",
+			"id": "783b4906a0f24564962eb6521211f08c"
+		},
+		{
+			// The business side's production ORDERS namespace: live
+			// keys read the CHECKOUT-DONE paid signal here. tap-mcp
+			// never writes it (live orders ride POST
+			// /api/invoice-request, which writes the same record).
+			"binding": "ORDERS",
+			"id": "654f6c47fde3435a9bb3829407f284f7"
+		},
+		{
+			// The test lane's DEV_ORDERS namespace: a test key's
+			// create_order writes its INVREQ-shaped record here, in
+			// the exact shape the lane's own handlers write.
+			"binding": "DEV_ORDERS",
+			"id": "3e9ba6b53aeb450a81f6fbc959cfc1d9"
+		}
+	]
+}
