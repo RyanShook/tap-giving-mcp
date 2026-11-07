@@ -834,7 +834,102 @@ test("R2 F22: a second order is discount-ineligible, and a reused invoice is nam
   assert.ok(inv2.text.includes("150 discs, $675.00 total"), "the prior order's quantity and the invoice total are in the text");
   assert.ok(inv2.text.includes("is not invoiced separately"), "the consequence is stated");
 
+  // The two orders differ on quantity (150 vs 200), so the stored
+  // mint-time comparison names it on the invoice surfaces too.
+  assert.deepEqual(inv2.structured.existingDifferingFields, ["quantity"], "the quantity difference is stored and returned");
+  assert.ok(inv2.text.includes("The earlier order differs from this order in: quantity."), "the invoice text names the differing field");
+
   const status2 = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRef2 }, fresh);
   assert.ok(status2.text.startsWith("TEST MODE:"), "status carries the banner");
   assert.ok(status2.text.includes(`was already open from order ${orderRef1}`), "status names the shared invoice's order");
+  assert.ok(status2.text.includes("The earlier order differs from this order in: quantity."), "status appends the stored differing-fields line");
+});
+
+
+test("R2 F22 comparison: identical re-present warns on nothing; artwork and mounting diffs are named; status never recomputes", async () => {
+  const { env, keys } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  const fresh = stubFetch(calls) as typeof fetch;
+  const shipArgs = { size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO, contactEmail: "mcp-acceptance@example.com" };
+
+  // Submit two real artworks so both refs are valid order inputs.
+  const artRefs: string[] = [];
+  for (const seed of ["alpha", "beta"]) {
+    const bytes = new Uint8Array(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" data-seed="${seed}"></svg>`));
+    const sub = await runTool(env, req(TEST_KEY), "submit_artwork", {
+      file: { filename: `${seed}.svg`, mediaType: "image/svg+xml", contentBase64: Buffer.from(bytes).toString("base64") },
+      sha256: await sha256HexBytes(bytes), shape: "round",
+    }, fresh);
+    artRefs.push(sub.structured.artworkRef as string);
+  }
+
+  const mkOrder = async (over: Record<string, unknown>, key: string) => {
+    const args = { ...shipArgs, quantity: 150, ...over };
+    const recap = await runTool(env, req(TEST_KEY), "get_recap", args, fresh);
+    const order = await runTool(env, req(TEST_KEY), "create_order", {
+      ...args, contactName: "Test Pastor", contactPhone: "+17135550199",
+      recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: key,
+    }, fresh);
+    return order.structured.orderRef as string;
+  };
+
+  // Order 1 carries artwork A; its own invoice mints fresh.
+  const orderRef1 = await mkOrder({ artworkRef: artRefs[0] }, "r2c-order-0001");
+  await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRef1, idempotencyKey: "r2c-invoice-0001" }, fresh);
+
+  // Stripe reports order 1's invoice open for this customer from here on.
+  const existingStub = (async (input: unknown, init?: { method?: string; body?: string }): Promise<Response> => {
+    const url = String((input as { url?: string })?.url ?? input);
+    if (url.includes("/api/")) return fresh(input as RequestInfo, init as RequestInit);
+    if (url.includes("api.stripe.com")) {
+      if (url.includes("/customers") && (!init || init.method === "GET" || !init.method)) {
+        return new Response(JSON.stringify({ data: [{ id: "cus_prior" }] }), { status: 200 });
+      }
+      if (url.includes("/customers")) return new Response(JSON.stringify({ id: "cus_prior" }), { status: 200 });
+      if (url.includes("/invoices") && init?.method !== "POST") {
+        if (url.includes("status=open")) {
+          return new Response(JSON.stringify({ data: [{ id: "in_prior", number: "PRIOR-0001", status: "open", hosted_invoice_url: "https://invoice.stripe.com/i/prior", total: 67500, metadata: { mcp_order_ref: orderRef1 } }] }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    }
+    return new Response("nope", { status: 404 });
+  }) as typeof fetch;
+
+  // (a) Identical re-present: same five fields, new idempotency key.
+  const orderRefSame = await mkOrder({ artworkRef: artRefs[0] }, "r2c-order-0002");
+  const invSame = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRefSame, idempotencyKey: "r2c-invoice-0002" }, existingStub);
+  assert.equal(invSame.structured.existingFromOrderRef, orderRef1);
+  assert.deepEqual(invSame.structured.existingDifferingFields, [], "identical orders carry an empty comparison");
+  assert.ok(!invSame.text.includes("differs from this order"), "no warning line when nothing differs");
+  const statusSame = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefSame }, fresh);
+  assert.ok(!statusSame.text.includes("differs from this order"), "status carries no warning for the identical re-present");
+
+  // (b) Same price, different artwork: the warning names artwork.
+  const orderRefArt = await mkOrder({ artworkRef: artRefs[1] }, "r2c-order-0003");
+  const invArt = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRefArt, idempotencyKey: "r2c-invoice-0003" }, existingStub);
+  assert.deepEqual(invArt.structured.existingDifferingFields, ["artworkRef"], "structured names the record field");
+  assert.ok(invArt.text.includes("The earlier order differs from this order in: artwork."), "text names artwork");
+  const statusArt = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefArt }, fresh);
+  assert.ok(statusArt.text.includes("The earlier order differs from this order in: artwork."), "status names artwork");
+
+  // (c) Mounting only: names mounting, not artwork.
+  const orderRefMount = await mkOrder({ artworkRef: artRefs[0], mounting: "screws" }, "r2c-order-0004");
+  const invMount = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRefMount, idempotencyKey: "r2c-invoice-0004" }, existingStub);
+  assert.deepEqual(invMount.structured.existingDifferingFields, ["mounting"]);
+  assert.ok(invMount.text.includes("in: mounting."), "text names mounting");
+  assert.ok(!invMount.text.includes("in: artwork"), "artwork is not named");
+
+  // (d) Stored, not recomputed: mutate the prior order's mounting in
+  // the record store; status for the artwork case must still report
+  // the mint-time diff (artwork only, no mounting added).
+  const priorRaw = keys.store.get(`ORDER:${orderRef1}`);
+  assert.ok(priorRaw);
+  const priorRec = JSON.parse(priorRaw as string) as { mounting: string };
+  priorRec.mounting = "screws";
+  keys.store.set(`ORDER:${orderRef1}`, JSON.stringify(priorRec));
+  const statusArt2 = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefArt }, fresh);
+  assert.ok(statusArt2.text.includes("The earlier order differs from this order in: artwork."), "status still reports the mint-time diff");
+  assert.ok(!statusArt2.text.includes("mounting"), "the mutated prior field does not leak into status");
 });
