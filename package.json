@@ -15,5 +15,8 @@
 		"@types/node": "^22.0.0",
 		"typescript": "^7.0.2",
 		"wrangler": "4.127.1"
+	},
+	"dependencies": {
+		"@resvg/resvg-wasm": "^2.6.2"
 	}
 }

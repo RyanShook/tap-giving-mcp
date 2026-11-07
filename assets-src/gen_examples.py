@@ -71,7 +71,7 @@ DESIGNS["ex-navy-round"] = ("round", design("#16324f", "round", inner),
 
 # 2. Warm cream, serif, square.
 inner = (
-    '<rect x="6" y="6" width="94" height="94" fill="none" stroke="#8a6d3b" stroke-width="0.8"/>'
+    '<rect x="7" y="7" width="92" height="92" fill="none" stroke="#8a6d3b" stroke-width="0.8"/>'
     + TAP_ICON.format(x=53, y=36, s=0.58, c="#8a6d3b")
     + text(53, 68, "New Life Fellowship", 8.2, "#4a3b26")
     + tap_line(80, "#8a6d3b")
@@ -82,23 +82,23 @@ DESIGNS["ex-cream-square"] = ("square", design("#f5eddc", "square", inner),
 
 # 3. Deep green, arched name, cross accent, round.
 inner = (
-    '<path d="M18,58 A35,35 0 0,1 88,58" fill="none" stroke="#cfe3cf" stroke-width="0.7"/>'
-    + text(53, 30, "THE OAKS", 8.8, "#ffffff", weight="bold", spacing="2")
-    + text(53, 40, "COMMUNITY CHURCH", 4.6, "#cfe3cf", family="sans-serif", spacing="2.6")
+    '<path d="M20,24 A33,9 0 0,1 86,24" fill="none" stroke="#cfe3cf" stroke-width="0.7"/>'
+    + text(53, 37, "THE OAKS", 8.8, "#ffffff", weight="bold", spacing="2")
+    + text(53, 47, "COMMUNITY CHURCH", 4.6, "#cfe3cf", family="sans-serif", spacing="2.6")
     + '<g stroke="#e8c766" stroke-width="2.4" stroke-linecap="round">'
-    + '<line x1="53" y1="50" x2="53" y2="64"/><line x1="47.5" y1="55" x2="58.5" y2="55"/></g>'
-    + tap_line(78, "#e8c766")
-    + text(53, 88, "Give with a tap", 4.6, "#cfe3cf", family="sans-serif")
+    + '<line x1="53" y1="54" x2="53" y2="68"/><line x1="47.5" y1="59.5" x2="58.5" y2="59.5"/></g>'
+    + tap_line(80, "#e8c766")
+    + text(53, 90, "Give with a tap", 4.6, "#cfe3cf", family="sans-serif")
 )
 DESIGNS["ex-forest-round"] = ("round", design("#1e4634", "round", inner),
                               "Deep green with an arched name and a small cross accent")
 
 # 4. Burgundy, gold frame, bold, square.
 inner = (
-    '<rect x="5" y="5" width="96" height="96" fill="none" stroke="#d9a441" stroke-width="1.1"/>'
+    '<rect x="7" y="7" width="92" height="92" fill="none" stroke="#d9a441" stroke-width="1.1"/>'
     + text(53, 34, "REDEMPTION", 10.5, "#ffffff", family="sans-serif", weight="bold", spacing="1.6")
     + text(53, 44, "CITY CHURCH", 6.4, "#e6c98a", family="sans-serif", spacing="3.4")
-    + TAP_ICON.format(x=53, y=62, s=0.5, c="#d9a441")
+    + TAP_ICON.format(x=53, y=63, s=0.44, c="#d9a441")
     + tap_line(88, "#ffffff")
 )
 DESIGNS["ex-burgundy-square"] = ("square", design("#5e1f24", "square", inner),
@@ -106,7 +106,7 @@ DESIGNS["ex-burgundy-square"] = ("square", design("#5e1f24", "square", inner),
 
 # 5. Modern slate, minimal, round.
 inner = (
-    TAP_ICON.format(x=53, y=38, s=0.8, c="#ffffff")
+    TAP_ICON.format(x=53, y=30, s=0.6, c="#ffffff")
     + text(53, 72, "harbor church", 8.4, "#ffffff", family="sans-serif", spacing="0.6")
     + tap_line(84, "#9fb4c8")
 )
@@ -117,8 +117,8 @@ DESIGNS["ex-slate-round"] = ("round", design("#3d4c5c", "round", inner),
 inner = (
     text(53, 30, "Cornerstone", 10.2, "#513f2a", weight="bold")
     + text(53, 40, "FELLOWSHIP", 5.2, "#8a7355", family="sans-serif", spacing="3.2")
-    + '<line x1="33" y1="48" x2="73" y2="48" stroke="#b39b72" stroke-width="0.8"/>'
-    + TAP_ICON.format(x=53, y=64, s=0.52, c="#513f2a")
+    + '<line x1="33" y1="46" x2="73" y2="46" stroke="#b39b72" stroke-width="0.8"/>'
+    + TAP_ICON.format(x=53, y=65, s=0.46, c="#513f2a")
     + tap_line(90, "#513f2a")
 )
 DESIGNS["ex-sand-square"] = ("square", design("#e9dfc9", "square", inner),
@@ -143,6 +143,19 @@ def main():
         page = doc[0]
         zoom = 424 / page.rect.width
         pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
+        if shape == "round":
+            # The disc is the 100 mm cut (radius 50 mm at centre), not
+            # the square artboard: apply it as transparency outside
+            # the circle so the render shows the actual round disc.
+            mask_svg = (
+                '<svg xmlns="http://www.w3.org/2000/svg" width="106mm" height="106mm" '
+                'viewBox="0 0 106 106"><rect width="106" height="106" fill="black"/>'
+                '<circle cx="53" cy="53" r="50" fill="white"/></svg>'
+            )
+            mdoc = pymupdf.open(stream=mask_svg.encode("utf-8"), filetype="svg")
+            mpix = mdoc[0].get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False, colorspace=pymupdf.csGRAY)
+            mask = mpix
+            pix = pymupdf.Pixmap(pix, mask)
         pix.save(png_path)
         print(f"{ex_id}: svg {os.path.getsize(svg_path)} png {os.path.getsize(png_path)} ({shape})")
     return 0

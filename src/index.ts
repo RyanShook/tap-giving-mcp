@@ -13,7 +13,8 @@
 
 import type { Env } from "./env.ts";
 import { ENDPOINT, GATES, KEY_REQUEST_LINE, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME } from "./facts.ts";
-import { TOOLS, artworkBytesKey, readArtworkRecord, runTool } from "./tools.ts";
+import { PRODUCT_PHOTOS, TOOLS, artworkBytesKey, readArtworkRecord, runTool } from "./tools.ts";
+import { buildTemplateSvg } from "./preview.ts";
 import { ToolError, isRecord } from "./errors.ts";
 import { DETECTED_MEDIA_TYPE } from "./sniff.ts";
 import { EXAMPLES, exampleById } from "./examples.ts";
@@ -79,8 +80,8 @@ function selfDescription(): string {
     toolLines,
     ``,
     `## Auth`,
-    `Read tools (get_discovery, get_quote, get_product, get_artwork_spec) need no key.`,
-    `Write and status tools need the organization's API key: Authorization: Bearer tg_live_<orgslug>_<secret> (or tg_test_ for the test seat).`,
+    `Keyless reads (get_discovery, get_quote, get_product, get_artwork_spec) need no key.`,
+    `Order questions, order recap, and order status are reads that need the organization's key, like the writes: Authorization: Bearer tg_live_<orgslug>_<secret> (or tg_test_ for the test seat).`,
     KEY_REQUEST_LINE,
     ``,
     `## Human gates`,
@@ -234,6 +235,27 @@ export default {
       return new Response(ex.svgText, { status: 200, headers });
     }
     void EXAMPLES;
+
+    // The artwork template, with guide layers (F12).
+    const tplMatch = /^\/mcp\/templates\/disc-template-(round|square)\.svg$/.exec(url.pathname);
+    if (tplMatch && (request.method === "GET" || request.method === "HEAD")) {
+      const svg = buildTemplateSvg(tplMatch[1] as "round" | "square");
+      const headers = { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400", "Content-Length": String(new TextEncoder().encode(svg).length) };
+      if (request.method === "HEAD") return new Response(null, { status: 200, headers });
+      return new Response(svg, { status: 200, headers });
+    }
+
+    // Product photos, served for display (the same bytes the tools
+    // return inline).
+    const photoMatch = /^\/mcp\/photos\/([a-z0-9-]+)\.webp$/.exec(url.pathname);
+    if (photoMatch && (request.method === "GET" || request.method === "HEAD")) {
+      const photo = PRODUCT_PHOTOS.find((x) => x.id === photoMatch[1]);
+      if (!photo) return new Response("not found", { status: 404 });
+      const bytes = Uint8Array.from(atob(photo.data), (c) => c.charCodeAt(0));
+      const headers = { "Content-Type": "image/webp", "Cache-Control": "public, max-age=86400", "Content-Length": String(bytes.length) };
+      if (request.method === "HEAD") return new Response(null, { status: 200, headers });
+      return new Response(bytes as unknown as BodyInit, { status: 200, headers });
+    }
 
     // Stored submission bytes at a capability URL. The artworkRef is
     // the capability (unguessable, hash-derived); the bytes are never

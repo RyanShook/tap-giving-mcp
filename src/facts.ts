@@ -22,9 +22,15 @@ export const SERVER_DESCRIPTION =
 export const PRESENTATION_SYNONYMS = ["tap discs", "tap plates", "tap tags", "NFC tap to give"];
 export const ENDPOINT = "https://tap.giving/mcp";
 export const REPO_URL = "https://github.com/RyanShook/tap-giving-mcp";
+// How a person gets a key (F2): a role and an address, never a first
+// name, plus the turnaround and what to say. hello@tap.giving is the
+// published contact address (it is on the website's own emails).
+export const TEAM_EMAIL = "hello@tap.giving";
 export const KEY_REQUEST_LINE =
-  "An organization API key is issued by Tap.Giving: ask Ryan at ryan@tap.giving. " +
-  "Read tools need no key; order setup, invoice requests, and order status need the organization's key.";
+  "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address " +
+  "you want on the order, say which church or nonprofit the key is for, and the team replies with the key " +
+  "within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, " +
+  "and order status use the organization's key.";
 
 // The standing differentiators (llms.txt and for-agents fact set),
 // carried in submit_artwork's output and in get_discovery so the
@@ -40,7 +46,7 @@ export const BENEFITS: string[] = [
 
 export const PRODUCT = {
   chip: "NTAG213",
-  chipDetail: "NTAG213 chip (144 bytes user memory), locked to https://go.tap.giving/<slug>, assigned by Tap.Giving",
+  chipDetail: "NTAG213 chip, locked to your organization's Tap.Giving address, assigned by Tap.Giving",
   material: "0.85 mm double-laminated matte waterproof PVC",
   sizes: [
     { size: "100mm-round", label: "100 mm (4 inch) round", shape: "round" },
@@ -48,7 +54,7 @@ export const PRODUCT = {
   ],
   sizePolicy:
     "Built-in sizes are 100 mm (4 inch) round and 100 mm (4 inch) square at the same price. " +
-    "Every other size or shape is a manual exception handled by hand through Ryan at ryan@tap.giving, never self-serve.",
+    "Every other size or shape is a manual exception handled by hand through the Tap.Giving team (hello@tap.giving), never self-serve.",
   mounting: ["adhesive", "screws"],
   mountingDetail:
     "Every disc carries 3M adhesive backing as standard. Pre-drilled screw holes (2 holes, 6 mm) are optional at no extra cost, and discs with holes keep the adhesive too.",
@@ -104,7 +110,20 @@ export const ARTWORK_GEOMETRY = {
   background: "Flat solid colour background (a standing production rule).",
   minimumLogoMm: 18,
   encoding:
-    "The disc encodes the organization's go.tap.giving slug, assigned by Tap.Giving; never invent a raw giving URL for the artwork.",
+    "The disc encodes the organization's Tap.Giving address, assigned by Tap.Giving; never invent a raw giving URL for the artwork.",
+  screwHoles: {
+    count: 2,
+    diameterMm: 6,
+    centreOffsetMm: 43.25,
+    centresMm: [
+      { x: 9.75, y: 53 },
+      { x: 96.25, y: 53 },
+    ],
+    note:
+      "Two pre-drilled holes, 6 mm across, centered 43.25 mm either side of the disc center on the horizontal " +
+      "midline (centers at (9.75, 53) and (96.25, 53) mm on the artboard). Drilled only when screws mounting " +
+      "is chosen; discs with holes keep the adhesive backing too.",
+  },
 } as const;
 
 export const ARTWORK_GUIDELINES: string[] = [
@@ -139,11 +158,13 @@ export const MOUNTING_OPTIONS = [
 ] as const;
 
 export const LINK_DESTINATION_NOTE =
-  "Where should a tap send people? Optional: you can leave this blank and change it anytime; " +
-  "your discs ship ready to re-point from your free Redirect Dashboard.";
+  "Where should a tap send people? Give your giving page URL and your discs start pointed there. " +
+  "Leaving it blank is fine too, and a tap is never left going nowhere: your discs ship pointed at your " +
+  "own Tap.Giving page (your free Redirect Dashboard), and you can set or change the destination anytime " +
+  "from the dashboard.";
 
 export const RECAP_NOTES: string[] = [
-  "Shipping usually takes two to three weeks.",
+  "Shipping usually takes two to three weeks from artwork approval.",
   "We send a final proof via email before any order is placed.",
 ];
 
