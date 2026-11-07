@@ -30,6 +30,7 @@ export interface ToolResult {
   structured: Record<string, unknown>;
   text: string;
   image?: { data: string; mimeType: string };
+  images?: Array<{ data: string; mimeType: string }>;
 }
 
 interface Ctx {
@@ -276,15 +277,32 @@ async function toolGetArtworkSpec(_ctx: Ctx, args: Record<string, unknown>): Pro
   const chosenExampleRef = optString(args, "chosenExampleRef", 80);
   const structured = artworkSpecObject(shape);
   if (chosenExampleRef) structured.chosenExampleRef = chosenExampleRef;
+  // The examples are presented as a numbered list of design directions
+  // to build from, in the same order as structured.examples and as the
+  // image content blocks that follow the text (entry N describes image
+  // block N). The PNG bytes ride along inline as image content, from
+  // the same embedded source the displayUrls serve.
+  const specExamples = structured.examples as Array<{ id: string; direction: string; shape: string }>;
+  const pickList = specExamples.map((e, i) => {
+    const def = EXAMPLES.find((x) => x.id === e.id);
+    const shapeWord = e.shape === "round" ? "Round" : "Square";
+    return `${i + 1}. ${shapeWord}, ${def ? def.pickLabel : e.direction}: ${e.direction}.`;
+  });
+  const images = specExamples
+    .map((e) => EXAMPLES.find((x) => x.id === e.id))
+    .filter((x): x is NonNullable<typeof x> => !!x)
+    .map((x) => ({ data: x.pngBase64, mimeType: "image/png" }));
   const text = [
     `Artwork spec: 106 mm square artboard for both shapes.`,
     `Round: cut radius 50 mm, bleed radius 53 mm, safe radius 45 mm, centre (53, 53) mm.`,
     `Square: cut is a 100 mm box spanning 3 to 103 mm; bleed half-width 53 mm; safe half-width 47 mm.`,
     ARTWORK_GEOMETRY.formatWanted,
     ARTWORK_GEOMETRY.background,
-    `Examples: ${(structured.examples as Array<{ direction: string }>).map((e) => e.direction).join("; ")}.`,
+    `Example design directions (starting templates to build from, shown in the images that follow):`,
+    ...pickList,
+    `Tell me the number of the direction you want to build from. Then compose your own artwork from that direction, adding the logo or name of the organization it is for, and submit it with submit_artwork. The examples are starting templates only: an example is never ordered or shipped as-is.`,
   ].join("\n");
-  return { structured, text };
+  return { structured, text, images };
 }
 
 // ─── artwork submission ─────────────────────────────────────────────
