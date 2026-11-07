@@ -107,12 +107,11 @@ idempotency key.
 ## Worked example
 
 One full pass through the journey, captured from the live server on
-2026-11-07 with the acceptance test organization, in test mode
-throughout (the order and invoice below are test records). Every
-field name and value shown is exactly what the server returned;
-long values are shortened only where marked. Each result returns
-both the structured content and a plain-text rendering, and both
-are shown.
+2026-11-07 with test organizations, in test mode throughout (the
+orders and invoice below are test records). Every field name and
+value shown is exactly what the server returned; long values are
+shortened only where marked. Each result returns both the
+structured content and a plain-text rendering, and both are shown.
 
 ### 1. get_discovery (no key)
 
@@ -128,7 +127,8 @@ Response, structured content (abbreviated):
 {
   "server": {"name": "NFC Tap Builder by Tap.Giving", "endpoint": "https://tap.giving/mcp", "synonyms": ["tap discs", "tap plates", "tap tags", "NFC tap to give"]},
   "introduction": {
-    "product": "A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked NTAG213 chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.",
+    "builder": "NFC Tap Builder by Tap.Giving",
+    "product": "A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.",
     "firstChoice": {"field": "shape", "options": ["round", "square"]}
   },
   "pricing": {
@@ -138,12 +138,24 @@ Response, structured content (abbreviated):
       {"quantity": 400, "tier": "400+ discs", "unitCents": 350, "unitPrice": "$3.50"}
     ],
     "minimumQuantity": 100,
+    "discount": "10 percent off the first order with code WELCOME10, inside a 7-day renewing window; a conditional first-order line, never a price gate. Quotes headline list totals.",
     "shipping": "Free on every order.",
     "note": "Call get_quote for the binding quote at an exact quantity."
   },
+  "artworkSpec": {"summary": "106 mm square artboard; 100 mm cut (round or square); 3 mm bleed; vector artwork back (SVG preferred).", "tool": "get_artwork_spec"},
+  "photos": [
+    {"id": "pew-disc", "alt": "A Tap.Giving disc mounted on a church pew", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/pew-disc.webp"},
+    {"id": "phone-tap", "alt": "A phone tapping a Tap.Giving disc on a chair back, opening the church's giving page", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/phone-tap.webp"}
+  ],
   "capabilities": {
-    "readTools": ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap", "get_order_status"],
-    "writeTools": ["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"]
+    "readTools": ["get_discovery", "get_quote", "get_product", "get_artwork_spec"],
+    "keyedReadTools": ["get_order_questions", "get_recap", "get_order_status"],
+    "writeTools": ["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"],
+    "gates": ["Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.", "Payment stays human: this server moves no money itself. It returns a hosted invoice link and a person pays on Stripe's hosted page.", "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state."],
+    "howToGetAKey": "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which church or nonprofit the key is for, and the team replies with the key within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, and order status use the organization's key.",
+    "kickoff": "start_order_intent",
+    "benefits": ["Works with any giving platform", "No subscription fees", "Durable waterproof PVC with a locked tap chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
+    "guarantee": "Covered by our 30-day money-back guarantee."
   }
 }
 ```
@@ -154,14 +166,14 @@ Response, text rendering (complete):
 NFC Tap Builder by Tap.Giving: Build and order custom NFC tap discs and tap tags for churches and nonprofits: NFC tap to give, designed by your own agent, priced from the published tiers, ordered up to the human payment and proof gates. No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently. This server moves no money itself: it returns a hosted invoice link for a person to pay.
 
 What it is
-A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked NTAG213 chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.
+A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.
 First choice: the shape, round or square.
 
 Why Tap.Giving
 No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently.
 - Works with any giving platform
 - No subscription fees
-- Durable waterproof PVC with a locked NTAG213 chip
+- Durable waterproof PVC with a locked tap chip
 - Custom branding from 100 discs
 - Free shipping
 - Covered by our 30-day money-back guarantee
@@ -177,8 +189,10 @@ How it works
 
 Gates
 Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.
-Writes need an organization API key. An organization API key is issued by Tap.Giving: ask Ryan at ryan@tap.giving. Read tools need no key; order setup, invoice requests, and order status need the organization's key.
+Discovery, quotes, product facts, and the artwork spec need no key. Order questions, recaps, and order status are reads that use your organization key, like the writes. An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which church or nonprofit the key is for, and the team replies with the key within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, and order status use the organization's key.
+The two photos with this answer show the disc in use: on a church pew, and a phone tapping a disc on a chair back.
 ```
+
 
 ### 2. get_quote at 250 (no key)
 
@@ -233,7 +247,8 @@ baked into the headline.
 ### 3. submit_artwork (keyed)
 
 A 1-pixel PNG stands in for the agent-built artwork file here; the
-sha256 is the real hash of those bytes.
+sha256 is the real hash of those bytes. This call was made with the
+first-user test organization's key.
 
 Request:
 
@@ -246,18 +261,21 @@ Response, structured content:
 ```json
 {
   "received": true,
-  "artworkRef": "art_2ce8de191f7035de811e224b",
-  "displayUrl": "https://tap.giving/mcp/artwork/art_2ce8de191f7035de811e224b",
+  "artworkRef": "art_fc94d730591f03bab798edfe",
+  "displayUrl": "https://tap.giving/mcp/artwork/art_fc94d730591f03bab798edfe",
   "sha256": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
   "validation": {"policy": "permissive", "checks": {"notMalicious": true, "sizeOk": true, "decodable": true}, "findings": ["accepted; vector preferred for production"]},
-  "benefits": ["Works with any giving platform", "No subscription fees", "Durable waterproof PVC with a locked NTAG213 chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
-  "nextStep": "Show the benefits, then capture the contact email at order setup (start_order_intent) and ask the order questions (get_order_questions)."
+  "benefits": ["Works with any giving platform", "No subscription fees", "Durable waterproof PVC with a locked tap chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
+  "preview": {"kind": "on-disc", "shapes": ["round", "square"], "note": "Your design on the disc, cut shape applied. This is a preview render; the final proof comes by email before production."},
+  "nextStep": "Show the person their design on the disc (the preview image), then capture the contact email at order setup (start_order_intent) and ask the order questions (get_order_questions)."
 }
 ```
 
-The result also carries the artwork back as an image content block,
-and its text rendering opens: "Artwork received:
-art_2ce8de191f7035de811e224b (worked-example.png, png, 70 bytes)."
+The result also carries the submitted design composited on the disc
+back as image content blocks, one per shape when no shape was given,
+and its text rendering opens with the test-mode banner, then:
+"Artwork received: art_fc94d730591f03bab798edfe
+(worked-example.png, png, 70 bytes)."
 
 ### 4. create_order (keyed, idempotency key)
 
@@ -292,47 +310,60 @@ conflict naming the differing fields.
 
 ### 5. request_invoice (keyed, idempotency key)
 
+Steps 1 to 4 above are the acceptance organization's pass. This step
+replays the reused-invoice case against the first-user test
+organization, whose second order was placed while its first order's
+invoice was still open, so the server returns that invoice instead
+of minting a second one.
+
 Request:
 
 ```json
-{"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "request_invoice", "arguments": {"orderRef": "mcp:mcp-acceptance-test-church:93f3ebe22527b0b7", "idempotencyKey": "worked-example-invoice-2026-11-07-01"}}}
+{"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "request_invoice", "arguments": {"orderRef": "mcp:coo-first-user:e897269bd8c9f078", "idempotencyKey": "worked-example-invoice-refresh-2026-11-07"}}}
 ```
 
-Response, structured content (abbreviated):
+Response, structured content:
 
 ```json
 {
-  "orderRef": "mcp:mcp-acceptance-test-church:93f3ebe22527b0b7",
-  "invoiceId": "in_1UZGb3KIjbVAoCpTT6aw3fh4",
-  "invoiceNumber": "RVO4XL7A-0001",
+  "orderRef": "mcp:coo-first-user:e897269bd8c9f078",
+  "invoiceId": "in_1UZHUIKIjbVAoCpTX1AMZjyQ",
+  "invoiceNumber": "RCMDIGOQ-0001",
   "status": "open",
-  "hostedInvoiceUrl": "https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVJVa2x5MmJWY3dKb1BEanZZWWE2OEhGMFhNSWdILDE4NDYyODc1Mw0200scxZ1WGD?s=ap",
-  "handoffLine": "Review your invoice: https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVJVa2x5MmJWY3dKb1BEanZZWWE2OEhGMFhNSWdILDE4NDYyODc1Mw0200scxZ1WGD?s=ap",
-  "totalCents": 90000,
+  "hostedInvoiceUrl": "https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVNQdVU1dlRBdFQ2VWRLTVpmZ0RoS0tWZ3lBZ05XLDE4NDYzMzEwMA0200ZqkGjMGe?s=ap",
+  "handoffLine": "Review your invoice: https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVNQdVU1dlRBdFQ2VWRLTVpmZ0RoS0tWZ3lBZ05XLDE4NDYzMzEwMA0200ZqkGjMGe?s=ap",
+  "totalCents": 67500,
   "currency": "USD",
+  "totalNote": "Totals are structured data for the agent's records; the human-facing handoff line carries no dollar total, the invoice itself carries the money.",
   "existing": true,
-  "note": "This customer already had an open or draft invoice; that invoice's link is returned, flagged existing, rather than stacking a second one."
+  "note": "This customer already had an open or draft invoice; that invoice's link is returned, flagged existing, rather than stacking a second one.",
+  "existingFromOrderRef": "mcp:coo-first-user:fddf6e881efb4c5e",
+  "replayed": true,
+  "antiMetal": "unknown",
+  "antiMetalNote": "No anti-metal count was recorded for this order, so the invoice carries no shielding line. If some discs go on metal surfaces, the count must be settled with the person before printing; it cannot be added afterwards.",
+  "nextStep": "Hand the handoffLine to the person. A person pays on Stripe's hosted page; this server moves no money itself. Artwork approval happens separately, by email, before production."
 }
 ```
 
 Response, text rendering:
 
 ```text
-Invoice RVO4XL7A-0001 is open.
-Review your invoice: https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVJVa2x5MmJWY3dKb1BEanZZWWE2OEhGMFhNSWdILDE4NDYyODc1Mw0200scxZ1WGD?s=ap
-Total on the invoice: $900.00. A person pays it on Stripe's hosted page.
+TEST MODE: this call uses a test key, so no real order is placed and no charge is made.
+Invoice RCMDIGOQ-0001 is open.
+This is not a new invoice for this order: invoice RCMDIGOQ-0001 was already open from order mcp:coo-first-user:fddf6e881efb4c5e (150 discs, $675.00 total), so this order (mcp:coo-first-user:e897269bd8c9f078) is not invoiced separately. Pay that invoice if it is the order you mean; if you need a separate invoice for this order, contact the Tap.Giving team at hello@tap.giving.
+Review your invoice: https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVNQdVU1dlRBdFQ2VWRLTVpmZ0RoS0tWZ3lBZ05XLDE4NDYzMzEwMA0200ZqkGjMGe?s=ap
+Total on the invoice: $675.00. A person pays it on Stripe's hosted page.
 ```
 
-The acceptance customer already had this open test invoice from the
-invoice-parity acceptance run earlier the same day, so the server
-returned it flagged `existing` instead of stacking a second one;
-for a customer with no open invoice, the same call mints and
-returns the new invoice in the same shape, without the flag. The
-invoice total is $900.00 because the first-order WELCOME10 discount
-applied at invoice time; the quote's headline stayed the $1,000.00
-list total. The handoff is the link: a person pays it, this server
-takes no payment.
-
+The first-user organization already had this open test invoice from
+its first order, so the server returned it flagged `existing` and
+named the order it belongs to in `existingFromOrderRef`, instead of
+stacking a second one; for an organization with no open invoice,
+the same call mints and returns the new invoice in the same shape,
+without the flag. The invoice total is $675.00 because the
+first-order WELCOME10 discount applied at invoice time; the quote's
+headline stayed the list total for its quantity. The handoff is the
+link: a person pays it, this server takes no payment.
 ## Errors
 
 Every tool error returns MCP's standard error content (a text block
