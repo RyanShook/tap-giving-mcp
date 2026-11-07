@@ -10,10 +10,9 @@ invoice link a person pays.
   HTTP, JSON-RPC 2.0, stateless). `GET https://tap.giving/mcp`
   returns a short self-description for people and agents.
 - **Spec:** the published design and tool contracts live in
-  [docs/spec.md](docs/spec.md). The server is built and accepted
-  on every leg except the invoice legs, which wait on the Stripe
-  test key and the field-for-field parity check; live-mode invoice
-  minting is refused until parity passes.
+  [docs/spec.md](docs/spec.md). The server is built and accepted:
+  every acceptance leg passed, including the field-for-field invoice
+  parity check against Stripe test mode on 2026-11-07.
 - **This repo stays clean:** README, the published spec, and the
   released server code. Working notes and anything touching private
   business operations live elsewhere by design.
