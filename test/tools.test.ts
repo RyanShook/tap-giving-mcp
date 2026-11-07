@@ -7,6 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runTool } from "../src/tools.ts";
 import { EXAMPLES } from "../src/examples.ts";
+import { BENEFITS, NO_FEES_LINE, TAX_NOTE } from "../src/facts.ts";
 import worker from "../src/index.ts";
 import { sha256Hex } from "../src/keys.ts";
 import type { Env } from "../src/env.ts";
@@ -421,4 +422,38 @@ test("example display routes: HEAD returns the GET headers with no body", async 
     assert.equal(head.headers.get("Content-Length"), String(getBytes.length));
     assert.equal((await head.arrayBuffer()).byteLength, 0, "HEAD has no body");
   }
+});
+
+test("get_discovery: sectioned first presentation with the no-fees lead line", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
+  // Headed sections, in order.
+  let lastIdx = -1;
+  for (const h of ["What it is", "Why Tap.Giving", "Pricing", "How it works", "Gates"]) {
+    const idx = d.text.indexOf(`\n${h}\n`);
+    assert.ok(idx > lastIdx, `section heading present and in order: ${h}`);
+    lastIdx = idx;
+  }
+  // The Why section leads with the no-fees line, before the benefits
+  // bullets; all six benefits appear as bullets, unchanged.
+  const whyIdx = d.text.indexOf("Why Tap.Giving");
+  const leadIdx = d.text.indexOf(NO_FEES_LINE, whyIdx);
+  assert.ok(leadIdx > whyIdx, "no-fees lead line sits inside the Why section");
+  for (const b of BENEFITS) {
+    const bi = d.text.indexOf(`- ${b}`);
+    assert.ok(bi > leadIdx, `benefit bullet present after the lead line: ${b}`);
+  }
+  assert.deepEqual(d.structured.capabilities && (d.structured.capabilities as { benefits: string[] }).benefits, BENEFITS, "structured benefits unchanged");
+  // Pricing carries the tiers, the guarantee, and the new tax note.
+  assert.ok(d.text.includes("100-199 discs at $5.00 each, 200-399 at $4.00, 400+ at $3.50"));
+  assert.ok(d.text.includes("30-day money-back guarantee"));
+  assert.equal(TAX_NOTE, "Tax, where it applies, is calculated on the invoice.");
+  assert.ok(d.text.includes(TAX_NOTE), "new tax sentence present in discovery text");
+  // No affirmative checkout claim anywhere in the discovery text.
+  assert.ok(!/checkout/i.test(d.text), "no checkout claim in discovery text");
+  // The payment gate sentence stands verbatim.
+  assert.ok(d.text.includes("This server moves no money itself: it returns a hosted invoice link for a person to pay."), "gate sentence verbatim");
+  // How it works names the build-from and submit path.
+  assert.ok(d.text.includes("Build artwork from the example directions in get_artwork_spec, and submit it with submit_artwork."));
 });
