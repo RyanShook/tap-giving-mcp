@@ -74,6 +74,28 @@ section 7 tests exactly where that line falls.
 9. Build runbook for today, Nov 6, 2026 (repo bridge, server build, deploy, key issuance, acceptance, fix loop)
 10. Open items: genuine blockers and Ryan-action items only
 
+## Tool contract index
+
+One hop from this index to each tool's contract section. The README
+carries the same surface in brief (annotations and returns per
+tool, a worked example, and the error catalog).
+
+| Tool | Contract |
+|---|---|
+| `get_discovery` | [2.2.1 Tool: get_discovery](#221-tool-get_discovery-v1-read-no-key-the-cold-agent-entry-contract) |
+| `get_quote` | [2.3 Tool: get_quote](#23-tool-get_quote-v1-read-no-key) |
+| `get_product` | [2.4 Tool: get_product](#24-tool-get_product-v1-read-no-key) |
+| `get_artwork_spec` | [2.6 Design in v1](#26-design-in-v1-in-ryans-ruled-shape-changed-by-ryans-answer-2026-11-06) (the spec half) |
+| `submit_artwork` | [2.6 Design in v1](#26-design-in-v1-in-ryans-ruled-shape-changed-by-ryans-answer-2026-11-06) (the submission half) |
+| `start_order_intent` | [3.4 Cold first contact and the kickoff](#34-cold-first-contact-and-the-kickoff-start_order_intent-v1) |
+| `get_order_questions` | [2.11 The v1 journey](#211-the-v1-journey-in-ryans-order-binding-flow) (step 2 question set) |
+| `get_recap` | [2.11 The v1 journey](#211-the-v1-journey-in-ryans-order-binding-flow) (the recap contract) |
+| `create_order` | [2.5 Tool: create_order](#25-tool-create_order-v1-write-key-required) |
+| `request_invoice` | [2.7 Tool: request_invoice](#27-tool-request_invoice-v1-write-key-required) |
+| `get_order_status` | [2.8 Tool: get_order_status](#28-tool-get_order_status-v1-read-key-required) |
+| `register_webhook` | [2.9.1 Webhooks](#291-webhooks-proof_ready-and-shipped-contracts-in-v1-delivery-v11) |
+| All tools | [2.1 Auth header shape](#21-auth-header-shape-all-tools), [2.9 Error shape](#29-error-shape-all-tools) |
+
 ## 1. Assumption test: where an MCP is actually required
 
 Ryan's working assumption: the MCP is the only real way to do this
