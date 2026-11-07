@@ -4,7 +4,9 @@ Welcome. This is the public home of Tap.Giving's MCP server, "NFC Tap
 Builder by Tap.Giving": the connector that lets an AI agent help a
 church or nonprofit design and order custom NFC tap discs, tap
 plates, and tap tags end to end, from first discovery to a hosted
-invoice link a person pays.
+invoice link a person pays. No subscriptions and no ongoing fees:
+one-time pricing per order, and the Redirect Dashboard is included
+free, permanently.
 
 - **Website:** [https://tap.giving](https://tap.giving)
 - **Endpoint:** `POST https://tap.giving/mcp` (MCP over Streamable
