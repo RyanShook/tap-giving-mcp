@@ -6,3 +6,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Generated example render intermediates (the .png.ts modules are the committed form)
+src/example-assets/*.png
+!src/example-assets/*.png.ts
