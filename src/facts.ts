@@ -7,10 +7,17 @@
 
 export const SERVER_NAME = "NFC Tap Builder by Tap.Giving";
 export const SERVER_TITLE = "NFC Tap Builder by Tap.Giving";
+// The no-fees lead line: stated once here, used in the server
+// description and as the lead line of get_discovery's Why section.
+// Facts: no subscription fees (BENEFITS), and the Redirect Dashboard
+// is included free on every order, permanently (PRODUCT).
+export const NO_FEES_LINE =
+  "No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently.";
+
 export const SERVER_DESCRIPTION =
   "Build and order custom NFC tap discs and tap tags for churches and nonprofits: " +
   "NFC tap to give, designed by your own agent, priced from the published tiers, ordered up to the " +
-  "human payment and proof gates. This server moves no money itself: it returns a hosted invoice " +
+  "human payment and proof gates. " + NO_FEES_LINE + " This server moves no money itself: it returns a hosted invoice " +
   "link for a person to pay.";
 export const PRESENTATION_SYNONYMS = ["tap discs", "tap plates", "tap tags", "NFC tap to give"];
 export const ENDPOINT = "https://tap.giving/mcp";
@@ -140,7 +147,7 @@ export const RECAP_NOTES: string[] = [
   "We send a final proof via email before any order is placed.",
 ];
 
-export const TAX_NOTE = "Tax, where it applies, surfaces at Stripe checkout and on the invoice.";
+export const TAX_NOTE = "Tax, where it applies, is calculated on the invoice.";
 
 export const GATES = {
   designApproval:

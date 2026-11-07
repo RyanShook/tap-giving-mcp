@@ -7,7 +7,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { quoteFor, tierForQuantity, PRICING_TIERS } from "../src/pricing.ts";
-import { ARTWORK_GEOMETRY, PRODUCT } from "../src/facts.ts";
+import { ARTWORK_GEOMETRY, NO_FEES_LINE, PRODUCT, SERVER_DESCRIPTION, TAX_NOTE } from "../src/facts.ts";
 import { TOOLS, toolByName } from "../src/tools.ts";
 import { EXAMPLES } from "../src/examples.ts";
 
@@ -113,4 +113,10 @@ test("examples are a house set of six, round and square across it", () => {
     assert.ok(e.pngBase64.length > 1000, e.id);
     assert.ok(e.direction.length > 10, e.id);
   }
+});
+
+test("server description carries the no-fees line and the verbatim gate sentence", () => {
+  assert.ok(SERVER_DESCRIPTION.includes(NO_FEES_LINE), "no-fees statement in the server description");
+  assert.ok(SERVER_DESCRIPTION.includes("This server moves no money itself: it returns a hosted invoice link for a person to pay."), "gate sentence verbatim in the server description");
+  assert.equal(TAX_NOTE, "Tax, where it applies, is calculated on the invoice.");
 });

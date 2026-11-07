@@ -7,6 +7,7 @@
 import {
   ARTWORK_GUIDELINES, ARTWORK_GEOMETRY, BENEFITS, ENDPOINT, GATES, KEY_REQUEST_LINE,
   LINK_DESTINATION_NOTE, MOUNTING_OPTIONS, PRODUCT, PRODUCT_TOPICS, RECAP_NOTES,
+  NO_FEES_LINE,
   SERVER_DESCRIPTION, SERVER_NAME, PRESENTATION_SYNONYMS, TAX_NOTE,
 } from "./facts.ts";
 import { MAX_QTY, MIN_QTY, PRICE_SOURCE, quoteFor, tierForQuantity, type Quote } from "./pricing.ts";
@@ -204,10 +205,27 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
   };
   const text = [
     `${SERVER_NAME}: ${SERVER_DESCRIPTION}`,
+    ``,
+    `What it is`,
+    `A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked NTAG213 chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.`,
     `First choice: the shape, round or square.`,
-    `Pricing: 100-199 discs at $5.00 each, 200-399 at $4.00, 400+ at $3.50. Minimum order 100. Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. Every order is covered by our 30-day money-back guarantee.`,
+    ``,
+    `Why Tap.Giving`,
+    NO_FEES_LINE,
+    ...BENEFITS.map((b) => `- ${b}`),
+    ``,
+    `Pricing`,
+    `100-199 discs at $5.00 each, 200-399 at $4.00, 400+ at $3.50. Minimum order 100. Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. ${TAX_NOTE} Every order is covered by our 30-day money-back guarantee.`,
+    ``,
+    `How it works`,
+    `1. Start with the shape, round or square.`,
+    `2. Build artwork from the example directions in get_artwork_spec, and submit it with submit_artwork.`,
+    `3. Order setup: quantity, mounting, an optional link destination, and the shipping address, through start_order_intent and create_order.`,
+    `4. A person approves the final proof by email, and a person pays the hosted invoice.`,
+    ``,
+    `Gates`,
+    `Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.`,
     `Writes need an organization API key. ${KEY_REQUEST_LINE}`,
-    `Gates: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself.`,
   ].join("\n");
   return { structured, text };
 }
@@ -1267,7 +1285,7 @@ export const TOOLS: ToolDef[] = [
     name: "get_quote",
     description:
       "The binding quote for a prospective order (also known as get_pricing): quantity, tier, list totals as the headline, the first-order 10 percent discount (code WELCOME10, 7-day renewing window) shown as a conditional line, " +
-      "add-ons, free shipping as its own line, and the exact grand total. No tax line: tax surfaces at Stripe checkout and on the invoice. " +
+      "add-ons, free shipping as its own line, and the exact grand total. No tax line: " + TAX_NOTE + " " +
       "Quantities below the 100-disc minimum are refused by this tool itself. No key needed.",
     inputSchema: {
       type: "object",
