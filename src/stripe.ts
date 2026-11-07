@@ -145,6 +145,7 @@ export interface MintResult {
   customerId: string;
   customerReused: boolean;
   existing: boolean;
+  existingOrderRef: string | null;
 }
 
 export async function mintInvoice(
@@ -191,6 +192,7 @@ export async function mintInvoice(
       customerId,
       customerReused,
       existing: true,
+      existingOrderRef: (existingInv.metadata?.mcp_order_ref as string | undefined) ?? null,
     };
   }
 
@@ -244,5 +246,6 @@ export async function mintInvoice(
     customerId,
     customerReused,
     existing: false,
+    existingOrderRef: null,
   };
 }
