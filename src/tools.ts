@@ -936,6 +936,53 @@ export function diffFields(a: Record<string, unknown>, b: Record<string, unknown
   return out.sort();
 }
 
+// F22 content comparison: when minting reuses an earlier order's
+// invoice, the two orders are compared over exactly the fields the
+// invoice and production embody (the verdict's five). Excluded on
+// purpose: contactEmail (identical by construction), linkDestination
+// and givingUrl (changeable anytime by design), antiMetalCount (it
+// moves the total, which the reuse text already shows).
+const INVOICE_COMPARE_FIELDS = ["artworkRef", "quantity", "size", "mounting", "shipTo"] as const;
+
+const COMPARE_FIELD_LABELS: Record<string, string> = {
+  artworkRef: "artwork",
+  quantity: "quantity",
+  size: "size",
+  mounting: "mounting",
+  shipTo: "shipping address",
+};
+
+function stableComparedValue(v: unknown): unknown {
+  if (typeof v === "string") return v.trim();
+  if (Array.isArray(v)) return v.map(stableComparedValue);
+  if (v && typeof v === "object") {
+    const rec = v as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(rec).sort()) out[k] = stableComparedValue(rec[k]);
+    return out;
+  }
+  return v;
+}
+
+// Field names returned are the order-record field names; values are
+// normalized (object keys sorted recursively, strings trimmed) so a
+// re-serialized identical shipTo does not false-positive.
+export function invoiceDifferingFields(
+  prior: Pick<OrderRecord, "artworkRef" | "quantity" | "size" | "mounting" | "shipTo">,
+  current: Pick<OrderRecord, "artworkRef" | "quantity" | "size" | "mounting" | "shipTo">,
+): string[] {
+  const pick = (o: Record<string, unknown>): Record<string, unknown> => {
+    const out: Record<string, unknown> = {};
+    for (const k of INVOICE_COMPARE_FIELDS) if (o[k] !== undefined) out[k] = stableComparedValue(o[k]);
+    return out;
+  };
+  return diffFields(pick(prior as Record<string, unknown>), pick(current as Record<string, unknown>));
+}
+
+export function differingFieldsSentence(fields: string[]): string {
+  return `The earlier order differs from this order in: ${fields.map((f) => COMPARE_FIELD_LABELS[f] ?? f).join(", ")}.`;
+}
+
 async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
   const auth = requireKey(ctx.auth);
   const inputs = await validateOrderShape(ctx, args, auth);
@@ -1072,6 +1119,7 @@ export interface OrderRecord {
     totalCents: number;
     existing?: boolean;
     existingOrderRef?: string | null;
+    existingDifferingFields?: string[];
   };
   createdAt: string;
 }
@@ -1415,6 +1463,14 @@ async function toolRequestInvoice(ctx: Ctx, args: Record<string, unknown>): Prom
     throw e;
   }
 
+  const priorRecord = minted.existing && minted.existingOrderRef && minted.existingOrderRef !== orderRef
+    ? await readOrderRecord(ctx.env, minted.existingOrderRef)
+    : null;
+  // F22 content comparison, computed ONCE here at mint and stored on
+  // the order's invoice object, so status and replays report the
+  // mint-time diff and never recompute against a prior record that
+  // may have changed since.
+  const differingFields = priorRecord ? invoiceDifferingFields(priorRecord, order) : null;
   order.invoice = {
     invoiceId: minted.invoiceId,
     invoiceNumber: minted.invoiceNumber,
@@ -1423,13 +1479,11 @@ async function toolRequestInvoice(ctx: Ctx, args: Record<string, unknown>): Prom
     totalCents: minted.totalCents,
     ...(minted.existing ? { existing: true } : {}),
     ...(minted.existing && minted.existingOrderRef ? { existingOrderRef: minted.existingOrderRef } : {}),
+    ...(differingFields ? { existingDifferingFields: differingFields } : {}),
   };
   await saveOrderRecord(ctx.env, order);
   await touchKey(ctx.env.MCP_KEYS, auth);
-  const prior = minted.existing && minted.existingOrderRef && minted.existingOrderRef !== orderRef
-    ? await readOrderRecord(ctx.env, minted.existingOrderRef)
-    : null;
-  return invoiceResult(order, order.invoice, false, prior ? { orderRef: prior.orderRef, quantity: prior.quantity } : null);
+  return invoiceResult(order, order.invoice, false, priorRecord ? { orderRef: priorRecord.orderRef, quantity: priorRecord.quantity } : null);
 }
 
 function invoiceResult(order: OrderRecord, invoice: NonNullable<OrderRecord["invoice"]>, replayed: boolean, prior: { orderRef: string; quantity: number } | null = null): ToolResult {
@@ -1445,6 +1499,7 @@ function invoiceResult(order: OrderRecord, invoice: NonNullable<OrderRecord["inv
     totalNote: "Totals are structured data for the agent's records; the human-facing handoff line carries no dollar total, the invoice itself carries the money.",
     ...(invoice.existing ? { existing: true, note: "This customer already had an open or draft invoice; that invoice's link is returned, flagged existing, rather than stacking a second one." } : {}),
     ...(prior ? { existingFromOrderRef: prior.orderRef } : {}),
+    ...(prior && invoice.existingDifferingFields ? { existingDifferingFields: invoice.existingDifferingFields } : {}),
     ...(replayed ? { replayed: true } : {}),
     ...(order.antiMetalCount === undefined ? { antiMetal: "unknown", antiMetalNote: "No anti-metal count was recorded for this order, so the invoice carries no shielding line. If some discs go on metal surfaces, the count must be settled with the person before printing; it cannot be added afterwards." } : {}),
     nextStep: "Hand the handoffLine to the person. A person pays on Stripe's hosted page; this server moves no money itself. Artwork approval happens separately, by email, before production.",
@@ -1452,6 +1507,7 @@ function invoiceResult(order: OrderRecord, invoice: NonNullable<OrderRecord["inv
   const text = [
     `Invoice ${invoice.invoiceNumber ?? invoice.invoiceId} is ${invoice.status}.`,
     ...(prior ? [`This is not a new invoice for this order: invoice ${invoice.invoiceNumber ?? invoice.invoiceId} was already open from order ${prior.orderRef} (${prior.quantity} discs, ${dollars(invoice.totalCents)} total), so this order (${order.orderRef}) is not invoiced separately. Pay that invoice if it is the order you mean; if you need a separate invoice for this order, contact the Tap.Giving team at ${TEAM_EMAIL}.`] : []),
+    ...(prior && invoice.existingDifferingFields?.length ? [differingFieldsSentence(invoice.existingDifferingFields)] : []),
     `Review your invoice: ${invoice.hostedInvoiceUrl}`,
     `Total on the invoice: ${dollars(invoice.totalCents)}. A person pays it on Stripe's hosted page.`,
   ].join("\n");
@@ -1560,7 +1616,7 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
   const text = [
     `Order ${order.orderRef}: stage ${stage}.`,
     invoiceState ? `Invoice ${invoiceState.invoiceNumber ?? invoiceState.invoiceId}: ${invoiceState.status}. ${invoiceState.hostedInvoiceUrl}` : "No invoice yet.",
-    ...(order.invoice?.existing && order.invoice.existingOrderRef && order.invoice.existingOrderRef !== order.orderRef ? [`Note: invoice ${order.invoice.invoiceNumber ?? order.invoice.invoiceId} was already open from order ${order.invoice.existingOrderRef}; this order is not invoiced separately.`] : []),
+    ...(order.invoice?.existing && order.invoice.existingOrderRef && order.invoice.existingOrderRef !== order.orderRef ? [`Note: invoice ${order.invoice.invoiceNumber ?? order.invoice.invoiceId} was already open from order ${order.invoice.existingOrderRef}; this order is not invoiced separately.${order.invoice.existingDifferingFields?.length ? ` ${differingFieldsSentence(order.invoice.existingDifferingFields)}` : ""}`] : []),
     ...(invoiceState ? ["Both links open the same invoice: Stripe refreshes the invoice's web address between visits, so the link here and the link request_invoice returned can differ while opening the identical invoice."] : []),
     fulfillment ? `Fulfillment: ${fulfillment.status}${fulfillment.tracking ? `, tracking ${fulfillment.tracking} (${fulfillment.carrier})` : ""}.` : "Fulfillment has not begun (it starts after payment and proof approval).",
     `Your discs open https://go.tap.giving/${order.orgSlug}. Redirect Dashboard: sign in at https://tap.giving/login with username ${order.orgSlug}; your password arrives by email with your shipping notice.`,
