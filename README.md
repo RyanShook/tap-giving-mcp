@@ -6,6 +6,7 @@ church or nonprofit design and order custom NFC tap discs, tap
 plates, and tap tags end to end, from first discovery to a hosted
 invoice link a person pays.
 
+- **Website:** [https://tap.giving](https://tap.giving)
 - **Endpoint:** `POST https://tap.giving/mcp` (MCP over Streamable
   HTTP, JSON-RPC 2.0, stateless). `GET https://tap.giving/mcp`
   returns a short self-description for people and agents.
