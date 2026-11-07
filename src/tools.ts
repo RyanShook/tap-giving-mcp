@@ -13,6 +13,8 @@ import { PRICING_TIERS } from "./pricing.ts";
 import { renderArtworkOnDisc, bytesToBase64, SCREW_HOLES } from "./preview.ts";
 import pewDiscPhoto from "./product-assets/pew-disc.webp.ts";
 import phoneTapPhoto from "./product-assets/phone-tap.webp.ts";
+import mountAdhesivePhoto from "./product-assets/mount-adhesive.webp.ts";
+import mountScrewsPhoto from "./product-assets/mount-screws.webp.ts";
 import { MAX_QTY, MIN_QTY, PRICE_SOURCE, quoteFor, tierForQuantity, type Quote } from "./pricing.ts";
 import {
   ToolError, invalidInput, isRecord, optInt, optString, reqInt, reqString,
@@ -68,8 +70,8 @@ function quoteOutput(quote: Quote): Record<string, unknown> {
         line:
           `${boundary.quantity} discs would be ${dollars(boundaryQuote.grandTotalCents)} (${dollars(boundary.unitCents)} each): ` +
           (boundaryQuote.grandTotalCents >= quote.grandTotalCents
-            ? `${dollars(boundaryQuote.grandTotalCents - quote.grandTotalCents)} more for ${boundary.quantity - quote.qty} more discs.`
-            : `${dollars(quote.grandTotalCents - boundaryQuote.grandTotalCents)} LESS than this quote, for ${boundary.quantity - quote.qty} more discs.`),
+            ? `${dollars(boundaryQuote.grandTotalCents - quote.grandTotalCents)} more for ${boundary.quantity - quote.qty} more disc${boundary.quantity - quote.qty === 1 ? "" : "s"}.`
+            : `${dollars(quote.grandTotalCents - boundaryQuote.grandTotalCents)} LESS than this quote, for ${boundary.quantity - quote.qty} more disc${boundary.quantity - quote.qty === 1 ? "" : "s"}.`),
       },
     } : {}),
     quantity: quote.qty,
@@ -128,7 +130,7 @@ function quoteText(q: Record<string, unknown>): string {
 // image content and at display URLs served by this Worker.
 export const PRODUCT_PHOTOS = [
   { id: "pew-disc", alt: "A Tap.Giving disc mounted on a church pew", data: pewDiscPhoto, mimeType: "image/webp" },
-  { id: "phone-tap", alt: "A phone beside a Tap.Giving disc, showing the giving page a tap opens", data: phoneTapPhoto, mimeType: "image/webp" },
+  { id: "phone-tap", alt: "A phone tapping a Tap.Giving disc on a chair back, opening the church's giving page", data: phoneTapPhoto, mimeType: "image/webp" },
 ] as const;
 
 export function productPhotoImages(): Array<{ data: string; mimeType: string }> {
@@ -140,6 +142,17 @@ export function productPhotoStructured(): Array<Record<string, unknown>> {
     id: p.id, alt: p.alt, mimeType: p.mimeType,
     displayUrl: `https://tap.giving/mcp/photos/${p.id}.webp`,
   }));
+}
+
+// The two mounting options, from the website's own photos, returned
+// inline with the order questions (round 2: they were URL-only).
+export const MOUNTING_PHOTOS = [
+  { id: "mount-adhesive", alt: "Adhesive mounting: the disc's adhesive backing", data: mountAdhesivePhoto, mimeType: "image/webp" },
+  { id: "mount-screws", alt: "Screws mounting: pre-drilled holes for screws, plus the adhesive backing", data: mountScrewsPhoto, mimeType: "image/webp" },
+] as const;
+
+export function mountingPhotoImages(): Array<{ data: string; mimeType: string }> {
+  return MOUNTING_PHOTOS.map((p) => ({ data: p.data, mimeType: p.mimeType }));
 }
 
 // The tier-cliff window (F7): a quote whose quantity sits within this
@@ -243,6 +256,23 @@ function artworkSpecObject(shape?: string): Record<string, unknown> {
 }
 
 async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
+  // F27: an intent naming a disc count gets that count's quote
+  // headline, in the guidance and the text, not just an echo of the
+  // question; the echo itself drops trailing punctuation so it never
+  // reads "?." after the added period.
+  const intentRaw = typeof args.intent === "string" ? args.intent : "";
+  const intentEcho = intentRaw ? intentRaw.slice(0, 200).replace(/[\s.?!,;:\u2026]+$/, "") : "";
+  let intentHeadline: string | null = null;
+  let intentTextLine: string | null = null;
+  const countMatch = /(\d[\d,]*)\s*(?:tap\s+)?discs?\b/i.exec(intentRaw);
+  if (countMatch) {
+    const n = parseInt(countMatch[1].replace(/,/g, ""), 10);
+    if (n >= MIN_QTY && n <= MAX_QTY) {
+      const q = quoteFor({ qty: n, redirect: false });
+      intentHeadline = `About ${n} discs: ${dollars(q.grandTotalCents)} total, or ${dollars(q.discountedTotalCents)} with the first-order discount, free shipping. Start with the shape choice, then get_artwork_spec.`;
+      intentTextLine = `For ${n} discs: ${dollars(q.grandTotalCents)} total, or ${dollars(q.discountedTotalCents)} with the first-order discount. Free shipping.`;
+    }
+  }
   const boundaries = [100, 200, 400].map((qty) => {
     const tier = tierForQuantity(qty);
     return { quantity: qty, tier: tier.label, unitCents: tier.unitCents, unitPrice: dollars(tier.unitCents) };
@@ -253,7 +283,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       builder: SERVER_NAME,
       product:
         "A tap disc is a small physical disc a phone taps to open your giving page instantly. " +
-        "It carries a locked NTAG213 chip. It comes in one standardized 4-inch size (100 mm), in two shapes, " +
+        "It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, " +
         "and it is durable waterproof PVC.",
       firstChoice: { field: "shape", options: ["round", "square"] },
     },
@@ -279,13 +309,13 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       benefits: BENEFITS,
       guarantee: "Covered by our 30-day money-back guarantee.",
     },
-    ...(typeof args.intent === "string" && args.intent ? { guidance: `Noted intent: ${args.intent.slice(0, 200)}. Start with the shape choice, then get_artwork_spec.` } : {}),
+    ...(intentEcho ? { guidance: intentHeadline ?? `Noted intent: ${intentEcho}. Start with the shape choice, then get_artwork_spec.` } : {}),
   };
   const text = [
     `${SERVER_NAME}: ${SERVER_DESCRIPTION}`,
     ``,
     `What it is`,
-    `A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked NTAG213 chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.`,
+    `A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.`,
     `First choice: the shape, round or square.`,
     ``,
     `Why Tap.Giving`,
@@ -304,7 +334,8 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `Gates`,
     `Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.`,
     `Discovery, quotes, product facts, and the artwork spec need no key. Order questions, recaps, and order status are reads that use your organization key, like the writes. ${KEY_REQUEST_LINE}`,
-    `The two photos with this answer show the disc in use: on a church pew, and a phone beside a disc with the giving page a tap opens.`,
+    ...(intentTextLine ? [intentTextLine] : []),
+    `The two photos with this answer show the disc in use: on a church pew, and a phone tapping a disc on a chair back.`,
   ].join("\n");
   return { structured, text, images: productPhotoImages() };
 }
@@ -357,7 +388,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
   const text = topic
     ? JSON.stringify(structured, null, 2)
     : [
-      `Tap discs: ${p.chipDetail}. ${p.material}.`,
+      `Tap discs: ${p.chipPlain}. ${p.material}.`,
       p.sizePolicy,
       p.mountingDetail,
       p.metalCaveat,
@@ -366,7 +397,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       p.guarantee,
       `Table stands: 70 x 100 mm at $7, 120 x 140 mm at $9, minimum 100. Lanyard badges: 90 x 130 mm at $5, minimum 100. (Priced for information; discs are the orderable product here.)`,
       `${p.shipping.cost} ${p.shipping.terms}`,
-      `The photos with this answer show the disc in use: on a church pew, and a phone beside a disc with the giving page a tap opens.`,
+      `The photos with this answer show the disc in use: on a church pew, and a phone tapping a disc on a chair back.`,
     ].join("\n");
   return { structured, text, ...(topic === undefined || topic === "discs" ? { images: productPhotoImages() } : {}) };
 }
@@ -429,6 +460,7 @@ async function toolGetArtworkSpec(_ctx: Ctx, args: Record<string, unknown>): Pro
     `Round: cut radius 50 mm, bleed radius 53 mm, safe radius 45 mm, centre (53, 53) mm.`,
     `Square: cut is a 100 mm box spanning 3 to 103 mm; bleed half-width 53 mm; safe half-width 47 mm.`,
     `Screw holes (only when screws mounting is chosen): ${SCREW_HOLES.note}`,
+    `If you choose screws, keep the two 6 mm hole areas clear: the holes are drilled on the left and right midline, so frames and borders should not cross those spots.`,
     `Template with bleed, cut, safe, and screw-hole guides: https://tap.giving/mcp/templates/disc-template-${shape === "square" ? "square" : "round"}.svg${shape ? "" : " (a square template is at disc-template-square.svg)"}.`,
     ARTWORK_GEOMETRY.formatWanted,
     ARTWORK_GEOMETRY.background,
@@ -643,6 +675,18 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
     previewKind = "submitted-file";
   }
 
+  // F26: live text renders in this server's built-in fonts only, so
+  // the preview can substitute lettering; say so, with the families.
+  let fontNote = "";
+  if (detectedType === "svg") {
+    const svgText = new TextDecoder().decode(bytes);
+    if (/<text[\s>]/i.test(svgText)) {
+      const fams = new Set<string>();
+      for (const m of svgText.matchAll(/font-family\s*[:=]\s*["']?([^;"'}]+)/gi)) fams.add(m[1].trim());
+      fontNote = `Your file uses live text${fams.size ? ` (font families: ${[...fams].join(", ")})` : ""}; the preview renders text in this server's built-in fonts, so the lettering here may differ from your file. Convert text to outlines for an exact match.`;
+    }
+  }
+
   const structured: Record<string, unknown> = {
     received: true,
     artworkRef,
@@ -668,6 +712,7 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
       : previewKind === "submitted-file"
         ? `The on-disc render was unavailable in this call, so your submitted file is shown as-is; the proof we email you shows it on the disc.`
         : `Your file is on record; it could not be rendered to an image here, and the proof we email you shows it on the disc.`,
+    ...(fontNote ? [fontNote] : []),
   ].join("\n");
   return { structured, text, images: previewImages };
 }
@@ -759,11 +804,18 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
       : "Completing an order needs an organization API key. " + KEY_REQUEST_LINE +
         " An intent is a lead, not an order: it creates no invoice and reserves nothing.",
   };
+  const baseText = keyed
+    ? `Captured as ${intentRef}. The Tap.Giving team will also follow up with ${email} by email, usually within one business day. Your key is on this call, so order setup can continue now: order questions, recap, then create_order.${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`
+    : `Captured as ${intentRef}. The Tap.Giving team will follow up with ${email} by email, usually within one business day. Completing an order needs an organization API key: ${KEY_REQUEST_LINE}${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`;
   return {
     structured,
-    text: keyed
-      ? `Captured as ${intentRef}. The Tap.Giving team will also follow up with ${email} by email, usually within one business day. Your key is on this call, so order setup can continue now: order questions, recap, then create_order.${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`
-      : `Captured as ${intentRef}. The Tap.Giving team will follow up with ${email} by email, usually within one business day. Completing an order needs an organization API key: ${KEY_REQUEST_LINE}${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`,
+    // Test isolation, stated plainly (round 2 operational note): the
+    // capture rides the production lead machinery in every mode, and
+    // the response says so instead of letting the TEST MODE banner
+    // imply otherwise. Test mode covers orders and invoices.
+    text: ctx.auth?.record.mode === "test"
+      ? `${baseText}\nTest-key note: this contact capture is real. The email was recorded in Tap.Giving's lead list through the same capture the website uses, and the team may follow up. Test mode covers orders and invoices, not this capture.`
+      : baseText,
   };
 }
 
@@ -846,15 +898,15 @@ async function toolGetOrderQuestions(ctx: Ctx, _args: Record<string, unknown>): 
     "1. Shape and size: round or square, both 100 mm (4 inch).",
     `2. Quantity: "How many tap discs?" (minimum ${MIN_QTY}).`,
     "3. Metal surfaces: how many discs sit on metal? Those need the $1.00 shielding layer; omit the count when unknown.",
-    '4. Mounting: "How should we mount them?" Adhesive: https://tap.giving/assets/mount-adhesive.webp. Screws: https://tap.giving/assets/mount-screws.webp.',
+    '4. Mounting: "How should we mount them?" The two photos with this answer show the options: adhesive backing, and pre-drilled holes for screws (screws not included).',
     `5. Giving page (optional): ${LINK_DESTINATION_NOTE} get_recap and create_order accept it as givingUrl or linkDestination; they are the same field.`,
     "6. Contact name.",
     `7. Contact email: must be ${auth.record.contactEmail}, the address on this key's organization. The final proof is emailed there.`,
     "8. Contact phone.",
     "9. Shipping address, phone included, asked last.",
-    "Then run get_recap over the answers; create_order also needs the recapRef it returns and an idempotencyKey you mint for the order.",
+    "Then run get_recap over the answers; keep the recap reference it returns, because placing the order uses it.",
   ].join("\n");
-  return { structured, text };
+  return { structured, text, images: mountingPhotoImages() };
 }
 
 export interface RecapRecord {
@@ -913,7 +965,7 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
       artwork = { artworkRef, displayUrl: `https://tap.giving${artworkDisplayPath(artworkRef)}`, sha256: rec.sha256 };
       const stored = await ctx.env.MCP_ARTWORK.get(artworkBytesKey(artworkRef), "arrayBuffer");
       let onDisc: Uint8Array | null = null;
-      if (stored) onDisc = await renderArtworkOnDisc(new Uint8Array(stored), rec.detectedType, recapShape);
+      if (stored) onDisc = await renderArtworkOnDisc(new Uint8Array(stored), rec.detectedType, recapShape, (inputs.mounting as string) === "screws");
       if (onDisc) {
         image = { data: bytesToBase64(onDisc), mimeType: "image/png" };
         artwork.preview = "on-disc render embedded with this recap";
@@ -928,6 +980,8 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
   }
 
   const quoteObj = quoteOutput(quote);
+  const contactNameIn = optString(args, "contactName", 200);
+  const contactPhoneIn = optString(args, "contactPhone", 60);
   const contactEmailOut = (inputs.contactEmail as string | undefined) ?? auth.record.contactEmail;
   const givingUrlOut = (inputs.givingUrl as string | undefined) ?? (inputs.linkDestination as string | undefined);
   const structured: Record<string, unknown> = {
@@ -937,6 +991,8 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
       organization: auth.record.orgName,
       contactEmail: contactEmailOut,
       proofRecipientEmail: contactEmailOut,
+      ...(contactNameIn ? { contactName: contactNameIn } : {}),
+      ...(contactPhoneIn ? { contactPhone: contactPhoneIn } : {}),
     },
     quantity: inputs.quantity,
     size: inputs.size,
@@ -973,7 +1029,7 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
     givingUrlOut
       ? `Tap destination: ${givingUrlOut}. Your discs start pointed at this page.`
       : "Tap destination: your own Tap.Giving page (your free Redirect Dashboard) until you set one; you can set or change it anytime from the dashboard.",
-    `Contact: ${contactEmailOut}. The final proof is emailed to this address for approval.`,
+    `Contact: ${contactNameIn ? `${contactNameIn}, ` : ""}${contactEmailOut}${contactPhoneIn ? `, phone ${contactPhoneIn}` : ""}. The final proof is emailed to this address for approval.`,
     `Ship to: ${shipTo.name}, ${shipTo.street}, ${shipTo.city}, ${shipTo.state} ${shipTo.postalCode}, ${shipTo.country}. Phone: ${shipTo.phone}.`,
     `Cost: ${dollars(quote.grandTotalCents)} total. Shipping: Free. ${TAX_NOTE}`,
     `First-order discount, when it applies: if this is ${auth.record.orgName}'s first order, code WELCOME10 takes 10 percent off at invoice time, making the total ${dollars(quote.discountedTotalCents)}. It applies to any first order placed within 7 days of this quote (${record.createdAt.slice(0, 10)}); if the 7 days pass, a fresh quote restarts the window.`,
@@ -1015,6 +1071,7 @@ export interface OrderRecord {
     hostedInvoiceUrl: string;
     totalCents: number;
     existing?: boolean;
+    existingOrderRef?: string | null;
   };
   createdAt: string;
 }
@@ -1153,10 +1210,27 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
       { retryable: false, details: { differingFields: drift } });
   }
 
+  // First-order discount eligibility (policy: the discount is
+  // first-order only; round 2, F22). An earlier order for this
+  // organization in this mode that already carries an invoice spends
+  // the eligibility. Before this pass the flag was hardcoded true, so
+  // any later order would have minted with the coupon too; the round 2
+  // $675 figure itself came from the shared invoice (see
+  // request_invoice), but the latent defect was real.
+  let priorInvoicedOrder = false;
+  {
+    const listed = await ctx.env.MCP_KEYS.list({ prefix: `ORDER:mcp:${orgSlug}:`, limit: 1000 });
+    for (const k of listed.keys) {
+      const prior = await readOrderRecord(ctx.env, k.name.slice("ORDER:".length));
+      if (prior && prior.mode === mode && prior.invoice) { priorInvoicedOrder = true; break; }
+    }
+  }
+  const discountEligible = !priorInvoicedOrder;
   const quote = quoteFor({
     qty: shapeInputs.quantity as number,
     antiMetal: shapeInputs.antiMetalCount as number | undefined,
     redirect: false,
+    discountEligible,
   });
   const orderRef = `mcp:${orgSlug}:${idemHash.slice(0, 16)}`;
   const shipTo = shapeInputs.shipTo as Record<string, string>;
@@ -1165,7 +1239,7 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
   // The INVREQ payload, in the website invoice door's shape.
   const invreqBody: Record<string, unknown> = {
     source: "mcp",
-    discountEligible: true,
+    discountEligible,
     lead: {
       church,
       email: contactEmail,
@@ -1272,12 +1346,13 @@ function createOrderResult(order: OrderRecord, replayed: boolean): ToolResult {
     invreqKey: order.invreqKey,
     quote: quoteObj,
     exit: order.exit,
-    crmExpectation:
-      "The business record appears within about an hour under the organization's name, at stage \"ready\", " +
-      "through the same process that handles website invoice requests. Source is distinguishable as the MCP; nothing else differs.",
+    crmExpectation: order.mode === "test"
+      ? "Test mode: this order record stays in the test lane and does NOT enter the production CRM or fulfillment. Only the contact capture in start_order_intent touches the real lead list."
+      : "The business record appears within about an hour under the organization's name, at stage \"ready\", " +
+        "through the same process that handles website invoice requests. Source is distinguishable as the MCP; nothing else differs.",
     nextStep: order.exit === "pay_now"
       ? "Call request_invoice for this orderRef now and present the hosted invoice link to the person immediately; a person pays it on Stripe's hosted page."
-      : "Call request_invoice for this orderRef; the hosted invoice link is the payment handoff for the person to pay when they choose. A person approves the final proof by email before any order is placed.",
+      : "Call request_invoice for this orderRef; the hosted invoice link is the payment handoff for the person to pay when they choose. A person approves the final proof by email before anything is printed.",
   };
   const text = [
     `Order set up: ${order.orderRef}.`,
@@ -1304,7 +1379,10 @@ async function toolRequestInvoice(ctx: Ctx, args: Record<string, unknown>): Prom
 
   // Already minted for this order: return the same invoice.
   if (order.invoice) {
-    return invoiceResult(order, order.invoice, true);
+    const prior = order.invoice.existing && order.invoice.existingOrderRef && order.invoice.existingOrderRef !== orderRef
+      ? await readOrderRecord(ctx.env, order.invoice.existingOrderRef)
+      : null;
+    return invoiceResult(order, order.invoice, true, prior ? { orderRef: prior.orderRef, quantity: prior.quantity } : null);
   }
 
   // Paid check (spec 2.7): the CHECKOUT-DONE signal in ORDERS.
@@ -1344,13 +1422,17 @@ async function toolRequestInvoice(ctx: Ctx, args: Record<string, unknown>): Prom
     hostedInvoiceUrl: minted.hostedInvoiceUrl,
     totalCents: minted.totalCents,
     ...(minted.existing ? { existing: true } : {}),
+    ...(minted.existing && minted.existingOrderRef ? { existingOrderRef: minted.existingOrderRef } : {}),
   };
   await saveOrderRecord(ctx.env, order);
   await touchKey(ctx.env.MCP_KEYS, auth);
-  return invoiceResult(order, order.invoice, false);
+  const prior = minted.existing && minted.existingOrderRef && minted.existingOrderRef !== orderRef
+    ? await readOrderRecord(ctx.env, minted.existingOrderRef)
+    : null;
+  return invoiceResult(order, order.invoice, false, prior ? { orderRef: prior.orderRef, quantity: prior.quantity } : null);
 }
 
-function invoiceResult(order: OrderRecord, invoice: NonNullable<OrderRecord["invoice"]>, replayed: boolean): ToolResult {
+function invoiceResult(order: OrderRecord, invoice: NonNullable<OrderRecord["invoice"]>, replayed: boolean, prior: { orderRef: string; quantity: number } | null = null): ToolResult {
   const structured: Record<string, unknown> = {
     orderRef: order.orderRef,
     invoiceId: invoice.invoiceId,
@@ -1362,12 +1444,14 @@ function invoiceResult(order: OrderRecord, invoice: NonNullable<OrderRecord["inv
     currency: "USD",
     totalNote: "Totals are structured data for the agent's records; the human-facing handoff line carries no dollar total, the invoice itself carries the money.",
     ...(invoice.existing ? { existing: true, note: "This customer already had an open or draft invoice; that invoice's link is returned, flagged existing, rather than stacking a second one." } : {}),
+    ...(prior ? { existingFromOrderRef: prior.orderRef } : {}),
     ...(replayed ? { replayed: true } : {}),
     ...(order.antiMetalCount === undefined ? { antiMetal: "unknown", antiMetalNote: "No anti-metal count was recorded for this order, so the invoice carries no shielding line. If some discs go on metal surfaces, the count must be settled with the person before printing; it cannot be added afterwards." } : {}),
     nextStep: "Hand the handoffLine to the person. A person pays on Stripe's hosted page; this server moves no money itself. Artwork approval happens separately, by email, before production.",
   };
   const text = [
     `Invoice ${invoice.invoiceNumber ?? invoice.invoiceId} is ${invoice.status}.`,
+    ...(prior ? [`This is not a new invoice for this order: invoice ${invoice.invoiceNumber ?? invoice.invoiceId} was already open from order ${prior.orderRef} (${prior.quantity} discs, ${dollars(invoice.totalCents)} total), so this order (${order.orderRef}) is not invoiced separately. Pay that invoice if it is the order you mean; if you need a separate invoice for this order, contact the Tap.Giving team at ${TEAM_EMAIL}.`] : []),
     `Review your invoice: ${invoice.hostedInvoiceUrl}`,
     `Total on the invoice: ${dollars(invoice.totalCents)}. A person pays it on Stripe's hosted page.`,
   ].join("\n");
@@ -1476,6 +1560,7 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
   const text = [
     `Order ${order.orderRef}: stage ${stage}.`,
     invoiceState ? `Invoice ${invoiceState.invoiceNumber ?? invoiceState.invoiceId}: ${invoiceState.status}. ${invoiceState.hostedInvoiceUrl}` : "No invoice yet.",
+    ...(order.invoice?.existing && order.invoice.existingOrderRef && order.invoice.existingOrderRef !== order.orderRef ? [`Note: invoice ${order.invoice.invoiceNumber ?? order.invoice.invoiceId} was already open from order ${order.invoice.existingOrderRef}; this order is not invoiced separately.`] : []),
     ...(invoiceState ? ["Both links open the same invoice: Stripe refreshes the invoice's web address between visits, so the link here and the link request_invoice returned can differ while opening the identical invoice."] : []),
     fulfillment ? `Fulfillment: ${fulfillment.status}${fulfillment.tracking ? `, tracking ${fulfillment.tracking} (${fulfillment.carrier})` : ""}.` : "Fulfillment has not begun (it starts after payment and proof approval).",
     `Your discs open https://go.tap.giving/${order.orgSlug}. Redirect Dashboard: sign in at https://tap.giving/login with username ${order.orgSlug}; your password arrives by email with your shipping notice.`,
@@ -1580,7 +1665,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_product",
     description:
-      "The full product facts: NTAG213 chip locked to the organization's go.tap.giving slug, 0.85 mm double-laminated matte waterproof PVC, " +
+      "The full product facts: the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, " +
       "100 mm (4 inch) round and square built-ins (every other size is a manual exception), mounting, the metal caveat, table stands and lanyard badges, " +
       "the free Redirect Dashboard, and shipping terms (free; 2 to 3 weeks from artwork approval). No key needed.",
     inputSchema: {
@@ -1689,6 +1774,8 @@ export const TOOLS: ToolDef[] = [
         linkDestination: { type: "string" },
         givingUrl: { type: "string" },
         contactEmail: { type: "string" },
+        contactName: { type: "string" },
+        contactPhone: { type: "string" },
       },
     },
     annotations: READ,
@@ -1785,6 +1872,7 @@ export function toolByName(name: string): ToolDef | undefined {
 }
 
 const WRITE_TOOLS = new Set(["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"]);
+const KEYED_READ_TOOLS = new Set(["get_order_questions", "get_recap", "get_order_status"]);
 export const TEST_MODE_LINE = "TEST MODE: this call uses a test key, so no real order is placed and no charge is made.";
 
 export async function runTool(
@@ -1801,7 +1889,7 @@ export async function runTool(
   const result = await def.run(ctx, args);
   // With a test key, every write's text opens by saying so (F19), so a
   // first user can never mistake a test order for a real one.
-  if (auth && auth.record.mode === "test" && WRITE_TOOLS.has(name)) {
+  if (auth && auth.record.mode === "test" && (WRITE_TOOLS.has(name) || KEYED_READ_TOOLS.has(name))) {
     result.text = `${TEST_MODE_LINE}\n${result.text}`;
   }
   return result;

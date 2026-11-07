@@ -219,7 +219,7 @@ test("keyed journey: recap, create_order (idempotent), request_invoice, status",
   assert.equal((recap.structured.cost as { grandTotalCents: number }).grandTotalCents, 100000);
   assert.deepEqual(recap.structured.notes, [
     "Shipping usually takes two to three weeks from artwork approval.",
-    "We send a final proof via email before any order is placed.",
+    "We email you a final proof before anything is printed.",
   ]);
   // F17/F18: the recap names the customer, the destination, the proof
   // recipient, the sequence, and the conditional discount line.
@@ -651,4 +651,190 @@ test("F12 routes: the template SVG and the product photos are served", async () 
   const photo = await worker.fetch(new Request("https://tap.giving/mcp/photos/pew-disc.webp"), env);
   assert.equal(photo.status, 200);
   assert.equal(photo.headers.get("Content-Type"), "image/webp");
+});
+
+// ─── Round 2 fix pass ───────────────────────────────────────────────
+import { buildDiscSvg } from "../src/preview.ts";
+
+test("R2 F27: discovery answers an intent with a disc count and never echoes '?.'", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const d = await runTool(env, req(), "get_discovery", {
+    intent: "I am a pastor of a 220-person church. We want about 150 discs. What will it cost, and what does it look like?",
+  }, fetchFn);
+  assert.ok(d.text.includes("For 150 discs: $750.00 total, or $675.00 with the first-order discount."), "headline in text");
+  const guidance = (d.structured as { guidance?: string }).guidance ?? "";
+  assert.ok(guidance.startsWith("About 150 discs: $750.00"), "guidance leads with the quote headline");
+  assert.ok(!d.text.includes("?."), "no stray punctuation in text");
+  assert.ok(!guidance.includes("?."), "no stray punctuation in guidance");
+  const echo = await runTool(env, req(), "get_discovery", { intent: "Tell me about stands?" }, fetchFn);
+  const echoGuidance = (echo.structured as { guidance?: string }).guidance ?? "";
+  assert.ok(echoGuidance.startsWith("Noted intent: Tell me about stands."), "echo drops the trailing question mark");
+});
+
+test("R2 F7: the cliff line says '1 more disc' at 199", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const q = await runTool(env, req(), "get_quote", { quantity: 199 }, fetchFn);
+  assert.ok(q.text.includes("1 more disc."), "singular handled");
+  assert.ok(!q.text.includes("1 more discs"), "no plural slip");
+});
+
+test("R2 F5: customer text drops the chip jargon; the fact stays structured", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
+  assert.ok(!d.text.includes("NTAG213"), "discovery text is plain");
+  assert.ok(!((d.structured.introduction as { product: string }).product.includes("NTAG213")), "introduction prose is plain");
+  const p = await runTool(env, req(), "get_product", {}, fetchFn);
+  assert.ok(!p.text.includes("NTAG213"), "product text is plain");
+  assert.ok(!BENEFITS.join(" ").includes("NTAG213"), "benefits are plain");
+  assert.ok(((p.structured.discs as { chip: string }).chip.includes("NTAG213")), "the chip fact stays in structured data");
+});
+
+test("R2 F15/F19: order questions carry the mounting photos inline and plain closing; keyed reads carry the banner", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const q = await runTool(env, req(TEST_KEY), "get_order_questions", {}, fetchFn);
+  assert.ok(q.images && q.images.length === 2, "both mounting photos inline");
+  assert.ok(!q.text.includes("idempotencyKey"), "no agent plumbing in the closing line");
+  assert.ok(q.text.includes("keep the recap reference it returns"), "plain closing line");
+  assert.ok(q.text.startsWith("TEST MODE:"), "keyed read carries the banner");
+  const recap = await runTool(env, req(TEST_KEY), "get_recap", {
+    quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO, contactEmail: "mcp-acceptance@example.com",
+  }, fetchFn);
+  assert.ok(recap.text.startsWith("TEST MODE:"), "recap carries the banner");
+  assert.ok(recap.text.includes("We email you a final proof before anything is printed."), "F24 line in recap text");
+  assert.ok(!recap.text.includes("before any order is placed"), "old proof line gone");
+});
+
+test("R2 F17: the recap echoes a contact name and phone when given", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const recap = await runTool(env, req(TEST_KEY), "get_recap", {
+    quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
+    contactEmail: "mcp-acceptance@example.com", contactName: "Dana Whitfield", contactPhone: "+19315550142",
+  }, fetchFn);
+  const customer = recap.structured.customer as { contactName?: string; contactPhone?: string };
+  assert.equal(customer.contactName, "Dana Whitfield");
+  assert.equal(customer.contactPhone, "+19315550142");
+  assert.ok(recap.text.includes("Contact: Dana Whitfield, mcp-acceptance@example.com, phone +19315550142."), "contact line carries name and phone");
+});
+
+test("R2 F21: the spec warns about the hole areas; a screws recap draws the holes on the preview", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const spec = await runTool(env, req(), "get_artwork_spec", { shape: "round" }, fetchFn);
+  assert.ok(spec.text.includes("keep the two 6 mm hole areas clear"), "guideline in spec text");
+  const withHoles = buildDiscSvg({ shape: "round", svgInner: { viewBox: "0 0 106 106", inner: "<rect width=\"106\" height=\"106\"/>" }, holes: true });
+  assert.ok(withHoles.includes('cx="9.75"') && withHoles.includes('cx="96.25"'), "holes drawn at production centres");
+  const noHoles = buildDiscSvg({ shape: "round", svgInner: { viewBox: "0 0 106 106", inner: "<rect width=\"106\" height=\"106\"/>" } });
+  assert.ok(!noHoles.includes('cx="9.75"'), "no holes by default");
+
+  const fakePng = Buffer.from(PNG_B64, "base64");
+  let captured = "";
+  setRasterizerForTests(async (svg) => { captured = svg; return new Uint8Array(fakePng); });
+  try {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 106"><rect width="106" height="106" fill="#1e4634"/></svg>`;
+    const sha = await sha256HexBytes(new Uint8Array(Buffer.from(svg)));
+    const sub = await runTool(env, req(TEST_KEY), "submit_artwork", {
+      file: { filename: "plain.svg", mediaType: "image/svg+xml", contentBase64: Buffer.from(svg).toString("base64") }, sha256: sha, shape: "round",
+    }, fetchFn);
+    captured = "";
+    const recap = await runTool(env, req(TEST_KEY), "get_recap", {
+      quantity: 100, size: "100mm-round", mounting: "screws", shipTo: SHIP_TO,
+      artworkRef: sub.structured.artworkRef as string, contactEmail: "mcp-acceptance@example.com",
+    }, fetchFn);
+    assert.ok(recap.image, "screws recap embeds the render");
+    assert.ok(captured.includes('cx="9.75"'), "the recap render draws the holes for screws");
+  } finally {
+    setRasterizerForTests(null);
+  }
+});
+
+test("R2 F26: live text in an SVG submission is called out with its font families", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const fakePng = Buffer.from(PNG_B64, "base64");
+  setRasterizerForTests(async () => new Uint8Array(fakePng));
+  try {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 106"><rect width="106" height="106" fill="#1e4634"/><text x="53" y="55" font-family="Georgia, serif" font-weight="bold">CEDAR HOLLOW</text></svg>`;
+    const sha = await sha256HexBytes(new Uint8Array(Buffer.from(svg)));
+    const sub = await runTool(env, req(TEST_KEY), "submit_artwork", {
+      file: { filename: "cedar.svg", mediaType: "image/svg+xml", contentBase64: Buffer.from(svg).toString("base64") }, sha256: sha, shape: "round",
+    }, fetchFn);
+    assert.ok(sub.text.includes("live text"), "the font caveat is stated");
+    assert.ok(sub.text.includes("Georgia"), "the family is named");
+    assert.ok(sub.text.includes("Convert text to outlines"), "the exact-match path is given");
+  } finally {
+    setRasterizerForTests(null);
+  }
+});
+
+test("R2 isolation: a test-key intent says the capture is real; a test order says it stays out of the CRM", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const intent = await runTool(env, req(TEST_KEY), "start_order_intent", {
+    email: "pastor.dana@cedarhollow.example", church: "Cedar Hollow Community Church", quantityHint: 150,
+  }, fetchFn);
+  assert.ok(intent.text.includes("this contact capture is real"), "capture honesty in intent text");
+  assert.ok(intent.text.includes("lead list"), "the lead list is named");
+});
+
+test("R2 F22: a second order is discount-ineligible, and a reused invoice is named in plain text", async () => {
+  const { env } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  const fresh = stubFetch(calls) as typeof fetch;
+  const shipArgs = { size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO, contactEmail: "mcp-acceptance@example.com" };
+
+  const recap1 = await runTool(env, req(TEST_KEY), "get_recap", { ...shipArgs, quantity: 150 }, fresh);
+  const order1 = await runTool(env, req(TEST_KEY), "create_order", {
+    ...shipArgs, quantity: 150, contactName: "Test Pastor", contactPhone: "+17135550199",
+    recapRef: recap1.structured.recapRef as string, exit: "pay_now", idempotencyKey: "r2-order-0001",
+  }, fresh);
+  const orderRef1 = order1.structured.orderRef as string;
+  const devRecs = () => [...(env.DEV_ORDERS as unknown as MemoryKV).store.values()].map((v) => JSON.parse(v) as { mcpOrderRef: string; discountEligible: boolean });
+  assert.equal(devRecs().find((r) => r.mcpOrderRef === orderRef1)?.discountEligible, true, "the first order is discount-eligible");
+  await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRef1, idempotencyKey: "r2-invoice-0001" }, fresh);
+
+  const recap2 = await runTool(env, req(TEST_KEY), "get_recap", { ...shipArgs, quantity: 200 }, fresh);
+  const order2 = await runTool(env, req(TEST_KEY), "create_order", {
+    ...shipArgs, quantity: 200, contactName: "Test Pastor", contactPhone: "+17135550199",
+    recapRef: recap2.structured.recapRef as string, exit: "pay_now", idempotencyKey: "r2-order-0002",
+  }, fresh);
+  const orderRef2 = order2.structured.orderRef as string;
+  assert.equal(devRecs().find((r) => r.mcpOrderRef === orderRef2)?.discountEligible, false, "the second order is NOT discount-eligible");
+  assert.ok(String(order2.structured.crmExpectation).includes("does NOT enter the production CRM"), "test order states its isolation");
+
+  // Stripe now shows order 1's invoice still open for this customer.
+  const existingStub = (async (input: unknown, init?: { method?: string; body?: string }): Promise<Response> => {
+    const url = String((input as { url?: string })?.url ?? input);
+    if (url.includes("/api/")) return fresh(input as RequestInfo, init as RequestInit);
+    if (url.includes("api.stripe.com")) {
+      if (url.includes("/customers") && (!init || init.method === "GET" || !init.method)) {
+        return new Response(JSON.stringify({ data: [{ id: "cus_prior" }] }), { status: 200 });
+      }
+      if (url.includes("/customers")) return new Response(JSON.stringify({ id: "cus_prior" }), { status: 200 });
+      if (url.includes("/invoices") && init?.method !== "POST") {
+        if (url.includes("status=open")) {
+          return new Response(JSON.stringify({ data: [{ id: "in_prior", number: "PRIOR-0001", status: "open", hosted_invoice_url: "https://invoice.stripe.com/i/prior", total: 67500, metadata: { mcp_order_ref: orderRef1 } }] }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 200 });
+    }
+    return new Response("nope", { status: 404 });
+  }) as typeof fetch;
+
+  const inv2 = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRef2, idempotencyKey: "r2-invoice-0002" }, existingStub);
+  assert.equal(inv2.structured.existing, true);
+  assert.equal(inv2.structured.existingFromOrderRef, orderRef1, "the prior order is named in structured data");
+  assert.ok(inv2.text.includes("PRIOR-0001"), "the prior invoice number is in the text");
+  assert.ok(inv2.text.includes(orderRef1), "the prior order is named in the text");
+  assert.ok(inv2.text.includes("150 discs, $675.00 total"), "the prior order's quantity and the invoice total are in the text");
+  assert.ok(inv2.text.includes("is not invoiced separately"), "the consequence is stated");
+
+  const status2 = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRef2 }, fresh);
+  assert.ok(status2.text.startsWith("TEST MODE:"), "status carries the banner");
+  assert.ok(status2.text.includes(`was already open from order ${orderRef1}`), "status names the shared invoice's order");
 });

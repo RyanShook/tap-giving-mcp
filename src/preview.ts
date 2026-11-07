@@ -68,6 +68,7 @@ export function buildDiscSvg(opts: {
   shape: DiscShape;
   svgInner?: { viewBox: string; inner: string };
   imageDataUrl?: string;
+  holes?: boolean;
 }): string {
   const placed = opts.imageDataUrl
     ? `<image href="${opts.imageDataUrl}" x="0" y="0" width="106" height="106" preserveAspectRatio="xMidYMid meet"/>`
@@ -77,6 +78,7 @@ export function buildDiscSvg(opts: {
     `<defs>${cutShapeSvg(opts.shape, "cut")}</defs>`,
     `<g clip-path="url(#cut)">${placed}</g>`,
     cutOutlineSvg(opts.shape),
+    ...(opts.holes ? [`<g>${SCREW_HOLES.centresMm.map((c) => `<circle cx="${c.x}" cy="${c.y}" r="3" fill="rgba(255,255,255,0.92)" stroke="rgba(0,0,0,0.55)" stroke-width="0.4"/>`).join("")}</g>`] : []),
     `</svg>`,
   ].join("");
 }
@@ -155,18 +157,19 @@ export async function renderArtworkOnDisc(
   bytes: Uint8Array,
   detectedType: string,
   shape: DiscShape,
+  holes = false,
 ): Promise<Uint8Array | null> {
   try {
     if (detectedType === "svg") {
       const text = new TextDecoder().decode(bytes);
       const inner = extractSvgInner(text);
       if (!inner) return null;
-      return await renderSvgToPng(buildDiscSvg({ shape, svgInner: inner }));
+      return await renderSvgToPng(buildDiscSvg({ shape, svgInner: inner, holes }));
     }
     if (detectedType === "png" || detectedType === "jpeg" || detectedType === "webp" || detectedType === "gif") {
       const mime = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" }[detectedType];
       const dataUrl = `data:${mime};base64,${bytesToBase64(bytes)}`;
-      return await renderSvgToPng(buildDiscSvg({ shape, imageDataUrl: dataUrl }));
+      return await renderSvgToPng(buildDiscSvg({ shape, imageDataUrl: dataUrl, holes }));
     }
     return null;
   } catch {

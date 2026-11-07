@@ -38,7 +38,7 @@ export const KEY_REQUEST_LINE =
 export const BENEFITS: string[] = [
   "Works with any giving platform",
   "No subscription fees",
-  "Durable waterproof PVC with a locked NTAG213 chip",
+  "Durable waterproof PVC with a locked tap chip",
   "Custom branding from 100 discs",
   "Free shipping",
   "Covered by our 30-day money-back guarantee",
@@ -47,6 +47,7 @@ export const BENEFITS: string[] = [
 export const PRODUCT = {
   chip: "NTAG213",
   chipDetail: "NTAG213 chip, locked to your organization's Tap.Giving address, assigned by Tap.Giving",
+  chipPlain: "a locked tap chip, set to your organization's Tap.Giving address, assigned by Tap.Giving",
   material: "0.85 mm double-laminated matte waterproof PVC",
   sizes: [
     { size: "100mm-round", label: "100 mm (4 inch) round", shape: "round" },
@@ -129,6 +130,7 @@ export const ARTWORK_GEOMETRY = {
 export const ARTWORK_GUIDELINES: string[] = [
   "Design edge to edge on the 106 mm square artboard; the cut is the inner 100 mm shape.",
   "Keep important elements inside the safe zone so nothing risks edge clipping.",
+  "If you choose screws, keep the two 6 mm hole areas clear: the holes are drilled on the left and right midline, so frames and borders should not cross those spots.",
   "Vector artwork is preferred back (SVG preferred, AI or vector PDF accepted), but intake accepts any real image up to 5 MB (5,242,880 bytes decoded); production fitness is judged later in the normal proof flow.",
   "Use a flat solid colour background.",
   "A logo in a lockup should be at least 18 mm at final size (the smallest size with a shipped precedent).",
@@ -165,7 +167,7 @@ export const LINK_DESTINATION_NOTE =
 
 export const RECAP_NOTES: string[] = [
   "Shipping usually takes two to three weeks from artwork approval.",
-  "We send a final proof via email before any order is placed.",
+  "We email you a final proof before anything is printed.",
 ];
 
 export const TAX_NOTE = "Tax, where it applies, is calculated on the invoice.";

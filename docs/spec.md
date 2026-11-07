@@ -1053,7 +1053,7 @@ Recap notes (REQUIRED recap fields, Ryan, verbatim in substance; the
 get_recap output carries both in a `notes` array and a client must show
 them on the recap itself, not behind a link):
   1. "Shipping usually takes two to three weeks."
-  2. "We send a final proof via email before any order is placed."
+  2. "We email you a final proof before anything is printed."
      Meaning stated with it: production never starts on the
      agent-submitted artwork alone; the emailed final proof is approved
      by a person first, and the human proof approval gate (section 4,
