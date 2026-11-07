@@ -12,6 +12,8 @@ free, permanently.
 - **Endpoint:** `POST https://tap.giving/mcp` (MCP over Streamable
   HTTP, JSON-RPC 2.0, stateless). `GET https://tap.giving/mcp`
   returns a short self-description for people and agents.
+- **Agent index:** [https://tap.giving/llms.txt](https://tap.giving/llms.txt),
+  the site's llms.txt, names this server and links back to this repo.
 - **Spec:** the published design and tool contracts live in
   [docs/spec.md](docs/spec.md). The server is built and accepted:
   every acceptance leg passed, including the field-for-field invoice
@@ -19,6 +21,47 @@ free, permanently.
 - **This repo stays clean:** README, the published spec, and the
   released server code. Working notes and anything touching private
   business operations live elsewhere by design.
+
+## Connect
+
+Paste-ready client config. The keyless read side works exactly as
+shown, with no auth header:
+
+```json
+{
+  "mcpServers": {
+    "tap-giving": {
+      "type": "http",
+      "url": "https://tap.giving/mcp"
+    }
+  }
+}
+```
+
+For the write tools, add the organization's key as a header on the
+same block:
+
+```json
+{
+  "mcpServers": {
+    "tap-giving": {
+      "type": "http",
+      "url": "https://tap.giving/mcp",
+      "headers": { "Authorization": "Bearer <key>" }
+    }
+  }
+}
+```
+
+Claude Code, one line:
+
+```sh
+claude mcp add --transport http tap-giving https://tap.giving/mcp
+```
+
+Reads need no key; a key is added only when the organization is
+ready to order. The live `GET https://tap.giving/mcp` self-description
+carries this same connect guidance.
 
 ## What the server does
 
@@ -39,20 +82,290 @@ releases an order to production.
 
 ## Tools
 
-| Tool | Key | What it does |
-|---|---|---|
-| `get_discovery` | no | One-call orientation: the product, the two shapes, the tier prices, the artwork summary, the tool list, and how an organization gets a key. |
-| `get_quote` (alias `get_pricing`) | no | An exact quote from the published tiers; below 100 discs is refused with the minimum stated. |
-| `get_product` | no | Product facts: discs, stands, badges, mounting, and shipping terms. |
-| `get_artwork_spec` | no | The production artwork geometry in structured form, with the house example set and the optional logo ask. |
-| `submit_artwork` | optional | Accepts artwork under a permissive intake (three sanity grounds only); that it was accepted is not a production-fitness verdict. |
-| `start_order_intent` | no | Captures an email contact so a person at Tap.Giving has it, and names the key step for ordering. |
-| `get_order_questions` | yes | The order questions in order: quantity, mounting with pictures, optional link destination, shipping address. |
-| `get_recap` | yes | The order in display order (artwork, quantity, ship-to, exact total) with the two required notes, returning a recap reference. |
-| `create_order` | yes | Locks an order in behind both exits (pay now, or lock in this price); idempotent on the caller's key. |
-| `request_invoice` | yes | Mints the order's invoice and returns the hosted link for the person who pays. |
-| `get_order_status` | yes | Order stage, invoice state, and fulfillment read from the records of truth. |
-| `register_webhook` | yes | Registers one callback per organization for proof_ready and shipped (registration in v1; delivery is v1.1). |
+| Tool | Key | What it does | Annotations | Returns |
+|---|---|---|---|---|
+| `get_discovery` | no | One-call orientation: the product, the two shapes, the price range, the artwork summary, the tool list, and how an organization gets a key. | readOnlyHint: true, idempotentHint: true | `server`, `introduction.product`, `pricing` (tiers, minimumQuantity), `capabilities` (benefits, gates, key route) |
+| `get_quote` (alias `get_pricing`) | no | An exact quote from the published tiers; below 100 discs is refused with the minimum stated. | readOnlyHint: true, idempotentHint: true | `discUnitCents`, `discSubtotalCents`, `grandTotalCents`, `discount.conditionalTotalCents`, `shippingLine`, `taxNote` |
+| `get_product` | no | Product facts: discs, stands, badges, mounting, and shipping terms. | readOnlyHint: true, idempotentHint: true | `discs` (chip, sizes, mounting, metalCaveat, redirectDashboard), `stands`, `badges`, `shipping` |
+| `get_artwork_spec` | no | The production artwork geometry in structured form, with the house example directions shown inline as images and the optional logo ask. | readOnlyHint: true, idempotentHint: true | geometry per shape, `guidelines`, `examples` (id, direction, displayUrl) plus the example images, `logoAsk` |
+| `submit_artwork` | optional | Accepts artwork under a permissive intake (three sanity grounds only); that it was accepted is not a production-fitness verdict. | readOnlyHint: false | `artworkRef`, `displayUrl`, `sha256`, `validation`, `benefits` |
+| `start_order_intent` | no | Captures an email contact so a person at Tap.Giving has it, and names the key step for ordering. | readOnlyHint: false | `captured`, `source`, `nextStep` |
+| `get_order_questions` | yes | The order questions in order: quantity, mounting with pictures, optional link destination, shipping address. | readOnlyHint: true, idempotentHint: true | `questions` in order (quantity, mounting with picture options, linkDestination, shipTo) |
+| `get_recap` | yes | The order in display order (artwork, quantity, ship-to, exact total) with the two required notes, returning a recap reference. | readOnlyHint: true, idempotentHint: true | `recapRef`, `cost` (the get_quote object), `shipTo`, `notes`, `exits` |
+| `create_order` | yes | Locks an order in behind both exits (pay now, or lock in this price); idempotent on the caller's key. | readOnlyHint: false, idempotentHint: true | `orderRef`, `quote`, `exit`, `nextStep` |
+| `request_invoice` | yes | Mints the order's invoice (or returns the customer's existing open one) and returns the hosted link for the person who pays. | readOnlyHint: false, idempotentHint: true | `invoiceId`, `invoiceNumber`, `hostedInvoiceUrl`, `handoffLine`, `totalCents` |
+| `get_order_status` | yes | Order stage, invoice state, and fulfillment read from the records of truth. | readOnlyHint: true, idempotentHint: true | `stage`, `invoice` (status, hostedInvoiceUrl), fulfillment with tracking when present |
+| `register_webhook` | yes | Registers one callback per organization for proof_ready and shipped (registration in v1; delivery is v1.1). | readOnlyHint: false | `subscriptionSecret` (shown once), `payloadContract`, `delivery` status |
+
+Annotations are the server's own declarations, read from the live
+`tools/list`: every tool also declares `destructiveHint: false` and
+`openWorldHint: false`. A client can auto-approve the read-only
+tools, ask its person before the writes, and retry `create_order`
+and `request_invoice` after a network failure with the same
+idempotency key.
+
+## Worked example
+
+One full pass through the journey, captured from the live server on
+2026-11-07 with the acceptance test organization, in test mode
+throughout (the order and invoice below are test records). Every
+field name and value shown is exactly what the server returned;
+long values are shortened only where marked. Each result returns
+both the structured content and a plain-text rendering, and both
+are shown.
+
+### 1. get_discovery (no key)
+
+Request:
+
+```json
+{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_discovery", "arguments": {}}}
+```
+
+Response, structured content (abbreviated):
+
+```json
+{
+  "server": {"name": "NFC Tap Builder by Tap.Giving", "endpoint": "https://tap.giving/mcp", "synonyms": ["tap discs", "tap plates", "tap tags", "NFC tap to give"]},
+  "introduction": {
+    "product": "A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked NTAG213 chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.",
+    "firstChoice": {"field": "shape", "options": ["round", "square"]}
+  },
+  "pricing": {
+    "tiers": [
+      {"quantity": 100, "tier": "100-199 discs", "unitCents": 500, "unitPrice": "$5.00"},
+      {"quantity": 200, "tier": "200-399 discs", "unitCents": 400, "unitPrice": "$4.00"},
+      {"quantity": 400, "tier": "400+ discs", "unitCents": 350, "unitPrice": "$3.50"}
+    ],
+    "minimumQuantity": 100,
+    "shipping": "Free on every order.",
+    "note": "Call get_quote for the binding quote at an exact quantity."
+  },
+  "capabilities": {
+    "readTools": ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap", "get_order_status"],
+    "writeTools": ["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"]
+  }
+}
+```
+
+Response, text rendering (complete):
+
+```text
+NFC Tap Builder by Tap.Giving: Build and order custom NFC tap discs and tap tags for churches and nonprofits: NFC tap to give, designed by your own agent, priced from the published tiers, ordered up to the human payment and proof gates. No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently. This server moves no money itself: it returns a hosted invoice link for a person to pay.
+
+What it is
+A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked NTAG213 chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.
+First choice: the shape, round or square.
+
+Why Tap.Giving
+No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently.
+- Works with any giving platform
+- No subscription fees
+- Durable waterproof PVC with a locked NTAG213 chip
+- Custom branding from 100 discs
+- Free shipping
+- Covered by our 30-day money-back guarantee
+
+Pricing
+Price range of $3.50 - $5.00 per disc depending on quantity. Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. Tax, where it applies, is calculated on the invoice. Every order is covered by our 30-day money-back guarantee.
+
+How it works
+1. Start with the shape, round or square.
+2. Build artwork from the example directions in get_artwork_spec, and submit it with submit_artwork.
+3. Order setup: quantity, mounting, an optional link destination, and the shipping address, through start_order_intent and create_order.
+4. A person approves the final proof by email, and a person pays the hosted invoice.
+
+Gates
+Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.
+Writes need an organization API key. An organization API key is issued by Tap.Giving: ask Ryan at ryan@tap.giving. Read tools need no key; order setup, invoice requests, and order status need the organization's key.
+```
+
+### 2. get_quote at 250 (no key)
+
+Request:
+
+```json
+{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "get_quote", "arguments": {"quantity": 250}}}
+```
+
+Response, structured content:
+
+```json
+{
+  "quantity": 250,
+  "tier": "200-399 discs",
+  "unitCents": 400,
+  "discUnitCents": 400,
+  "discSubtotalCents": 100000,
+  "discount": {
+    "code": "WELCOME10",
+    "percentOff": 10,
+    "scope": "first order",
+    "window": "7-day renewing window",
+    "appliedInHeadlineTotals": false,
+    "conditionalTotalCents": 90000
+  },
+  "addOns": [],
+  "addOnCents": 0,
+  "shippingCents": 0,
+  "shippingLine": "Shipping: Free",
+  "taxNote": "Tax, where it applies, is calculated on the invoice.",
+  "grandTotalCents": 100000,
+  "grandTotalWithFirstOrderDiscountCents": 90000,
+  "currency": "USD"
+}
+```
+
+Response, text rendering:
+
+```text
+Quote for 250 discs (200-399 discs): $1,000.00 total.
+Discs: 250 at $4.00 list, $1,000.00 list subtotal. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window: $900.00 when it applies.
+Add-ons: none.
+Shipping: Free
+Tax, where it applies, is calculated on the invoice.
+```
+
+The headline total is the list total, $1,000.00. The first-order
+discount is a conditional line only: $900.00 when it applies, never
+baked into the headline.
+
+### 3. submit_artwork (keyed)
+
+A 1-pixel PNG stands in for the agent-built artwork file here; the
+sha256 is the real hash of those bytes.
+
+Request:
+
+```json
+{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "submit_artwork", "arguments": {"file": {"filename": "worked-example.png", "mediaType": "image/png", "contentBase64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="}, "sha256": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77"}}}
+```
+
+Response, structured content:
+
+```json
+{
+  "received": true,
+  "artworkRef": "art_2ce8de191f7035de811e224b",
+  "displayUrl": "https://tap.giving/mcp/artwork/art_2ce8de191f7035de811e224b",
+  "sha256": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
+  "validation": {"policy": "permissive", "checks": {"notMalicious": true, "sizeOk": true, "decodable": true}, "findings": ["accepted; vector preferred for production"]},
+  "benefits": ["Works with any giving platform", "No subscription fees", "Durable waterproof PVC with a locked NTAG213 chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
+  "nextStep": "Show the benefits, then capture the contact email at order setup (start_order_intent) and ask the order questions (get_order_questions)."
+}
+```
+
+The result also carries the artwork back as an image content block,
+and its text rendering opens: "Artwork received:
+art_2ce8de191f7035de811e224b (worked-example.png, png, 70 bytes)."
+
+### 4. create_order (keyed, idempotency key)
+
+Between artwork and order, `get_recap` returns a recapRef for the
+exact inputs the person saw (its cost object is the get_quote
+object above); `create_order` carries that recapRef. The recap for
+this pass was `recap_f562143ce62c3282468a7670`, with the contact
+email among its inputs.
+
+Request:
+
+```json
+{"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "create_order", "arguments": {"contactName": "MCP Acceptance", "contactEmail": "mcp-acceptance@example.com", "contactPhone": "+17135550199", "church": "MCP Acceptance Test Church", "quantity": 250, "size": "100mm-round", "mounting": "adhesive", "artworkRef": "art_2ce8de191f7035de811e224b", "recapRef": "recap_f562143ce62c3282468a7670", "exit": "pay_now", "idempotencyKey": "worked-example-2026-11-07-01", "shipTo": {"name": "MCP Acceptance Test Church", "street": "100 Test Way", "city": "Spring", "state": "TX", "postalCode": "77380", "country": "US", "phone": "+17135550199"}}}}
+```
+
+Response, structured content (abbreviated; the full quote object
+from step 2 rides as `quote`):
+
+```json
+{
+  "orderRef": "mcp:mcp-acceptance-test-church:93f3ebe22527b0b7",
+  "invreqKey": "INVREQ:2026-11-07T21:45:50.340Z:mcp-acceptance@example.com",
+  "exit": "pay_now",
+  "quote": {"quantity": 250, "tier": "200-399 discs", "grandTotalCents": 100000},
+  "nextStep": "Call request_invoice for this orderRef now and present the hosted invoice link to the person immediately; a person pays it on Stripe's hosted page."
+}
+```
+
+A retry with the same idempotency key and the same payload returns
+this same orderRef; the same key with a different payload is a
+conflict naming the differing fields.
+
+### 5. request_invoice (keyed, idempotency key)
+
+Request:
+
+```json
+{"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "request_invoice", "arguments": {"orderRef": "mcp:mcp-acceptance-test-church:93f3ebe22527b0b7", "idempotencyKey": "worked-example-invoice-2026-11-07-01"}}}
+```
+
+Response, structured content (abbreviated):
+
+```json
+{
+  "orderRef": "mcp:mcp-acceptance-test-church:93f3ebe22527b0b7",
+  "invoiceId": "in_1UZGb3KIjbVAoCpTT6aw3fh4",
+  "invoiceNumber": "RVO4XL7A-0001",
+  "status": "open",
+  "hostedInvoiceUrl": "https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVJVa2x5MmJWY3dKb1BEanZZWWE2OEhGMFhNSWdILDE4NDYyODc1Mw0200scxZ1WGD?s=ap",
+  "handoffLine": "Review your invoice: https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVJVa2x5MmJWY3dKb1BEanZZWWE2OEhGMFhNSWdILDE4NDYyODc1Mw0200scxZ1WGD?s=ap",
+  "totalCents": 90000,
+  "currency": "USD",
+  "existing": true,
+  "note": "This customer already had an open or draft invoice; that invoice's link is returned, flagged existing, rather than stacking a second one."
+}
+```
+
+Response, text rendering:
+
+```text
+Invoice RVO4XL7A-0001 is open.
+Review your invoice: https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVJVa2x5MmJWY3dKb1BEanZZWWE2OEhGMFhNSWdILDE4NDYyODc1Mw0200scxZ1WGD?s=ap
+Total on the invoice: $900.00. A person pays it on Stripe's hosted page.
+```
+
+The acceptance customer already had this open test invoice from the
+invoice-parity acceptance run earlier the same day, so the server
+returned it flagged `existing` instead of stacking a second one;
+for a customer with no open invoice, the same call mints and
+returns the new invoice in the same shape, without the flag. The
+invoice total is $900.00 because the first-order WELCOME10 discount
+applied at invoice time; the quote's headline stayed the $1,000.00
+list total. The handoff is the link: a person pays it, this server
+takes no payment.
+
+## Errors
+
+Every tool error returns MCP's standard error content (a text block
+reading `code: message`) plus a structured object:
+`{code, message, retryable, details}`. The `details` object carries
+what an agent needs to act, for example the differing fields on a
+conflict. No error ever returns another organization's data, a stack
+trace, or a secret.
+
+| Code | Meaning | Retryable | Next action |
+|---|---|---|---|
+| `unauthorized` | The key is malformed, unknown, or revoked. | no | Fix the key: check the `Authorization: Bearer <key>` header and that the key is current and active. Read tools need no key at all. |
+| `forbidden` | The key is valid, but the record named belongs to another organization (an order, recap, or artwork submitted under a different key). | no | Do not retry. Use the owning organization's key, or start fresh under your own. |
+| `invalid_input` | An input failed validation: missing, malformed, or out of range. The message names the input. | no | Correct the named input and resend. One case to know: `get_quote` and `create_order` refuse quantities under the 100-disc minimum and state it; do not retry with a smaller quantity. |
+| `manual_exception` | The request needs a person, for example a size other than the two built-ins (100 mm round, 100 mm square). | no | Take the human route the message names: Ryan at ryan@tap.giving. |
+| `not_found` | The named record does not exist for this key's organization: an unknown tool, orderRef, or invoiceId. Another organization's records read as not_found, never as their data. | no | Check the reference. Do not retry expecting another organization's record to appear. |
+| `conflict` | The request conflicts with recorded state: an idempotency key reused with a different payload, order inputs that differ from the recap, or an order path that is already paid. `details` names the differing fields where that is the cause. | no | Reconcile against the details. For a genuinely new order, re-run `get_recap` on the real inputs and use a fresh idempotency key. |
+| `stripe_unavailable` | Stripe did not complete the invoice call. | yes | Retry with the same idempotency key; Stripe's own keys replay safely, so a retry cannot double-mint. |
+| `rate_limited` | Too many calls right now, at this server or at the capture endpoint. | yes | Wait, then retry. On `start_order_intent` the contact is not captured until a call succeeds. |
+| `internal` | Something failed on our side; the message says what, and names the human route when one applies. | yes | Retry. If it persists, reach Ryan at ryan@tap.giving with the message. |
+
+The two distinctions agents most often get wrong: `unauthorized`
+is about the key itself (malformed or unknown, fix the key), while
+`forbidden` means the key is fine and the record is not yours (do
+not retry). And `not_found` is what a cross-organization orderRef
+returns on the read paths; `forbidden` is what the attach paths
+return when a named order, recap, or artwork belongs to another
+organization.
+
+This catalog is current as of 2026-11-07, when the live-mode
+invoice refusal (`invoice_parity_pending`) was lifted after the
+field-for-field parity check passed; that code no longer exists in
+the server.
 
 ## Keys
 
@@ -62,6 +375,13 @@ An organization key looks like `tg_live_<orgslug>_<secret>` (or
 stored. A key's mode binds its seat: test keys write test records and
 mint test invoices; live keys serve production. Real organizations
 get a key by asking Ryan at ryan@tap.giving.
+
+A registry record for this server lives in this repo as
+[`server.json`](server.json), in the official MCP Registry format:
+the namespace-tied name, a short description, the server version,
+and the remote endpoint. The record is created and validated;
+publishing it to the registry is a separate step, so the server is
+not listed yet.
 
 ## Development
 
