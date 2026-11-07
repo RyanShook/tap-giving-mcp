@@ -292,7 +292,7 @@ test("writes without a key are unauthorized; garbage keys are unauthorized", asy
     (e: Error & { code?: string }) => e.code === "unauthorized");
 });
 
-// ─── parity gate: live-mode request_invoice refusal ─────────────────
+// ─── request_invoice: live-mode keys proceed (parity passed 2026-11-07) ─────────────────
 
 const LIVE_KEY = `tg_live_live-org-church_${"C".repeat(43)}`;
 
@@ -306,21 +306,22 @@ async function seedLiveKey(keys: MemoryKV): Promise<void> {
   await keys.put(`KEYHASH:${await sha256Hex(LIVE_KEY)}`, JSON.stringify(rec));
 }
 
-test("request_invoice refuses a live-mode key (invoice_parity_pending) before any fetch or Stripe call", async () => {
+test("request_invoice with a live-mode key proceeds past the former parity gate to the order lookup", async () => {
   const { env, keys } = await makeEnv();
   await seedLiveKey(keys);
-  // Even with a live Stripe secret configured, the refusal fires first.
+  // The parity gate is lifted (leg (f) passed 2026-11-07): a live-mode
+  // key now enters the normal flow. With no order under this ref, the
+  // flow stops at the order lookup, before any fetch or Stripe call.
   (env as unknown as Record<string, unknown>).STRIPE_API_KEY_LIVE = "sk_live_stub";
   const calls: Array<{ url: string; body?: string }> = [];
   await assert.rejects(
     () => runTool(env, req(LIVE_KEY), "request_invoice", { orderRef: "mcp:live-org-church:abc123", idempotencyKey: "live-invoice-0001" }, stubFetch(calls) as typeof fetch),
     (e: unknown) => {
-      assert.equal((e as { code?: string }).code, "invoice_parity_pending");
-      assert.match((e as Error).message, /parity check passes/);
+      assert.equal((e as { code?: string }).code, "not_found");
       return true;
     },
   );
-  assert.equal(calls.length, 0, "no fetch of any kind: no Stripe call, no door call");
+  assert.equal(calls.length, 0, "no fetch of any kind: the order lookup stops the flow before Stripe");
 });
 
 test("request_invoice in test mode still stops at stripe_unavailable while no test secret is set", async () => {

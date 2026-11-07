@@ -985,21 +985,6 @@ function createOrderResult(order: OrderRecord, replayed: boolean): ToolResult {
 
 async function toolRequestInvoice(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
   const auth = requireKey(ctx.auth);
-  // Parity gate (CEO ruling, 2026-11-06): the B1 field-for-field
-  // invoice parity guard binds the live path too. Until acceptance
-  // leg (f) passes against test mode, a live-mode key cannot mint
-  // here: the invoice shape a live key would mint is one no test has
-  // ever compared. The refusal sits at the entry, before any order
-  // read or Stripe call, keyed on the authenticated org's mode.
-  // create_order and its exits are untouched (they ride the proven
-  // /api/invoice-request path), and test-mode behavior is unchanged.
-  if (auth.record.mode === "live") {
-    throw new ToolError(
-      "invoice_parity_pending",
-      "Invoice minting for live keys is refused until the field-for-field invoice parity check passes. Nothing was minted. create_order and its pay-now and lock-in exits are unaffected.",
-      { retryable: false },
-    );
-  }
   const orderRef = reqString(args, "orderRef", 160);
   reqString(args, "idempotencyKey", 200); // required by contract; retries replay through Stripe's own keys
   const order = await readOrderRecord(ctx.env, orderRef);
@@ -1434,7 +1419,7 @@ export const TOOLS: ToolDef[] = [
       "Return the payment handoff for an order this key's organization created: a real, finalized Stripe hosted invoice and its link, minted under the invoice playbook " +
       "(send_invoice collection, 7 days to due, first-order coupon when eligible, the free shipping line, finalized with auto_advance=false so Stripe emails nothing). " +
       "If the customer already has an open or draft invoice, that invoice's link is returned flagged existing. " +
-      "Live-mode keys are refused with invoice_parity_pending until the field-for-field invoice parity check passes. " +
+      "Both test-mode and live-mode keys mint here; the minted invoice shape passed the field-for-field parity check against Stripe test mode on 2026-11-07. " +
       "This server moves no money itself: it returns a hosted invoice link for a person to pay.",
     inputSchema: {
       type: "object",

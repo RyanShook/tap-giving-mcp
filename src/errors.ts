@@ -11,7 +11,6 @@ export type McpErrorCode =
   | "not_found"
   | "conflict"
   | "stripe_unavailable"
-  | "invoice_parity_pending"
   | "rate_limited"
   | "internal";
 
