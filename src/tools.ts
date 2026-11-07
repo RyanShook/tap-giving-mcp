@@ -8,8 +8,7 @@ import {
   ARTWORK_GUIDELINES, ARTWORK_GEOMETRY, BENEFITS, ENDPOINT, GATES, KEY_REQUEST_LINE,
   LINK_DESTINATION_NOTE, MOUNTING_OPTIONS, PRODUCT, PRODUCT_TOPICS, RECAP_NOTES,
   NO_FEES_LINE,
-  SERVER_DESCRIPTION, SERVER_NAME, PRESENTATION_SYNONYMS, TAX_NOTE,
-} from "./facts.ts";
+  SERVER_DESCRIPTION, SERVER_NAME, PRESENTATION_SYNONYMS, TAX_NOTE, PRICE_RANGE_LINE } from "./facts.ts";
 import { MAX_QTY, MIN_QTY, PRICE_SOURCE, quoteFor, tierForQuantity, type Quote } from "./pricing.ts";
 import {
   ToolError, invalidInput, isRecord, optInt, optString, reqInt, reqString,
@@ -215,7 +214,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     ...BENEFITS.map((b) => `- ${b}`),
     ``,
     `Pricing`,
-    `100-199 discs at $5.00 each, 200-399 at $4.00, 400+ at $3.50. Minimum order 100. Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. ${TAX_NOTE} Every order is covered by our 30-day money-back guarantee.`,
+    `${PRICE_RANGE_LINE} Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. ${TAX_NOTE} Every order is covered by our 30-day money-back guarantee.`,
     ``,
     `How it works`,
     `1. Start with the shape, round or square.`,

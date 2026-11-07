@@ -424,6 +424,19 @@ test("example display routes: HEAD returns the GET headers with no body", async 
   }
 });
 
+test("GET self-description carries the connect guidance", async () => {
+  const { env } = await makeEnv();
+  const res = await worker.fetch(new Request("https://tap.giving/mcp", { method: "GET" }), env);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.ok(text.includes("## Connect"), "connect section present in GET text");
+  assert.ok(text.includes('"tap-giving"'), "named server in the config block");
+  assert.ok(text.includes('"type": "http"'), "http transport in the config block");
+  assert.ok(text.includes('"url": "https://tap.giving/mcp"'), "endpoint in the config block");
+  assert.ok(text.includes("claude mcp add --transport http tap-giving https://tap.giving/mcp"), "Claude Code one-liner present");
+  assert.ok(text.includes("Reads need no key"), "keyless-reads note present");
+});
+
 test("get_discovery: sectioned first presentation with the no-fees lead line", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
@@ -445,8 +458,17 @@ test("get_discovery: sectioned first presentation with the no-fees lead line", a
     assert.ok(bi > leadIdx, `benefit bullet present after the lead line: ${b}`);
   }
   assert.deepEqual(d.structured.capabilities && (d.structured.capabilities as { benefits: string[] }).benefits, BENEFITS, "structured benefits unchanged");
-  // Pricing carries the tiers, the guarantee, and the new tax note.
-  assert.ok(d.text.includes("100-199 discs at $5.00 each, 200-399 at $4.00, 400+ at $3.50"));
+  // Pricing leads with the range line only (Amendment A, refined,
+  // Ryan 2026-11-07): the tier breakdown and the minimum are out of
+  // the discovery text entirely, while the structured pricing data
+  // keeps both intact.
+  assert.ok(d.text.includes("Price range of $3.50 - $5.00 per disc depending on quantity."), "range line verbatim in discovery text");
+  assert.ok(!d.text.includes("100-199 discs at $5.00 each"), "tier list absent from discovery text");
+  assert.ok(!/minimum/i.test(d.text), "minimum not named anywhere in discovery text");
+  const pricing = d.structured.pricing as { minimumQuantity: number; tiers: Array<{ quantity: number; unitCents: number }> };
+  assert.equal(pricing.minimumQuantity, 100, "structured minimumQuantity intact");
+  assert.deepEqual(pricing.tiers.map((t) => [t.quantity, t.unitCents]), [[100, 500], [200, 400], [400, 350]], "structured tiers intact");
+  // Pricing still carries the guarantee and the new tax note.
   assert.ok(d.text.includes("30-day money-back guarantee"));
   assert.equal(TAX_NOTE, "Tax, where it applies, is calculated on the invoice.");
   assert.ok(d.text.includes(TAX_NOTE), "new tax sentence present in discovery text");
