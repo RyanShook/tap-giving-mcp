@@ -158,6 +158,11 @@ async function handleRpc(env: Env, request: Request): Promise<Response> {
       if (result.image) {
         content.push({ type: "image", data: result.image.data, mimeType: result.image.mimeType });
       }
+      if (result.images) {
+        for (const img of result.images) {
+          content.push({ type: "image", data: img.data, mimeType: img.mimeType });
+        }
+      }
       return json({
         jsonrpc: "2.0",
         id,
@@ -196,23 +201,21 @@ export default {
 
     // House template examples, served for display.
     const exMatch = /^\/mcp\/examples\/([a-z0-9-]+)\.png$/.exec(url.pathname);
-    if (exMatch && request.method === "GET") {
+    if (exMatch && (request.method === "GET" || request.method === "HEAD")) {
       const ex = exampleById(exMatch[1]);
       if (!ex) return new Response("not found", { status: 404 });
       const bytes = Uint8Array.from(atob(ex.pngBase64), (c) => c.charCodeAt(0));
-      return new Response(bytes as unknown as BodyInit, {
-        status: 200,
-        headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" },
-      });
+      const headers = { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400", "Content-Length": String(bytes.length) };
+      if (request.method === "HEAD") return new Response(null, { status: 200, headers });
+      return new Response(bytes as unknown as BodyInit, { status: 200, headers });
     }
     const exSvgMatch = /^\/mcp\/examples\/([a-z0-9-]+)\.svg$/.exec(url.pathname);
-    if (exSvgMatch && request.method === "GET") {
+    if (exSvgMatch && (request.method === "GET" || request.method === "HEAD")) {
       const ex = exampleById(exSvgMatch[1]);
       if (!ex) return new Response("not found", { status: 404 });
-      return new Response(ex.svgText, {
-        status: 200,
-        headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400" },
-      });
+      const headers = { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400", "Content-Length": String(new TextEncoder().encode(ex.svgText).length) };
+      if (request.method === "HEAD") return new Response(null, { status: 200, headers });
+      return new Response(ex.svgText, { status: 200, headers });
     }
     void EXAMPLES;
 

@@ -27,18 +27,19 @@ import exSandSquarePng from "./example-assets/ex-sand-square.png.ts";
 export interface ExampleDesign {
   id: string;
   direction: string;
+  pickLabel: string;
   shape: "round" | "square";
   svgText: string;
   pngBase64: string;
 }
 
 export const EXAMPLES: ExampleDesign[] = [
-  { id: "ex-navy-round", direction: "Classic navy with a gold tap icon and a clean church name", shape: "round", svgText: exNavyRoundSvg, pngBase64: exNavyRoundPng },
-  { id: "ex-cream-square", direction: "Warm cream with serif lettering and a centered tap icon", shape: "square", svgText: exCreamSquareSvg, pngBase64: exCreamSquarePng },
-  { id: "ex-forest-round", direction: "Deep green with an arched name and a small cross accent", shape: "round", svgText: exForestRoundSvg, pngBase64: exForestRoundPng },
-  { id: "ex-burgundy-square", direction: "Burgundy with a thin gold border frame and bold lettering", shape: "square", svgText: exBurgundySquareSvg, pngBase64: exBurgundySquarePng },
-  { id: "ex-slate-round", direction: "Modern slate with minimal type and a large tap icon", shape: "round", svgText: exSlateRoundSvg, pngBase64: exSlateRoundPng },
-  { id: "ex-sand-square", direction: "Soft sand with a stacked name and tagline treatment", shape: "square", svgText: exSandSquareSvg, pngBase64: exSandSquarePng },
+  { id: "ex-navy-round", direction: "Classic navy with a gold tap icon and a clean church name", pickLabel: "Navy Blue & Gold", shape: "round", svgText: exNavyRoundSvg, pngBase64: exNavyRoundPng },
+  { id: "ex-cream-square", direction: "Warm cream with serif lettering and a centered tap icon", pickLabel: "Warm Cream & Serif", shape: "square", svgText: exCreamSquareSvg, pngBase64: exCreamSquarePng },
+  { id: "ex-forest-round", direction: "Deep green with an arched name and a small cross accent", pickLabel: "Deep Green & Gold Cross", shape: "round", svgText: exForestRoundSvg, pngBase64: exForestRoundPng },
+  { id: "ex-burgundy-square", direction: "Burgundy with a thin gold border frame and bold lettering", pickLabel: "Burgundy & Gold Frame", shape: "square", svgText: exBurgundySquareSvg, pngBase64: exBurgundySquarePng },
+  { id: "ex-slate-round", direction: "Modern slate with minimal type and a large tap icon", pickLabel: "Slate, Minimal White", shape: "round", svgText: exSlateRoundSvg, pngBase64: exSlateRoundPng },
+  { id: "ex-sand-square", direction: "Soft sand with a stacked name and tagline treatment", pickLabel: "Soft Sand, Stacked Serif", shape: "square", svgText: exSandSquareSvg, pngBase64: exSandSquarePng },
 ];
 
 export function exampleById(id: string): ExampleDesign | undefined {

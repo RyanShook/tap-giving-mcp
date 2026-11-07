@@ -6,6 +6,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runTool } from "../src/tools.ts";
+import { EXAMPLES } from "../src/examples.ts";
+import worker from "../src/index.ts";
 import { sha256Hex } from "../src/keys.ts";
 import type { Env } from "../src/env.ts";
 import type { KeyRecord } from "../src/keys.ts";
@@ -351,4 +353,72 @@ test("request_invoice in test mode still stops at stripe_unavailable while no te
     },
   );
   assert.equal(calls.filter((c) => c.url.includes("api.stripe.com")).length, 0);
+});
+
+test("get_artwork_spec: inline example images and numbered build-from pick list, both shapes", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  for (const shape of ["round", "square"] as const) {
+    const r = await runTool(env, req(), "get_artwork_spec", { shape }, fetchFn);
+    const expected = EXAMPLES.filter((e) => e.shape === shape);
+    assert.equal(expected.length, 3);
+    // structuredContent unchanged: the examples array and its
+    // displayUrls are intact, in the established order.
+    const exs = r.structured.examples as Array<{ id: string; direction: string; shape: string; displayUrl: string }>;
+    assert.deepEqual(exs.map((e) => e.id), expected.map((e) => e.id));
+    for (const [i, e] of exs.entries()) {
+      assert.equal(e.direction, expected[i].direction);
+      assert.equal(e.shape, shape);
+      assert.ok(e.displayUrl.endsWith(`/mcp/examples/${e.id}.png`), "displayUrl fallback intact");
+    }
+    // The result carries exactly one text block (r.text) plus three
+    // image blocks (r.images), and no single-image field.
+    assert.equal(typeof r.text, "string");
+    assert.equal(r.image, undefined);
+    assert.ok(r.images);
+    assert.equal(r.images.length, 3);
+    for (const [i, img] of r.images.entries()) {
+      assert.equal(img.mimeType, "image/png");
+      // Byte equality against the source files the displayUrls serve.
+      assert.equal(img.data, expected[i].pngBase64);
+      const bytes = Buffer.from(img.data, "base64");
+      assert.ok(bytes.equals(Buffer.from(expected[i].pngBase64, "base64")));
+      assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a", "real PNG magic");
+    }
+    // Numbered pick list: entries correspond one-to-one and in order
+    // with structuredContent.examples and with the image blocks
+    // (entry N describes image block N).
+    let lastIdx = -1;
+    for (const [i, e] of exs.entries()) {
+      const line = `${i + 1}. ${shape === "round" ? "Round" : "Square"}, ${expected[i].pickLabel}: ${e.direction}.`;
+      const idx = r.text.indexOf(line);
+      assert.ok(idx > lastIdx, `pick list entry ${i + 1} present and in order`);
+      lastIdx = idx;
+    }
+    // Build-from framing: directions are starting templates for the
+    // caller's own artwork, submitted via submit_artwork; the closing
+    // ask is a number selection of a direction.
+    assert.ok(r.text.includes("starting templates to build from"), "frames examples as build-from templates");
+    assert.ok(r.text.includes("Tell me the number of the direction you want to build from"), "closing ask: number of a direction");
+    assert.ok(r.text.includes("compose your own artwork"), "compose step is explicit");
+    assert.ok(r.text.includes("submit_artwork"), "names the submission path");
+    assert.ok(r.text.includes("never ordered or shipped as-is"), "no example is presented as shippable as-is");
+    assert.ok(!/\b(pick|choose) (one|it|the|your)\b/i.test(r.text), "no bare pick/choose phrasing");
+  }
+});
+
+test("example display routes: HEAD returns the GET headers with no body", async () => {
+  const { env } = await makeEnv();
+  for (const ex of [EXAMPLES[0], EXAMPLES[1]]) {
+    const url = `https://tap.giving/mcp/examples/${ex.id}.png`;
+    const get = await worker.fetch(new Request(url), env);
+    assert.equal(get.status, 200);
+    const getBytes = Buffer.from(await get.arrayBuffer());
+    assert.ok(getBytes.equals(Buffer.from(ex.pngBase64, "base64")), "GET serves the source bytes");
+    const head = await worker.fetch(new Request(url, { method: "HEAD" }), env);
+    assert.equal(head.status, 200);
+    assert.equal(head.headers.get("Content-Type"), "image/png");
+    assert.equal(head.headers.get("Content-Length"), String(getBytes.length));
+    assert.equal((await head.arrayBuffer()).byteLength, 0, "HEAD has no body");
+  }
 });
