@@ -149,6 +149,11 @@ export const RECAP_NOTES: string[] = [
 
 export const TAX_NOTE = "Tax, where it applies, is calculated on the invoice.";
 
+// The discovery text's pricing lead (Ryan, 2026-11-07): the range
+// line only. The tier breakdown and the minimum live in get_quote
+// and in the structured pricing data, not in discovery's text.
+export const PRICE_RANGE_LINE = "Price range of $3.50 - $5.00 per disc depending on quantity.";
+
 export const GATES = {
   designApproval:
     "Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.",
