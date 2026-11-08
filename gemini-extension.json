@@ -1,0 +1,10 @@
+{
+  "name": "tap-giving",
+  "version": "1.0.0",
+  "description": "NFC Tap Builder by Tap.Giving: design and order custom NFC tap-to-give discs for churches and nonprofits, with published tier pricing, artwork spec, quotes, and order setup.",
+  "mcpServers": {
+    "tap-giving": {
+      "httpUrl": "https://tap.giving/mcp"
+    }
+  }
+}
