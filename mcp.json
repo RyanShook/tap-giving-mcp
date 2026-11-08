@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "tap-giving": {
+      "type": "streamable-http",
+      "url": "https://tap.giving/mcp"
+    }
+  }
+}
