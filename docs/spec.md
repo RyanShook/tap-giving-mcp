@@ -1,5 +1,158 @@
 # NFC Tap Builder by Tap.Giving: MCP v1 spec
 
+## Landing note (2026-11-09): no keys anywhere, two-part flow, final-step invoice and proof chain
+
+Ryan's rulings of 2026-11-09 (via the CEO dispatch chain, from the
+no-keys design brief of the same day) supersede every earlier passage
+in this spec that describes a keyed surface, a priced Part 1, or a
+placement that mints no invoice. The marking rule for this amendment:
+a dated banner at the top of each amended section, section titles
+corrected in place where a title itself teaches the old path, live
+sentences rewritten, and dated landing records left byte-untouched as
+history under this note. Any sentence an agent could follow into a
+keyed, priced-in-Part-1, or server-produces-the-PDF path is rewritten
+or banner-marked; purely historical narrative stays.
+
+The settled rulings, which are the live contract from this note on:
+
+- NO KEYS AT ALL. No user-facing step requires or offers a key,
+  login, or account, including order status and webhooks. A key is
+  not even an option: a presented credential is ignored, never an
+  error. Keys are removed from the server entirely (section 3 as
+  amended): authentication, the keyed organization block on the order
+  questions, the TEST MODE banner, key issuance tooling, and the live
+  key records all retire. The MCP_KEYS namespace itself stays: it is
+  a shared namespace (ORDER, IDEM, RECAP, INTENT, INTENTBYEMAIL,
+  WEBHOOK, and the rate-limit counters), and with no keys the per-IP
+  rate limit becomes universal.
+- TWO PARTS. Part 1, DESIGN, is first and is the critical core: on
+  connect the server hands over specs, dimensions, and design
+  guidelines; the user sees numbered, described examples drawn only
+  from real delivered artwork; the user's own agent reproduces the
+  chosen direction with the user's logo and produces the finished
+  artwork as a print-ready PDF. Part 1 collects no identity or
+  contact data; the one design input is the destination URL, entered
+  mid-to-late Part 1 so the agent can build the design's QR from it.
+  Part 2, ORDER, is optional: instead of keeping the file, the user
+  may order, collecting in Ryan's order (email first, then
+  organization name, shipping address and phone, quantity, shape,
+  mounting, link destination), and the final step is labeled exactly
+  "Email me my invoice and design proof."
+- THE FINAL-STEP CHAIN (P-16 superseded in its no-invoice clause).
+  The final step completes the placement as before (the INVREQ record
+  and the order email to Ryan stand), a Stripe invoice is created and
+  FINALIZED at the quoted total through a new tap-mail invocation
+  seat op (working name mintOrderInvoice, section 5.3 as amended),
+  and a second seat op (working name sendOrderInvoiceProof) emails
+  the customer the invoice (hosted link spelled out as a text link,
+  plus the invoice PDF attached) and their artwork proof, the proof
+  embedded inline AND attached. Order of operations: record first,
+  Ryan's email second, invoice third, customer email fourth; each
+  outcome is recorded on the order record and any failure surfaces as
+  an explicit partial state, never silent success; replay re-attempts
+  only the missing steps. An order placed without submitted artwork
+  still mints its invoice at placement; its customer email waits in
+  the explicit state proof_pending and fires from the existing
+  HELDPROOF pipeline once the name-only design's prepared proof is
+  published. The human gates stand: proof approval by email before
+  production, payment by a person on the hosted invoice. Two build
+  risks are named, not assumed away: the hourly INVREQ adoption must
+  be verified to recognize a finalized MCP invoice as already
+  invoiced (no second draft), and the invoice.finalized GA4 branch's
+  origin resolution may degrade MCP invoices (UNVERIFIED whether it
+  reads the mcp_order metadata marker); the GA4 leg itself stays
+  dormant until Ryan's Stripe Dashboard step and nothing depends on
+  it.
+- ORDER STATUS WITHOUT A KEY: a capability reference. At placement
+  the server mints statusRef (32 bytes of randomness, base64url);
+  only its SHA-256 hash is stored (a STATUS:<hash> index on the
+  order record). The plaintext exists only in the create_order
+  response and in the customer's email, and the copy says it cannot
+  be recovered if lost. The read is tightened: stage, invoice state
+  including the hosted URL, fulfillment including tracking and
+  carrier, quantity, exit, the order's own artwork preview image,
+  and the Redirect Dashboard block; never the CRM row verbatim, the
+  ship-to phone, internal seat or ledger identifiers, or any other
+  order. Unknown references answer not_found with no distinction
+  between malformed and nonexistent; there is no list and no
+  slug-based lookup. The runner-up, email-based status, is the held
+  fallback if capability custody fails cold users.
+- PART 1 HAS ZERO PRICING REFERENCES. No range, no totals, no
+  discount talk, no per-disc figures, no minimum or tier language,
+  no anti-metal figure, no stands or badges price figures anywhere
+  in a Part 1 response or discovery surface. The price range line
+  and the no-fees line move to the Part 2 entry, get_order_questions;
+  totals live only at get_quote. get_product is a Part 1 surface and
+  carries no prices. get_discovery does not split: one discovery
+  tool, Part 1 content only, price-free. This supersedes the
+  2026-11-08 range-at-discovery ruling for the MCP flow only;
+  Marketing-owned directory listings are outside this rule's scope.
+- THE USER'S AGENT PRODUCES THE PDF. There is no PDF-producing path
+  in the server and none is built. The print-ready PDF is an output
+  standard the user's agent meets from this spec; submit_artwork's
+  export returns the agent's own submitted file byte-identical, its
+  PNG render, and the on-disc preview. The server stores and returns
+  what the agent made; it authors nothing.
+- TEMPLATES ARE REAL DELIVERED ARTWORK ONLY, and each example
+  carries curated data (description, size, palette, layout,
+  iconTreatment, logoSlot) so a pick by number or description text
+  can be reproduced faithfully and verified against the example
+  (P-13) with data beside the checklist. The supplier is never named
+  in this repo or any public surface; the four occurrences that stood
+  in this spec are replaced with "the production supplier" and "the
+  production handoff".
+- ENTIRELY VISUAL. Every tool response in both parts carries an
+  honest image. The audit: discovery, product, artwork spec, order
+  questions, and quote are unchanged; start_order_intent gains the
+  labeled product photo; recap, create_order, and get_order_status
+  fall back to the labeled product photo when no artwork render
+  exists. One genuine exception, named: a submission the server
+  cannot render (a PDF-only submission) answers with no image and
+  says why. No generated renders; no customer design as anonymous
+  set dressing; setting photos stay labeled as settings.
+- THE EXPLAINER follows MCP best practice, not a website FAQ:
+  Resources are the primary surface (tapgiving://explainer/<topic>:
+  how-it-works, what-a-tap-disc-does, nfc-vs-qr, the-two-phases,
+  after-you-order, materials-and-care), one Prompt on a new prompts
+  surface (explain_where_i_am) assembles the current-step
+  explanation, and nextStep fields point at the resource URIs.
+  Content limits: continuity is absent (Ryan's ruled position is
+  quiet, no public promise); loss and theft carry no replacement
+  promise; durability copy stays within the verified material facts;
+  the approval-workflow question has no sourced answer and is
+  omitted, with the gap named in the landing record at the end of
+  this document.
+
+PROPOSALS, recorded here and in the sections named, NOT settled
+contract, each marked PROPOSED (PENDING CEO SETTLEMENT) where it
+stands: the identity-based test lane (a placement is test-lane when
+the contact email's domain is on a hardcoded operator list,
+initially mcptest.org, or the organization name carries the standing
+TEST / DO NOT CONTACT markers; test-lane placements write DEV_ORDERS
+records, skip CRM adoption, TEST-mark the order email to team
+inboxes only, mint with the Stripe test key, and suppress the
+customer email); the retirement of register_webhook in v1 (delivery
+was never built and a live prefix list shows zero registrations;
+the capability-bound design is the recorded v1.1 revival path); the
+replacement protected string and confirmation text (section 3.1 as
+amended); shapes promotion (the code and the 2026-11-01 policy hold
+exactly two built-ins, 100 mm round and 100 mm square; the site
+markets eight shapes; the example set holds 25 round, 2 square, and
+zero rectangles, and per-example size is unrecorded until curation);
+and the explainer wordings flagged in the landing record.
+
+OPEN QUESTION, carried not resolved: the phase-one design QR is
+built by the agent from the URL the user enters, while production
+encoding is locked (Ryan, 2026-11-01) to the go.tap.giving redirect
+slug for that destination, changeable anytime in the Redirect
+Dashboard, with raw encoding only as a per-order client-specified
+exception. Whether the design QR is a labeled mock of the entered
+URL (the design brief's recommendation A), a redirect-style
+placeholder, or the raw-encoding exception is PENDING CEO
+SETTLEMENT; this spec states the mechanics and asserts none of the
+three.
+
+
 ## Landing note (2026-11-08): examples are delivered proofs; labeled photo set added
 
 Ryan's ruling of 2026-11-08 supersedes every earlier passage in this
@@ -71,7 +224,7 @@ and key model, the human gates, and the build and acceptance runbook.
 
 
 Status: SPEC, written 2026-11-06 against live machinery read the same day.
-Positioning (Ryan, 2026-11-08): this server is a design tool first: it helps agents and users create print-ready NFC tap artwork proofs from its published spec and design directions, art the organization owns and can take to any vendor. Ordering discs through Tap.Giving is the optional next step after the design path, and pricing is presented in that same order: the per-disc range only up front, minimums and totals only at the quote step. The full rulings and what changed are recorded in the landing note at the end of this document (2026-11-08 pricing presentation, positioning, and flow).
+Positioning (Ryan, 2026-11-08): this server is a design tool first: it helps agents and users create print-ready NFC tap artwork proofs from its published spec and design directions, art the organization owns and can take to any vendor. Ordering discs through Tap.Giving is the optional next step after the design path, and pricing is presented only in Part 2 of the flow: Part 1 (design) carries no pricing references at all, and totals appear only at the quote step (Ryan, 2026-11-09; the 2026-11-08 range-up-front presentation is superseded for the MCP flow, and Marketing-owned directory listings are outside that rule). The full rulings and what changed are recorded in the landing note at the end of this document (2026-11-08 pricing presentation, positioning, and flow).
 
 Owner: TG Engineering. Commissioned by the CEO lane for Ryan's direction of
 2026-11-06: Tap.Giving works the MCP / connector angle before any bigger
@@ -89,7 +242,9 @@ contract, written to be built from immediately; the build starts the
 moment it lands. Today's launch scope, in the commissioning words:
 quote and status; order setup on the CRM writer path; invoice link as
 the payment handoff; email-only interest registration; cold-agent read
-and kickoff without a key; writes keyed per organization. Design joins
+and kickoff without a key; writes keyed per organization. (Amended
+2026-11-09: the keyed-writes model is retired in full; no key exists
+anywhere in the flow, section 3 as amended.) Design joins
 the launch in the shape Ryan ruled (section 2.6): the MCP publishes the
 artwork spec, the external agent creates the artwork with its own tools,
 and the finished file comes back through an artwork submission on the
@@ -110,7 +265,9 @@ the endpoint and how to use it are published on our own web surface and on
 the llms / for-agents surface, so an agent that has never heard of
 Tap.Giving can still land on it. This requirement changed the auth design
 in section 3 from an all-keyed surface to a split surface: read tools open,
-write tools keyed. That change is noted where it lands.
+write tools keyed. That change is noted where it lands. (Amended
+2026-11-09: the split surface is itself superseded; no tool is
+keyed, and the landing note at the top of this spec governs.)
 
 Loop rule (Ryan, 2026-11-06): spec, build, deploy, acceptance run, and the
 fixes the acceptance run surfaces proceed back to back without pausing for
@@ -130,13 +287,13 @@ section 7 tests exactly where that line falls.
 
 1. Assumption test: where an MCP is actually required
 2. Tool surface and contracts (v1 fixed scope, later phases marked)
-3. Identity and auth model
+3. Identity model (no credentials; amended 2026-11-09)
 4. Human gates that stay human
 5. Riding the existing machinery
 6. Agent-readable website companion
 7. Phases beyond today
 8. Decisions taken as defaults
-9. Build runbook for today, Nov 6, 2026 (repo bridge, server build, deploy, key issuance, acceptance, fix loop)
+9. Build runbook for today, Nov 6, 2026 (repo bridge, server build, deploy, key issuance, acceptance, fix loop) (historical)
 10. Open items: genuine blockers and Ryan-action items only
 
 ## Tool contract index
@@ -155,13 +312,15 @@ tool, a worked example, and the error catalog).
 | `start_order_intent` | [3.4 Cold first contact and the kickoff](#34-cold-first-contact-and-the-kickoff-start_order_intent-v1) |
 | `get_order_questions` | [2.11 The v1 journey](#211-the-v1-journey-in-ryans-order-binding-flow) (step 2 question set) |
 | `get_recap` | [2.11 The v1 journey](#211-the-v1-journey-in-ryans-order-binding-flow) (the recap contract) |
-| `create_order` | [2.5 Tool: create_order](#25-tool-create_order-v1-write-key-required) |
+| `create_order` | [2.5 Tool: create_order](#25-tool-create_order-v1-write-no-credential-the-final-step) |
 | `request_invoice` (RETIRED 2026-11-08, P-16; see the Persona Loop Round 1 landing record) | [2.7 Tool: request_invoice](#27-tool-request_invoice-v1-write-key-required) |
-| `get_order_status` | [2.8 Tool: get_order_status](#28-tool-get_order_status-v1-read-key-required) |
+| `get_order_status` | [2.8 Tool: get_order_status](#28-tool-get_order_status-v1-read-capability-reference-no-credential) |
 | `register_webhook` | [2.9.1 Webhooks](#291-webhooks-proof_ready-and-shipped-contracts-in-v1-delivery-v11) |
-| All tools | [2.1 Auth header shape](#21-auth-header-shape-all-tools), [2.9 Error shape](#29-error-shape-all-tools) |
+| All tools | [2.1 No credentials](#21-no-credentials-retired-2026-11-09-the-auth-header-shape), [2.9 Error shape](#29-error-shape-all-tools) |
 
 ## 1. Assumption test: where an MCP is actually required
+
+(Amended 2026-11-09: this section's auth verdicts predate the no-keys ruling. Where a verdict below argues for an authenticated or keyed surface, the 2026-11-09 landing note at the top of this spec governs and the keyed path is retired; the mechanism verdicts stand.)
 
 Ryan's working assumption: the MCP is the only real way to do this
 successfully. Tested part by part against the machinery as it exists
@@ -322,47 +481,50 @@ Marketing's discovery work does not substitute for it.
   the rollback and debug surface. Default taken, section 8.
 - Protocol: MCP over Streamable HTTP (the current MCP transport), JSON-RPC
   2.0 request and response bodies, stateless per request (no server-side
-  session to lose; every call carries its own auth and arguments, which
+  session to lose; every call carries its own arguments, which
   is also what makes the tools idempotent-friendly). The server implements
   initialize, tools/list, and tools/call; notifications and server-side
   streaming are out of v1.
 - Compatibility target: a standard MCP client (Muse, Muse
   Desktop, or any client speaking Streamable HTTP) connects with only the
-  endpoint URL and, for write tools, the organization's API key.
+  endpoint URL. (Amended 2026-11-09: no key, login, or account exists
+  anywhere in this server, for any tool.)
 - Every tool result is returned both as MCP structured content and as a
   plain-text rendering, so a client that only reads text still gets the
   invoice link and the quote.
 
-### 2.0.1 New KV namespace: MCP_KEYS
+### 2.0.1 KV namespace: MCP_KEYS (amended 2026-11-09: shared namespace, no key records)
 
-One new KV namespace, binding MCP_KEYS in tap-mcp, holding per-organization
-key records (section 3), created from the MCP repo's checkout (the
+One new KV namespace, binding MCP_KEYS in tap-mcp, holding the server's
+order, idempotency, recap, intent, and rate-limit records (ORDER, IDEM,
+RECAP, INTENT, INTENTBYEMAIL, WEBHOOK, RL/RLI), created from the MCP repo's checkout (the
 namespace belongs to the tap-mcp Worker, not to any business Worker). KV
 is the estate's standing pattern for key-shaped state (LEADS, ORDERS,
 MAIL_STATE) and needs no schema migration. Account cost: KV is included
 in the paid Workers plan at our volume; no new paid product, no approval
-needed beyond the deploy itself. Key creation: `npx wrangler kv
+needed beyond the deploy itself. Namespace creation: `npx wrangler kv
 namespace create MCP_KEYS` run inside the tap-giving-mcp repo, id pasted
 into that repo's wrangler.jsonc, same as DEV_ORDERS was created for
-tap-order-dev.
+tap-order-dev. (Amended 2026-11-09: the namespace is never deleted and
+never held key material as its purpose; the per-organization key records
+that once lived in it retire with the key model, and only those records
+and the key logic retire.)
 
-### 2.1 Auth header shape (all tools)
+### 2.1 No credentials (RETIRED 2026-11-09: the auth header shape)
 
-- Write tools require: `Authorization: Bearer tg_live_<orgslug>_<secret>`
-  or `Authorization: Bearer tg_test_<orgslug>_<secret>` (section 3 for
-  issuance and modes). The orgslug segment names the organization the key
-  was issued to; the secret segment is 32 bytes of randomness, base64url.
-  Only the SHA-256 hash of the full key is stored; the plaintext exists
-  only at issuance, shown once.
-- Read tools (get_quote, get_product) accept calls with no Authorization
-  header at all (public requirement). get_order_status requires a key
-  (it returns an organization's own order state), subject to the cold
-  contact exception in section 3.4.
-- A request with a malformed or unknown key gets the error shape in
-  section 2.8 with code `unauthorized`; a valid key used against another
-  organization's records gets `forbidden`, and the two are never merged
-  into one vague failure, because an agent debugging its own integration
-  needs to know which one it hit.
+Amended 2026-11-09: this section is retired. The replacement contract
+below is live; the earlier text of this section stands in this file's
+git history and in the retired model recorded at section 3.1.1.
+
+Replacement contract (live): no key, login, or account exists anywhere
+in this server. Every tool, reads and writes alike, is called with the
+endpoint URL alone. No Authorization header is required, offered, or
+consulted: a presented credential is ignored identically, never an
+error, and changes nothing (no organization block, no mode, no banner).
+The only capabilities in the system are references the flow itself
+issues: the artwork reference (section 2.6) and the status reference
+minted at placement (section 2.8), each stored as a hash only. Per-IP
+rate limiting applies to every call, with no credential bypass.
 
 ### 2.2 Fact-source requirement (Marketing hard constraint 2, binding)
 
@@ -415,21 +577,25 @@ the first tool a new agent calls and its description says so.
   and the FIRST CHOICE the person makes is the shape, round or square,
   carried in the output as firstChoice: {field: "shape", options:
   ["round", "square"]} so no client improvises a different opening
-  question, pricing (as amended by the 2026-11-08 pricing
-  presentation ruling recorded at the end of this document: the
-  per-disc range line only; the tier table and minimum moved to the
-  quote step), artworkSpec: the get_artwork_spec summary
-  (shapes, artboard, format wanted back), capabilities: {readTools,
-  writeTools, gates in one line each, how an organization gets a key,
+  question, NO pricing content of any kind (amended 2026-11-09: Part 1
+  carries zero pricing references; the price range line and the
+  structured pricing block live at the Part 2 entry,
+  get_order_questions, section 2.11, and totals live only at
+  get_quote), artworkSpec: the get_artwork_spec summary
+  (shapes, artboard, format wanted back), capabilities: {tools (one
+  list, no credential split), gates in one line each, the statement
+  that no key, login, or account exists anywhere in this server,
   the kickoff tool's name}}. Every figure inside it is the same object
   the dedicated tools return; get_discovery composes, it does not
   restate from a second source.
 - Machinery: none of its own; it composes get_quote's boundary rows,
   get_artwork_spec, and the static capability text of section 4.
-- Failure modes: rate_limited and internal only; it never returns
-  unauthorized, because no key is needed or accepted as a requirement.
+- Failure modes: rate_limited and internal only; it never returns a
+  credential error, because no credential exists in this server.
 
 ### 2.3 Tool: get_quote (v1, read, no key)
+
+(Amended 2026-11-09: get_quote is a Part 2 tool. Its totals live here and at the recap, nowhere in Part 1. The sub-100 guidance of the persona pass (P-9) is Part 2, quote-step content: it fires only inside the order path, and the discount-eligibility plain-words sentence stays on this tool in both channels.)
 
 Marketing name: get_pricing. One tool, two names reconciled: the MCP tool
 is `get_quote`, because it returns an authoritative quote object, not a
@@ -509,15 +675,17 @@ and the clamp is reported in the result.
 
 ### 2.4 Tool: get_product (v1, read, no key)
 
+(Amended 2026-11-09: get_product is a Part 1 surface and is price-free. It returns no price range, no stands or badges price figures, and no anti-metal figure; the functional anti-metal facts (shielding is decided before printing and cannot be added afterwards) stay, and the figure lives in Part 2 at get_order_questions and get_quote. The Redirect Dashboard's existence is described here without fee language.)
+
 Purpose: the full product spec an agent needs to answer "what exactly is
 this" without scraping: NTAG213 chip (144 bytes user memory, locked to
 https://go.tap.giving/<slug>), 0.85 mm double-laminated matte waterproof
-PVC, built-in sizes 100 mm (4 inch) round and 100 mm (4 inch) square at
-the same price, every other size or shape a manual exception handled by
-hand (named as such, never presented as self-serve), mounting adhesive
-or screws, table stands and lanyard badges as related products with their
-own prices and minimums, Redirect Dashboard included free, works with any
-platform, no monthly fee, ships free.
+PVC, built-in sizes 100 mm (4 inch) round and 100 mm (4 inch) square, every
+other size or shape a manual exception handled by hand (named as such,
+never presented as self-serve), mounting adhesive or screws, table
+stands and lanyard badges as related products (their
+facts and sizes; their prices and minimums are Part 2 content), Redirect Dashboard included with every order, works with any
+platform, ships free.
 
 Inputs: none required; optional `topic` enum (discs, stands, badges,
 mounting, shipping) to narrow the answer. Shipping terms ride this tool
@@ -535,7 +703,9 @@ and llms-full.txt already serves it for reading agents. Named phase 2.
 
 Failure modes: unknown topic returns `invalid_input` listing the topics.
 
-### 2.5 Tool: create_order (v1, write, key required)
+### 2.5 Tool: create_order (v1, write, no credential: the final step)
+
+(Amended 2026-11-09: this tool's completion action is the journey's final step, labeled exactly "Email me my invoice and design proof." The settled chain: placement completes as this section describes (INVREQ record, the durable order record, the artwork claimed, and the existing notifyOrderPlaced seat call emailing Ryan the order recap, unchanged); then a new tap-mail seat op (working name mintOrderInvoice, section 5.3 as amended) creates and FINALIZES a Stripe invoice at the quoted total under the parity contract recorded in section 2.7; then a second seat op (working name sendOrderInvoiceProof) emails the customer the invoice and the design proof, embedded inline and attached (an order without submitted artwork mints its invoice and waits in the explicit proof_pending state for its email). Each step's outcome is recorded on the order record; replay re-attempts only the missing steps. The response also carries the statusRef capability of section 2.8. The phase-two field order is Ryan's (section 2.11): email first, then organization name, shipping address and phone, quantity, shape, mounting, link destination. Test-lane routing for this tool is a PROPOSAL, pending CEO settlement, recorded in section 3.3 as amended; until settlement, a placement is a real placement. Earlier text below is amended where it names the old credential model.)
 
 Marketing mapping: this is create_lead and create_design/start_order
 folded together, minus the design. Ryan's v1 fixes order setup riding the
@@ -549,14 +719,16 @@ request into one CRM deal. A separate create_lead tool is phase 2, for
 agents that want a no-commitment first touch; in v1, a cold agent's
 first touch is start_order_intent (section 3.4).
 
-In Ryan's flow this tool is the LOCK-IN exit (section 2.11, step 4):
+In Ryan's flow this tool is the final step of Part 2 (section 2.11):
 it is called after the artwork, the questions, and the recap, when the
-person picks "I want to lock in this price". Its inputs therefore carry
+person picks the step labeled "Email me my invoice and design proof."
+(The exits recorded on the order, pay now or lock in this price, stand
+as before.) Its inputs therefore carry
 the journey's earlier legs (artworkRef optional: an order with no
 submitted artwork is valid, matching orders today that carry a design
 only when one exists).
 
-Purpose: set up an order for the key's organization, indistinguishable
+Purpose: set up an order for the organization named in the Part 2 answers, indistinguishable
 downstream from a website order: writes an INVREQ-shaped request record
 to ORDERS KV (the exact record POST /api/invoice-request writes:
 `INVREQ:<timestamp>:<email>`, the request body plus the quoteFor quote
@@ -568,10 +740,11 @@ Worker (the seat map in section 5).
 
 Inputs:
 - contactName: string, required.
-- contactEmail: string, required; must belong to the key's organization
-  (section 3; a mismatch is `forbidden`).
+- contactEmail: string, required; must equal the email captured by
+  start_order_intent and bound at get_recap (section 3 as amended); a
+  mismatch is `conflict` naming the differing fields.
 - contactPhone: string, required. The approval-block standard requires a
-  phone on every order that can reach ZBTech; collecting it here, at
+  phone on every order that can reach the production supplier; collecting it here, at
   setup, is cheaper than chasing it later (the standing missing-phone
   sourcing order exists because website orders arrive without it).
 - quantity: integer, required, same bounds as get_quote.
@@ -621,7 +794,10 @@ Inputs:
 Outputs:
 - orderRef: the durable reference, `mcp:<orgslug>:<idempotencyKey hash
   prefix>` plus the INVREQ key it wrote, returned so the agent can quote
-  it and pass it to request_invoice and get_order_status.
+  it. Order status is read with the statusRef capability (section 2.8);
+  the invoice arrives through the final-step chain above, not a tool call.
+- statusRef: the capability for get_order_status, minted at placement;
+  only its hash is stored (section 2.8).
 - quote: the full get_quote output object for the order as recorded (the
   INVREQ record's own quote, so the agent's number and the CRM number are
   the same object by construction).
@@ -637,8 +813,7 @@ tools/order-adopt/adopt.py, and tools/invoice-request/adopt.py hourly).
 Identity and dedupe are adoption's: canon_email match, parked deals left
 alone, slug collision handling, INVREQDONE: marker per request.
 
-Failure modes: `unauthorized` (no or unknown key); `forbidden` (email or
-organization mismatch with the key); `invalid_input` (missing ship-to
+Failure modes: `invalid_input` (missing ship-to
 field, bad enum, quantity out of bounds, INCLUDING a quantity below the
 100-disc minimum, which this tool refuses itself with the minimum
 stated rather than passing downstream, Ryan's ruling); `manual_exception` (non-built-in
@@ -681,12 +856,24 @@ across it; it does not block the build: if polished examples lag the
 server work, v1 ships with the examples element returning the set we
 have, its count stated honestly in the launch report. No example asset
 is invented in this spec; the lawful source is new house artwork made
-for this purpose. (Superseded 2026-11-08 by the delivered-proofs landing note at the top of this spec.)
+for this purpose. (Superseded 2026-11-08 by the delivered-proofs landing note at the top of this spec.) (Amended further 2026-11-09: the templates are the delivered proofs themselves. Each example carries curated fields in tools/delivered-examples.json and the generated index: description (short, authored from the actual delivered proof, never generated or invented; an example whose description cannot be verified is flagged UNVERIFIED in the data change's landing record), size, palette (hex values with roles: background, foreground, accent), layout (zone map in words and relative coordinates), iconTreatment, and logoSlot (position, max width and height in mm, clear space in mm; the logo sits directly on the disc background, never on a white chip or badge). The pick list is numbered across the FULL per-shape set in stable index order, in the line format "<n>. <description>, <shape>, <size>: the design delivered to <organization>, at <url>"; the inline image subset stays bounded for payload sanity, but numbering and text resolution cover the whole set. A pick resolves through chosenExampleRef as a number or an id; free-text description matching is the agent's reading of the list, not a server parser, and no client should expect the server to fuzzy-match prose. get_artwork_spec returns the reproduction data for the chosen example, and submit_artwork's verify-against-example block (P-13) repeats it beside the checklist, so verification compares data to data.)
 LOGO ASK (Ryan): the design step also carries `logoAsk`, an optional
 input the client presents at the design step: the person may provide
 their logo for the agent to build from. Optional by construction
 (name-only artwork is a standing shape); a provided logo travels with
 the submission record as source material beside the finished artwork.
+(Amended 2026-11-09: the agent pulls the logo itself from the website
+the user provides or confirms; no fetch is ever made against a guessed
+domain. The pull follows the website stack's logo-lookup priority: the
+site's own published logo and icon assets first (apple-touch-icon,
+favicon link tags, header logo), then the site's own published social
+links; accept the best valid real logo file at any size; never a
+monogram, globe, or placeholder. Direct upload through submit_artwork's
+logo argument is the fallback. The business side's server logo-fetch
+seat is NOT the Part 1 seat: it fires a capture-on-entry step-capture
+event, which collides with Part 1 collecting nothing. No server-side
+logo swap or compositing exists or is built; the swapped result is the
+agent's render, submitted through submit_artwork and the P-13 path.)
 (v1, read, no key). It returns the production geometry and the format
 we want artwork back in, read from the production sources named here,
 never invented numbers:
@@ -708,7 +895,26 @@ never invented numbers:
   (SQUARE_SAFE_HALF, a 3 mm margin inside the cut).
 - Format wanted back: vector source (documentation/disc-product-spec.md
   print row: "vector source only (SVG preferred; AI or vector PDF
-  accepted; never raster)"). The artwork itself is the church's full
+  accepted; never raster)"). (Amended 2026-11-09, the output standard:
+  the finished deliverable of Part 1 is a print-ready PDF the USER'S
+  AGENT produces from this spec: page geometry equal to the 106 mm
+  artboard with bleed, vector preserved, fonts outlined or embedded,
+  one disc per page. The server never builds or returns a PDF;
+  submit_artwork's export returns the agent's own submitted file
+  byte-identical, a full-resolution PNG render, and the on-disc
+  preview, fetchable under the artwork reference with no order, email,
+  or credential. Palette hexes in the example data are the sRGB values
+  of the delivered artwork as rendered; the agent composes in the same
+  values. QR rules for the agent's design: a printed QR sits on a white
+  background, never colored, 2 mm rounded corners allowed; reference
+  sizes 44 x 44 mm QR-forward and 30 mm split; error correction M
+  minimum and a quiet zone of 4 modules, set deliberately here (they
+  were stated nowhere in either repo's design docs). Plain-language
+  glossary the spec carries for no-designer users: the artboard is the
+  full page the artwork is built on; the bleed is the margin of
+  background color extending past the cut line so no white edge can
+  show; the safe zone is the inner area every important element must
+  stay inside.) The artwork itself is the church's full
   custom artwork, edge to edge. Supporting production facts the spec
   carries because an external generator needs them: background is a
   flat solid colour (standing rule, Ryan 2026-11-01); the disc encodes
@@ -721,23 +927,30 @@ never invented numbers:
   against numbers, not prose.
 
 (2) The external agent creates the artwork with its own built-in tools,
-following the spec. No generation, rendering, or preview tool exists on
+following the spec, and renders the print-ready PDF itself (the output
+standard above). No generation, rendering, or preview tool exists on
 our side in v1, by Ryan's ruling, not by omission.
 
 (3) The agent sends the finished artwork back through the MCP. Tool:
-`submit_artwork` (v1, write; key OPTIONAL: on the cold journey the
-submission is keyless and email-less, Ryan's reorder, section 2.11; a
-keyed submission is also accepted and binds to the key's organization
-at once. An unbound cold submission is stored under its artworkRef
+`submit_artwork` (v1, write; no credential exists: the submission is
+email-less on the design path, Ryan's reorder, section 2.11; it binds
+to an organization only when an order claims its artworkRef. An unbound cold submission is stored under its artworkRef
 with a 30-day TTL and is claimed when create_order carries the
 artworkRef; an unclaimed submission expires with the TTL and creates
 nothing).
 
+- designUrl: string, optional (Part 1 design input, amended
+  2026-11-09): the destination URL the user enters mid-to-late Part 1
+  so the agent can build the design's QR from it; stored on the
+  artwork record, and carried into the order as the recap's link
+  destination confirmation. What production encodes for that URL is
+  the open question recorded in the 2026-11-09 landing note; this
+  contract asserts none of the options.
 - Inputs: artworkRef-bearing call in two forms, per Ryan's flow
   (artwork comes FIRST, before any order exists): with no orderRef, the
   submission opens the journey's artwork leg and returns an artworkRef
   the later steps carry; with an orderRef (revised artwork for an order
-  the key already created), it attaches to that order. Form fields:
+  already created in this flow), it attaches to that order. Form fields:
   file (required):
   {filename, mediaType, contentBase64} carrying the finished artwork in
   whatever format is convenient for the agent (SVG preferred per the
@@ -778,8 +991,8 @@ nothing).
   for-agents fact set, worded consistently with them, and the same
   object is carried in get_discovery's capabilities so the wording
   exists in exactly one shape.
-- Failure modes: `forbidden` (an orderRef that is not the key's
-  organization's, when a key is presented);
+- Failure modes: `not_found` (an orderRef that does not exist or is
+  not bound to this submission's order);
   `invalid_input` (missing file, hash mismatch between contentBase64
   and the supplied sha256, over ceiling); `conflict` (a second
   submission for the same orderRef with a different hash returns the
@@ -853,9 +1066,11 @@ shows exactly what was and was not checked, and no reader can mistake
 What is NOT open: no validation level makes a submission approved
 artwork. Approval stays Gate 1 (section 4) at every level.
 
-### 2.7 Tool: request_invoice (v1, write, key required)
+### 2.7 Tool: request_invoice (RETIRED; historical heading, see the amendment above)
 
 RETIRED 2026-11-08 (P-16): this tool no longer exists. Placement records the order and emails it to the team; a person follows up with the actual invoice. This section is kept as the historical record of the retired design; the Persona Loop Round 1 landing record at the end of this spec carries the current contract.
+
+(Amended 2026-11-09: the mint returns, not as this tool. Under Ryan's 2026-11-09 ruling, which supersedes P-16's no-invoice clause, the final step of Part 2 (sections 2.5 and 2.11 as amended) creates and finalizes the invoice at the quoted total through a new tap-mail invocation-seat op (section 5.3 as amended), and a second seat op sends the customer email carrying the invoice and the proof. The parity contract recorded in this retired section (the invoice module's create-and-finalize behavior, the metadata, the full order recap on the line items, the anti-metal line discountable=false, the duplicate-open-invoice guard) is the seat op's spec source. This section remains history.)
 
 In Ryan's flow this is the second half of the LOCK-IN exit: create_order
 creates the order, request_invoice returns its payment handoff. The two
@@ -950,11 +1165,30 @@ CHECKOUT-DONE:<email> signal the same way tap-mail checks it);
 with the same idempotencyKey; Stripe-side idempotency keys are derived
 from orderRef exactly as invoice.ts derives its cf- keys).
 
-### 2.8 Tool: get_order_status (v1, read, key required)
+### 2.8 Tool: get_order_status (v1, read, capability reference, no credential)
+
+Amended 2026-11-09: status is read with a capability reference, not a
+credential. At placement, create_order mints statusRef (32 bytes of
+randomness, base64url); the order record stores only its SHA-256 hash,
+with a STATUS:<hash> index to the order. The plaintext exists only in
+the create_order response and in the customer's final-step email, and
+the copy says plainly: keep this reference, it is the only way to check
+this order, it cannot be recovered if lost. One reference reads exactly
+one order. The read returns stage, invoice state including
+hostedInvoiceUrl, fulfillment including tracking and carrier, quantity,
+exit, the order's own artwork preview image, and the Redirect Dashboard
+block. It never returns the CRM row verbatim, the ship-to phone, any
+internal seat or ledger identifier, or any other order. Unknown
+references answer not_found with no distinction between malformed and
+nonexistent; there is no list and no slug-based lookup; the universal
+per-IP rate limit applies. The Stripe invoice read and the seat
+readOrderRecords call stay, bound internally by the order record's own
+organization slug and contact email, not by any credential.
 
 Purpose: where an order stands, from the records fulfillment reads.
 
-Inputs: orderRef (from create_order) or invoiceId.
+Inputs (amended): statusRef (from create_order or the customer's
+email). The orderRef and invoiceId inputs below are history.
 
 Outputs:
 - stage: the CRM stage from adoption and the row's current status
@@ -983,15 +1217,19 @@ error, because hourly adoption lag is the machinery's normal state.
 ### 2.9 Error shape (all tools)
 
 Every tool error returns MCP's standard error content plus a structured
-object: {code, message, retryable, details}. Codes: `unauthorized`,
-`forbidden`, `invalid_input`, `manual_exception`, `not_found`,
-`conflict`, `stripe_unavailable`, `rate_limited`, `internal`. Messages
+object: {code, message, retryable, details}. Codes (amended 2026-11-09):
+`invalid_input`, `manual_exception`, `not_found`,
+`conflict`, `stripe_unavailable`, `rate_limited`, `internal`. The
+credential codes once listed here are retired from the live contract:
+no tool throws them, because no credential exists in this server. Messages
 are written for an agent reader: what failed, which input, what to do
 instead (for manual_exception, the human route; for conflict, which
 fields differ). No error ever returns another organization's data, a
 stack trace, or a secret.
 
-### 2.9.1 Webhooks: proof_ready and shipped (contracts in v1, delivery v1.1)
+### 2.9.1 Webhooks: proof_ready and shipped (PROPOSAL, PENDING CEO SETTLEMENT: retire in v1)
+
+(Amended 2026-11-09, PROPOSED, not settled: register_webhook leaves the published tool set in v1. The facts: registration stored one subscription per organization with a secret shown once; delivery was never built, so no push has ever fired; and a live prefix list on 2026-11-09 returned zero WEBHOOK records, so retiring the tool orphans nothing. The recorded v1.1 revival path is capability-bound registration: the statusRef of section 2.8 authorizes one webhook per order, if delivery is ever built. Until settlement, the text below is the historical registration contract, not a live offer.)
 
 Agents learn state changes by subscription, not polling.
 - Events: `proof_ready` (the order's final proof has been sent to the
@@ -1019,7 +1257,94 @@ Agents learn state changes by subscription, not polling.
   lands, get_order_status remains the state read, and tool descriptions
   say delivery is pending rather than implying live push.
 
-### 2.11 The v1 journey, in Ryan's order (binding flow)
+### 2.11 The v1 journey: Part 1 DESIGN, Part 2 ORDER (binding flow, amended 2026-11-09)
+
+Amended 2026-11-09: this section is rewritten wholesale as the
+two-part structure. The pre-amendment journey text below this
+replacement contract is superseded history, banner-marked at its
+start; its old question list and its Step 4 (built on the retired
+request_invoice) are superseded text and no agent should follow them.
+
+PART 1, DESIGN (the critical core; collects nothing):
+
+- Step 1, discovery and design entry: the cold agent starts with
+  get_discovery (section 2.2.1, Part 1 content only, price-free),
+  presents the introduction, and the person makes the first choice:
+  shape, round or square. get_artwork_spec is the design entry
+  point: specs, dimensions, and design guidelines as
+  machine-followable data (geometry per shape, bleed, safe zones,
+  colors, file requirements, QR rules, the plain-language glossary),
+  and the numbered, described examples drawn only from real
+  delivered artwork (section 2.6 as amended). The user picks by
+  number or by description text.
+- Step 2, reproduction: the user's own agent pulls the user's logo
+  from the website the user provides or confirms (section 2.6 as
+  amended), reproduces the chosen direction with the user's logo,
+  colors, and branding, built to spec, verifies the result against
+  the example (P-13, data beside the checklist), and shows the new
+  proof. Mid-to-late Part 1, the user enters their destination URL
+  as design input (designUrl on the artwork record) so the QR for
+  their URL is built into the design; no organization name and no
+  email are collected in Part 1, and design state rides on the
+  artwork reference alone.
+- Step 3, the deliverable: the agent renders the finished artwork
+  as a print-ready PDF from the spec (the output standard of
+  section 2.6). Part 1 ends there for a design-only user: no order,
+  no email, no credential, nothing collected beyond the design URL.
+  submit_artwork is the proof and preview step (and the optional
+  order binding), never the deliverable's source. The explainer
+  surfaces of the 2026-11-09 landing note answer "what step am I
+  on" and "how does this work" throughout both parts.
+
+PART 2, ORDER (optional; the user chooses it instead of keeping
+only the file):
+
+- Step 4, collection, in Ryan's confirmed order: email first
+  (start_order_intent captures it; Part 2 opens here), then
+  organization name, then shipping address and phone, then
+  quantity, then shape, then mounting, then the link destination.
+  The question set (get_order_questions) is reordered to this
+  sequence, and the deltas against the set it replaces are called
+  out, every one: (i) email sat 7th of 9 inside the old set and was
+  "first" only via the separate intent capture; the set now follows
+  the intent capture in Ryan's sequence; (ii) no organizationName
+  question existed at all (create_order took it as an argument with
+  fallbacks); one is added, second; (iii) shipTo was LAST (9th);
+  shipping address and phone are now third; (iv) quantity and size
+  sat 2nd and 1st; they are now fifth and sixth; (v) antiMetalCount
+  (3rd in the old set) appears nowhere in Ryan's list: it stays a
+  quote and order input, repositioned adjacent to quantity and
+  labeled as the metal-surfaces question, not deleted, because the
+  quote cannot price without it; (vi) contactName and contactPhone
+  were separate questions while Ryan's list folds phone into
+  "shipping address and phone", and shipTo also carries its own
+  required phone: one contact phone is collected with the shipping
+  block and defaults into shipTo.phone, collected once, used twice;
+  (vii) linkDestination leaves the collection set: the destination
+  entered in Part 1 appears only as a recap confirmation ("the
+  destination carried from your design"), and for artwork-less
+  orders the order answer is the fallback. The price range line and
+  the no-fees line are first stated at this Part 2 entry
+  (get_order_questions); totals appear only at get_quote and the
+  recap.
+- Step 5, recap: get_recap shows the artwork, the answers, and the
+  exact total (the recap contract below, in the superseded text's
+  Step 3, stands in substance: display order, both required notes,
+  and the rule that a lock-in call whose recap inputs differ returns
+  conflict naming the drift).
+- Step 6, the final step, labeled exactly: "Email me my invoice
+  and design proof." The click completes the chain of section 2.5
+  as amended: placement recorded and emailed to Ryan, the Stripe
+  invoice created and finalized at the quoted total, and the
+  customer email carrying the invoice and the design proof,
+  embedded inline and attached. The two exits (pay now, lock in
+  this price) are recorded intent on the same record shape, as
+  before. Dropout follow-up stands as written below: it applies
+  from the first capture point (Part 2's email capture) onward, and
+  Part 1 leaves nothing to follow up, by design.
+
+Superseded journey text (pre-2026-11-09) follows, as history:
+
 
 The tools above compose into one journey. This section is the contract
 for the sequence itself; a client following it needs no other guidance.
@@ -1063,11 +1388,10 @@ first ask): through start_order_intent's capture semantics (section
 3.4, the /api/lead capture record, source "mcp:intent"), which is what
 makes the dropout follow-up in step 5 real from this point onward. The
 order questions follow. The question
-set is a contract: tool `get_order_questions` (v1, read, keyless
-since the 2026-11-08 F3 amendment recorded at the end of this spec;
-the question set is static and public, and the keyed call also
-returns the key's organization block so the answers bind to the
-organization) returns the questions as
+set is a contract: tool `get_order_questions` (v1, read;
+the question set is static and public, and (amended 2026-11-09) the
+reordered set of section 2.11 is what it returns; no organization
+block exists, because no credential exists) returns the questions as
 structured data in exactly this order, each with its input shape,
 because an agent improvising the order or the wording is how the
 standing framings get lost:
@@ -1177,7 +1501,7 @@ rather than pretending a follow-up exists.
   "mcp:intent", keyed by the full contact email, exactly as a website
   capture is), plus the step events the journey's later public calls
   already write (STEPCAP-shaped records for design or checkout steps
-  reached), and, on a keyed journey, the submit_artwork pending record
+  reached), and the submit_artwork pending record
   if artwork was submitted (section 5.3). Nothing else is written for
   follow-up purposes; tap-mcp keeps no abandonment list of its own.
 - Which machinery picks it up: the same machinery that picks up a
@@ -1214,7 +1538,7 @@ not surprises.
   quoteFor has no stands seat today); site and FAQ search tool; invoice
   requests against website-originated orders by reference.
 - Phase 3: Redirect Dashboard reads for the organization (destinations,
-  click totals) through the same key; these ride the openshortlink
+  click totals) through capability references; these ride the openshortlink
   estate, a separate repo, and are scoped when v1.1 lands.
 
 ### 2.12 Minimum-friction design: fewest legitimate permission prompts
@@ -1231,7 +1555,7 @@ agent: no installs, no downloads of executables, no broad or vague
 scopes, no tool names or descriptions that read as destructive. The
 journey in section 2.11 is ordered by this principle (nothing asked
 until a design exists; email captured at order setup, the first ask;
-a key only at the order write that needs it; payment outside the MCP
+no credential at any point (amended 2026-11-09); payment outside the MCP
 entirely), and the six requirements below are design requirements the
 build is held to, legitimately, never by evasion:
 
@@ -1240,11 +1564,13 @@ build is held to, legitimately, never by evasion:
    ever. An agent connects to a URL and nothing touches the user's
    machine.
 2. UNAUTHENTICATED READ SIDE: discovery (get_discovery), pricing,
-   the artwork spec, and quote work cold with no key and no auth
-   challenge (sections 2.2.1, 2.3, 2.6).
-3. ONE CREDENTIAL FOR WRITES: a single per-organization API key in one
-   header (section 2.1). No OAuth consent flows, no per-tool scopes;
-   the key record's single v1 scope is `orders` (section 3.1).
+   the artwork spec, and quote work cold with no credential and no
+   auth challenge (sections 2.2.1, 2.3, 2.6).
+3. ZERO CREDENTIALS, EVERYWHERE (amended 2026-11-09, replacing the
+   one-credential requirement): no key, login, or account exists at
+   any step, for any tool, including order status (a capability
+   reference, section 2.8) and webhooks (section 2.9.1). No OAuth
+   consent flows, no per-tool scopes, no headers to configure.
 4. SMALL, CLEARLY-NAMED TOOL SURFACE: the tools are few and grouped so
    the read tools are obviously read-only in their MCP annotations
    (readOnlyHint true, and the sibling annotations, destructiveHint,
@@ -1276,7 +1602,9 @@ acceptance run RECORDS the number and kind of permission prompts
 encountered across the full journey and reports them against this
 section's prediction, as a measured v1 quality bar.
 
-## 3. Identity and auth model
+## 3. Identity model (no credentials)
+
+(Amended 2026-11-09: this section is rewritten as identity-without-credentials. Identity in the amended model comes only from what the user supplies in Part 2 (the intent email, the organization name answer, the order answers) and from the capability references the flow issues (the artwork reference, the statusRef). Sections 3.1.1, 3.2, 3.3, 3.5, 3.6, and 3.7 carry their own dated banners; text under those banners is history, not contract.)
 
 ### 3.1 Server identity: NFC Tap Builder by Tap.Giving
 
@@ -1297,14 +1625,28 @@ The MCP presents as a builder, in the vocabulary people actually use.
   The synonym set is contractual, so differently worded agent requests
   still match: tap discs, tap plates, tap tags, NFC tap discs.
   The description also carries, verbatim, the no-money sentence the
-  directory rules require (below): "This server moves no money itself:
-  a person from Tap.Giving follows up with the invoice." (Sentence as settled 2026-11-08: "This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.") Anthropic's
+  directory rules require (below). (Amended 2026-11-09: the
+  "issues no invoices" clause of the sentence settled 2026-11-08 is
+  superseded by Ryan's 2026-11-09 ruling, because the final-step
+  chain now issues the invoice. A replacement is PROPOSED, not
+  settled, for CEO settlement: "This server moves no money itself:
+  when an order is placed, Tap.Giving emails the invoice and the
+  design proof, and a person pays the hosted invoice." A confirmation
+  text replacement is likewise PROPOSED: "Your order is placed, and
+  your invoice and design proof are on their way to <contactEmail>.
+  A person from Tap.Giving follows up from there; production waits
+  for your proof approval, and the invoice is paid on its hosted
+  page." Until settlement, surfaces carry the no-money-movement
+  truth without the superseded clause, and no surface improvises a
+  variant of the protected string.) Anthropic's
   connector rules bar connectors that transfer money; this server is
   compliant by design (it never takes payment), and the sentence is in
   the copy, in the server description and in the payment handoff tool's
   contract, not only in the principle.
 
-### 3.1.1 The key
+### 3.1.1 The key (RETIRED 2026-11-09)
+
+(Amended 2026-11-09: retired in full. No key is issued, accepted, or stored as a credential anywhere in this server; the issuance tooling retires, and the live key records are deleted after the no-keys deploy. The text below is the historical record of the retired model.)
 
 One API key per organization, issued by Tap.Giving (Ryan or the CEO lane,
 through the issuance tooling in section 9; v1 issuance is a wrangler KV
@@ -1337,7 +1679,9 @@ same rule: test keys are issued the same way, against the test seat, and
 the acceptance script takes its key from an environment variable, never
 from a file in either repo.
 
-### 3.2 What a key may do, and may never do
+### 3.2 What a key may do, and may never do (amended 2026-11-09: read as the capability model)
+
+(Amended 2026-11-09: there is no key. Read this section as the capability model: the artwork reference and the statusRef are the only capabilities, each bound to its own record. The may-never list below stands unchanged in substance, enforced by the absence of tools, exactly as it was.)
 
 May: call create_order, request_invoice, and get_order_status for its
 own organization; call start_order_intent for its own contact email;
@@ -1346,15 +1690,17 @@ call the open read tools like anyone else.
 May never, by construction (the server exposes no tool for these, which
 is the enforcement, not a policy sentence): pay an invoice or hold a
 payment instrument; approve a design or mark anything approved; release
-an order to production or trigger a ZBTech handoff; read or write
+an order to production or trigger a production-supplier handoff; read or write
 another organization's records (every write and status read is bound to
 the key's orgSlug and contactEmail, checked on each call); mint an
-invoice for an order it did not create (request_invoice takes only
-orderRefs the key's organization created); rotate or revoke its own key
+invoice for an order it did not create (the final-step mint takes only
+the order the placement itself created); rotate or revoke its own key
 (issuance is ours, so a compromised agent cannot lock the organization
 out of its own account by rotating).
 
-### 3.3 Modes: how one server serves production and test
+### 3.3 Modes: how one server serves production and test (amended 2026-11-09: key modes superseded; test lane PROPOSED, pending settlement)
+
+(Amended 2026-11-09: mode is no longer a property of a key, because no key exists; the key-mode text below, including the in-place 2026-11-07 amendment scoping test isolation to order records and CRM adoption with the shared start_order_intent capture as the settled design, is banner-marked superseded by the following PROPOSAL, which is NOT settled contract. PROPOSED test lane, pending CEO settlement: an identity-based test lane, server-side, never offered to users in any copy. A placement is test-lane when the contact email's domain is on a hardcoded operator list (initially mcptest.org) OR the organization name carries the standing synthetic marker pattern (TEST / DO NOT CONTACT). Test-lane behavior reuses the existing test plumbing: the order record goes to DEV_ORDERS instead of the live INVREQ door, no CRM adoption, the order email to Ryan TEST-marked to team inboxes only, the invoice minted with the Stripe test key, and the customer email suppressed. This preserves every isolation property the test key provided, keyed off identity data the flow already collects. The runner-up (no test lane; every verification placement is real and cleaned up afterward) was rejected in the design brief: a finalized real invoice cannot be deleted, only voided, and a real placement needs the full gated cleanup. Until settlement, a placement is a real placement.)
 
 The acceptance criterion requires a test run that touches no real
 customer, and forbids a test-only server. Resolution: mode is a property
@@ -1427,16 +1773,19 @@ Marketing condition sets).
 - What it promises: nothing beyond capture. The result returns
   {captured: true, nextStep} where nextStep tells the agent, in plain
   words, that a person at Tap.Giving now has the contact, and that
-  completing an order needs an organization API key (how a human gets
-  one: by emailing the Tap.Giving team at hello@tap.giving, which replies
-  with the key within one business day; there is no self-serve issuance). An intent is a lead, with a lead's semantics:
+  completing an order needs no key, no login, and no account: the
+  agent continues with the order questions, the recap, and the final
+  step of section 2.11 (corrected 2026-11-09; the earlier copy
+  promising a key was wrong even before the no-keys ruling). An intent is a lead, with a lead's semantics:
   it is not an order, creates no invoice, and reserves nothing.
 - Abuse shape: an unauthenticated email capture is exactly the surface
   the website already exposes publicly; the MCP adds no new class of
   abuse, only a new client. Rate limit at tap-mcp (per-IP, KV-counter)
   mirrors the endpoint's own limits.
 
-### 3.5 Rotation and revocation
+### 3.5 Rotation and revocation (RETIRED 2026-11-09)
+
+(Amended 2026-11-09: retired with the key model. Capability references are hash-stored and single-record; there is no credential lifecycle to rotate or revoke. The text below is history.)
 
 Rotation: issue a new key for the organization, mark the old key
 revoked with reason "rotated" once the new key has made a successful
@@ -1451,39 +1800,45 @@ makes them real, and revocable in one write.
 
 ### 3.6 Binding to CRM and the Redirect Dashboard
 
-The key's orgSlug is the CRM slug: the same slug crm.py resolves, the
+The organization's slug is the CRM slug: the same slug crm.py resolves, the
 same slug adoption writes under, the same slug the Redirect Dashboard
 account is keyed by in the openshortlink estate. One organization, one
-slug, three surfaces. The MCP never creates a second identity for an
-organization that already has a CRM row: issuance checks the CRM first
-(the issuance script reads deals.csv through the writer clone) and
-refuses to issue a second key identity for an email that canon_email
-already resolves to another slug.
+slug, three surfaces. The slug derives from the intent, then the order
+answers, then the email local part (amended 2026-11-09; there is no
+issuance). The MCP never creates a second identity for an
+organization that already has a CRM row: identity resolution checks the CRM first
+(adoption reads deals.csv through the writer clone), and an email that canon_email
+already resolves to another slug binds to that slug, never a second identity.
 
 ### 3.7 Distribution surfaces and per-surface auth reality
 
 Source: Marketing's directory research (2026-11-06; their full map
-lands in the tap-giving repo's private MCP working directory). The
+lands in the tap-giving repo's private MCP working directory). (Amended 2026-11-09: the no-keys model applies to every connection,
+direct and portal-mediated alike; portals need no auth story. The
+per-surface text below is amended where it names the retired model.)
+The
 one-key model of sections 3.1 to 3.6 applies to DIRECT connections,
 and the spec does not claim it covers portal-mediated connections:
 
 - Direct MCP clients (an agent or its human configuring the endpoint
-  URL and the organization's key in their own client): the full v1
-  model. Reads open, writes keyed, exactly as specced.
+  URL alone in their own client): the full v1
+  model. Every tool open on the endpoint URL, exactly as specced.
 - Claude Directory, the Official MCP Registry, Meta Muse, Glama, and
   community registries: per Marketing's research these take a remote
   server on its own terms; the listing points at the endpoint and the
-  keyed model carries, because the connection is still a direct one
-  the user's client makes.
+  no-keys model carries (amended 2026-11-09), because the connection
+  is still a direct one the user's client makes.
 - OpenAI's ChatGPT directory: NO API-key connection flow exists there;
   writes would need OAuth or OpenAI's "contact OpenAI" route. Portal
   position (Ryan, binding, stated plainly): for v1 the ChatGPT listing
-  is a DISCOVERY SURFACE ONLY. The open read tools are what a ChatGPT
-  user gets; no keyed writes run through that portal in v1.
+  was a DISCOVERY SURFACE ONLY under the keyed model. (Amended
+  2026-11-09: closed by the no-keys ruling; the full flow, writes
+  included, runs through any portal on the endpoint URL alone.)
 - Google's Connected Apps Platform: documents OAuth-or-none, the same
   shape. Same position: discovery surface only in v1.
 
-OAuth for portals is a NAMED v1.1 ITEM, with the reason: an OAuth
+OAuth for portals was a NAMED v1.1 ITEM (closed 2026-11-09 by the
+no-keys ruling: portals need no auth story), with the reason: an OAuth
 authorization surface (consent flow, token issuance and revocation
 bound to organization records, a second credential lifecycle beside
 the key) is a new auth system, and bolting it on today would break the
@@ -1506,15 +1861,19 @@ spec and the published surface say one thing.
 
 ### Gate 1: design approval before production
 
-The rule (standing): what goes to ZBTech is verified against the
+The rule (standing): what goes to the production supplier is verified against the
 approval email, the email Ryan sent that the customer approved; its
 proof and order details are the reference. The MCP may: carry a design
 (v1.1) and surface proof state. The MCP may never: record an approval,
 expose an approve action, or let an order's state imply approval
-happened. create_order and request_invoice are explicitly
+happened. create_order (the final step, "Email me my invoice and
+design proof.") is explicitly
 approval-neutral: an invoice is a request for payment, not an artwork
 approval, and the records say so (the INVREQ and CRM note shapes carry
-no approval field, and v1 adds none).
+no approval field, and v1 adds none). (Amended 2026-11-09: the
+final-step chain mints and emails the invoice at placement under
+Ryan's ruling; Gate 1 stands exactly as before, and production still
+waits for the emailed proof's approval.)
 
 ### Gate 2: payment
 
@@ -1525,9 +1884,9 @@ webhook-written records only (tap-order's webhook writes the manifest
 and _status.json rows on invoice.paid; the MCP reads those records, it
 does not write payment truth of its own).
 
-### Gate 3: the ZBTech handoff
+### Gate 3: the production handoff
 
-Production release and the supplier handoff stay exactly where they are:
+Production release and the production supplier handoff stay exactly where they are:
 Ryan's paid-order approval email, the approval-recap standard, and the
 packet machinery on the business side. No MCP tool touches fulfillment
 state; get_order_status reads _status.json, it cannot advance it.
@@ -1562,9 +1921,12 @@ Tap-giving-mcp (public repo, Worker tap-mcp) may call:
   POST /api/lead (tap-autoreply), POST /api/invoice-request
   (tap-order), GET surfaces for reads.
 - The business side's authenticated invocation seat (section 5.3), new
-  and small, for the two things no public endpoint does: writing a
+  and small, for the things no public endpoint does: writing a
   queued record the adoption machinery drains under an MCP identity,
-  and invoking tap-mail's quote email.
+  the order notification, and (amended 2026-11-09) the final-step
+  invoice mint and the final-step customer email. (The seat is an
+  internal server-to-server surface; its shared secret is machinery,
+  not a user credential, and no user ever sees or holds it.)
 - Public URLs for display assets (the mounting pictures, artwork
   display).
 
@@ -1635,6 +1997,18 @@ named route is a business-side invocation seat into the adoption step
 
 One small business-repo deliverable rides today's build: an
 authenticated endpoint for the two calls no public endpoint makes.
+- (Amended 2026-11-09: the seat was specced at two operations and
+  shipped three (recordArtworkSubmission, the order notification
+  notifyOrderPlaced, and the status read readOrderRecords); the
+  final-step chain makes five, adding (d) mintOrderInvoice, wrapping
+  tap-mail's own invoice module in-process under the parity contract
+  recorded in section 2.7, creating and finalizing at the quoted
+  total and returning the invoice block for the order record, and
+  (e) sendOrderInvoiceProof, sending the customer email of section
+  2.5 as amended through tap-mail's own send path. The build must
+  verify, not assume, that the hourly INVREQ adoption recognizes a
+  finalized MCP invoice as already invoiced and marks its record
+  done accordingly, so no second, draft invoice is ever created.)
 - Seat: tap-mail gains POST /api/mcp-invoke on its existing workers.dev
   surface, authenticated by an MCP_INVOKE_SECRET header (the same
   header-gate pattern as its existing /cancel endpoint's X-Cancel-Token),
@@ -1665,7 +2039,10 @@ guard owns divergence); CRM identity resolution (canon_email and the
 not-new logic stay adoption's alone); email sending (tap-mail's seat);
 proof building (the box pipeline); payment state (Stripe and the
 webhook-written records). Each of these has exactly one home today and
-the MCP's job is to be a well-behaved client of each.
+the MCP's job is to be a well-behaved client of each. (Amended
+2026-11-09: invoice minting joins this list. Exactly one mint home:
+tap-mail's invoice module, reached through the seat of section 5.3;
+tap-mcp never mints directly.)
 
 ### 5.5 Capture and identity rules for MCP-originated leads
 
@@ -1704,12 +2081,12 @@ Today's launch deliverables on this surface (Marketing-owned copy,
 Engineering-sized SMALL, in the build runbook):
 - Publish the MCP under its presentation name, "NFC Tap Builder by
   Tap.Giving" (section 3.1): for-agents.html gains an MCP section (endpoint
-  https://tap.giving/mcp, the tool list in one line each, the key
+  https://tap.giving/mcp, the tool list in one line each, the no-keys
   model in two sentences, the gates in one), and llms.txt's "For Agents
   and Developers" section gains the endpoint and the same summary. The
   two published sentences that today say "there is no public write API"
   (website/for-agents.html, website/llms.txt) are updated to the true
-  statement: a public MCP with keyed writes now exists, and the human
+  statement: a public MCP with credential-free writes now exists, and the human
   gates are unchanged. Publishing a write API while the guide denies
   one would split the fact set the spec exists to keep single.
 - The MCP server itself answers a plain GET on its endpoint with a
@@ -1728,12 +2105,13 @@ account is named there rather than bundled into today.
 
 ## 7. Phases beyond today
 
-- v1.1: Mint consolidation: single implementation via the tap-mail invocation seat arm (v1.1, CEO ruling 2026-11-06), retiring tap-mcp's direct mint.
+- v1.1: Mint consolidation: single implementation via the tap-mail invocation seat arm (v1.1, CEO ruling 2026-11-06), retiring tap-mcp's direct mint. (Amended 2026-11-09: REALIZED by the final-step ruling; the mint lives in the seat as mintOrderInvoice, section 5.3 as amended, and tap-mcp's direct mint, already removed under P-16, does not return.)
 - v1.1: the automated price-divergence gate (the agent-ready gate extension of section 2.2).
 
-- v1.1: OAuth for portal-mediated writes (ChatGPT and Google portals;
-  section 3.7 gives the reason it is not in v1); webhook delivery for proof_ready and shipped (contracts and
-  registration in v1, section 2.9.1); the agent-ready gate extension
+- v1.1: OAuth for portal-mediated writes (CLOSED 2026-11-09 by the
+  no-keys ruling: portals need no auth story; section 3.7 as amended); webhook delivery for proof_ready and shipped (registration
+  retired in v1 under the pending proposal of section 2.9.1; the
+  capability-bound design is the revival path if delivery is built); the agent-ready gate extension
   (section 9.5); designer's DESIGN-record bridge and proof state on
   get_order_status (section 2.10); create_lead standalone if the intent
   tool proves too thin in real use; CRM-stage enrichment of status if
@@ -1755,19 +2133,20 @@ account is named there rather than bundled into today.
 4. Order seat: the website's own POST /api/invoice-request (section
    5.2), not a new business endpoint, because indistinguishable-by-
    construction beats a parallel seat.
-5. Invoice mint: tap-mcp mints directly against Stripe under the
-   INVOICE-PLAYBOOK contract (section 2.7), replacing the earlier
-   draft's shared-import design, which the repo boundary forbids. The
-   recorded risk: two mint implementations exist (tap-mail's for the
-   approval flow, tap-mcp's for agent orders), bounded by the playbook
-   contract and the acceptance guard; converging them is a phase 2
-   candidate through the 5.3 seat, not a launch dependency.
+5. Invoice mint: (amended 2026-11-09) the mint lives in tap-mail's
+   invoice module, reached through the invocation seat (section 5.3
+   as amended), under the parity contract recorded in section 2.7.
+   The earlier default (tap-mcp mints directly against Stripe) and
+   its recorded two-implementations risk are retired: the seat arm
+   the B1 item below always named as the alternative is the design,
+   and exactly one mint implementation exists.
 6. Artwork storage: bytes live in tap-mcp's MCP_ARTWORK KV namespace;
    the business side drains by reference (section 5.3). Artwork is
    agent-supplied content in transit, not business data of record,
    until the drain lands it in the order's artwork home.
-7. Key format and storage: section 3's tg_live_/tg_test_ shape, hashes
-   only, MCP_KEYS namespace in the MCP repo's Worker.
+7. Key format and storage: (RETIRED 2026-11-09) no keys exist. The
+   only stored capabilities are hash-only references (the artwork
+   reference, the statusRef) in the shared MCP_KEYS namespace.
 8. The MCP repo's stand-up is treated as in flight (dispatched
    separately); this spec does not duplicate its steps, and the build
    runbook (section 9) starts from "repo exists".
@@ -1825,6 +2204,8 @@ enforced by the MCP's own tools (2.3, 2.5), free shipping listed
 upfront in quote and recap, and no tax line in the MCP quote (2.3).
 
 ## 9. Build runbook for today, Nov 6, 2026
+
+(Amended 2026-11-09: this runbook is the Nov 6 launch record and is history. Its key-issuance steps (9.2 item 3, 9.4) describe the retired model and are covered by the landing note at the top of this spec; the no-keys build follows the implementation outline in the 2026-11-09 landing record at the end of this document.)
 
 Written to be executed without re-deriving anything. Steps in order;
 each names its owner surface and its done-evidence.
@@ -2031,10 +2412,11 @@ section 8. What remains is only what Engineering cannot do itself.
   themselves, the action is his where a listing requires the account
   owner's identity; Engineering prepares the listing content on
   request. Not a blocker.
-- R2 (Ryan action, none required today): API key issuance for real
-  organizations is Ryan's or the CEO lane's act in v1 (the issuance CLI
-  is ours; deciding which church gets a key is an ownership decision).
-  The test organization's key is Engineering's, under test lane rules.
+- R2 (CLOSED 2026-11-09 by the no-keys ruling): key issuance no
+  longer exists. No organization needs, receives, or is refused a
+  key; there is no issuance act for Ryan, the CEO lane, or
+  Engineering. The historical text of this item is superseded in
+  full.
 - B1, the one machinery tension found, RESOLVED in design and recorded
   so the parent hears it from the spec rather than discovering it in
   the build: invoice creation had no agent-reachable seat (its two
@@ -2051,7 +2433,10 @@ section 8. What remains is only what Engineering cannot do itself.
   the spec's default is to ship today's design and converge in phase 2.
   This is a judgment the CEO can reverse on sight; it does not block
   the launch either way, so it is carried here as a flagged decision,
-  not a stop.
+  not a stop. (Resolved 2026-11-09: Ryan's final-step ruling takes
+  the seat-arm alternative. The mint lives in tap-mail's invoice
+  module through the invocation seat, section 5.3 as amended; the
+  two-implementations risk is retired with it.)
 - Hosting asks to Ryan: NONE. We already hold Cloudflare Workers
   access; v1 goes public and live with no additional steps or accounts
   from Ryan (Ryan's process point, 2026-11-06). No hosting item is
@@ -2529,3 +2914,69 @@ never labeled a proof or a print file (the P-12 discipline).
 ## 2026-11-09 Persona Loop Round 2 residual: quote eligibility line in the text channel
 
 The round 2 re-run found the P-5 eligibility sentence ("the first-order discount belongs to an organization's first order. Getting a quote does not use it up...") present in get_quote's structured discountEligibility field but absent from its text channel, which is the channel the personas read. quoteText now renders the same discountEligibility line, and the persona-round test pins both channels. No other behavior changed.
+
+## 2026-11-09 no-keys, two-part flow, and final-step chain (landing record)
+
+Ryan's rulings of 2026-11-09, landed in this spec the same day as a
+spec amendment (no code changed by this record; the build follows
+the design brief's implementation outline, spec first). What
+changed, by section: the landing note at the top of this document
+(new); the preamble positioning and launch-scope lines; section 1
+banner; 2.0 and 2.0.1 (endpoint URL only; the shared namespace);
+2.1 (retired, replaced by the no-credentials contract); 2.2.1
+(price-free discovery, one tool list); 2.3 and 2.4 (Part 2 totals;
+Part 1 product facts price-free); 2.5 (retitled; the final-step
+chain; Ryan's phase-two field order); 2.6 (delivered-artwork
+templates with the curated data fields, the website logo pull,
+P-13 with data, the agent-produces-PDF output standard, the QR
+rules and glossary, designUrl); 2.7 (banner: the mint returns via
+the seat; the parity contract here is its spec source); 2.8
+(retitled; the capability reference); 2.9 (credential codes
+retired); 2.9.1 (webhook retirement PROPOSED); 2.10 (capability
+references); 2.11 (rewritten wholesale: Part 1 DESIGN, Part 2
+ORDER, the collection-order deltas called out one by one, the
+final step's exact label); 2.12 (zero-credential requirement);
+section 3 (rewritten as identity-without-credentials; 3.1.1 and
+3.5 retired; 3.3's test-isolation amendment banner-marked and the
+test lane recorded as a PROPOSAL; 3.4's key promise corrected);
+section 4 (Gate 3 renamed to the production handoff; Gate 1
+updated for the final-step chain); 5.1, 5.3, 5.4 (the seat at five
+operations; the adoption-collision verification; invoice minting's
+single home); section 6 (the no-keys model in the published
+summary); section 7 (mint consolidation realized; the OAuth item
+closed); section 8 items 5 and 7; section 10 (R2 closed; B1
+resolved by the seat arm); section 9 banner (history).
+
+Settled by the rulings and written as contract above: no keys
+anywhere; the two-part structure; Part 1 collecting nothing but
+the design URL; delivered-artwork templates only; zero pricing in
+Part 1; the agent as the PDF's producer; Ryan's collection order;
+the final-step chain with P-16 superseded in its no-invoice clause;
+the capability-reference status read; the supplier never named in
+this repo.
+
+Recorded as PROPOSALS, pending CEO settlement, not contract: the
+identity-based test lane (landing note; section 3.3); the
+retirement of register_webhook in v1 with the capability-bound
+v1.1 path (section 2.9.1); the replacement protected string and
+confirmation text (section 3.1, quoted there as PROPOSED); shapes
+promotion beyond the two built-ins (the example set holds 25 round
+and 2 square, zero rectangles; per-example size is UNVERIFIED
+until curation reads it off the proof records); the explainer
+wordings for the QR-sticker value case and the reorder fact
+(partially sourced; the approval-workflow question has no sourced
+answer anywhere and the explainer omits it, the gap named here).
+
+Open question, carried not resolved: the phase-one design QR and
+production encoding (landing note). Recommendation A (a labeled
+mock built from the entered URL, with production encoding the
+Redirect Dashboard link to that destination) is the design brief's
+recommendation, not a settled ruling, and no surface asserts it.
+
+Contradictions with the design brief found while landing this
+amendment: none in the brief's facts. Two notes for the record:
+the brief's census found the old protected string once in this
+spec, inside the P-16 landing record; it also stands in section
+3.1's settled-sentence parenthetical, amended above, and the
+brief's nine-live-key-records count and the server code remain the
+build's concern, not this spec pass's.

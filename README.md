@@ -2,9 +2,8 @@
 
 Welcome. This is the public home of Tap.Giving's MCP server, "NFC Tap
 Builder by Tap.Giving". A design tool first: this server helps you create print-ready NFC tap artwork proofs. Work from its published spec and design directions, compose the artwork with your own tools, and submit the finished file to see it on the disc as a proof. The artwork is yours: print-ready, vendor-neutral, yours to take to any printer. Ordering discs through Tap.Giving is an optional next step, only if you want it. The discs it designs for are custom
-NFC tap discs, tap plates, and tap tags. No subscriptions and no
-ongoing fees: one-time pricing per order, and the Redirect Dashboard
-is included free, permanently.
+NFC tap discs, tap plates, and tap tags. The Redirect Dashboard is
+included with every order.
 
 - **Website:** [https://tap.giving](https://tap.giving)
 - **Endpoint:** `POST https://tap.giving/mcp` (MCP over Streamable
@@ -20,10 +19,9 @@ is included free, permanently.
   released server code. Working notes and anything touching private
   business operations live elsewhere by design.
 
-## Connect
+## Connect (no key anywhere)
 
-Paste-ready client config. The keyless read side works exactly as
-shown, with no auth header:
+Any MCP client connects with this block alone:
 
 ```json
 {
@@ -36,22 +34,10 @@ shown, with no auth header:
 }
 ```
 
-Placing an order needs no key and no header. To present a key for
-the organization-bound surfaces (order status, webhook registration,
-and the order questions' organization block), add it as a header on
-the same block:
-
-```json
-{
-  "mcpServers": {
-    "tap-giving": {
-      "type": "http",
-      "url": "https://tap.giving/mcp",
-      "headers": { "Authorization": "Bearer <key>" }
-    }
-  }
-}
-```
+No key, login, or account exists anywhere in this server, for any
+tool, order status included. Order status is read with the order's
+status reference, issued at placement and carried in the order's
+email; keep it, it cannot be recovered if lost.
 
 Claude Code, one line:
 
@@ -60,9 +46,8 @@ claude mcp add --transport http tap-giving https://tap.giving/mcp
 ```
 
 Discovery, product facts, the artwork spec, and the
-order questions need no key; exact totals come from get_quote at the
-end. Placing an order needs no key either; order status and webhook
-registration are the surfaces that use one. The live `GET https://tap.giving/mcp` self-description
+order questions ask nothing; exact totals come from get_quote in
+Part 2, at the end. Part 1 (design) carries no pricing at all. The live `GET https://tap.giving/mcp` self-description
 carries this same connect guidance.
 
 ## What the server does
@@ -73,38 +58,34 @@ The discs themselves are custom NFC tap discs, tap plates, and tap
 tags for organizations of every kind: built for churches, nonprofits, restaurants, coffee shops, and local businesses,
 designed by your own agent.
 
-The read side is open and needs no key: an agent can discover the
-product, see the per-disc price range, read the artwork spec with house
-example designs, and submit artwork for validation before any contact
-exists. Exact pricing is quoted only at the quote step. Placing an
-order needs no key; order status is the read that uses one (see below).
+Nothing in this server needs a key, a login, or an account: an agent
+can discover the product, read the artwork spec with delivered example
+designs, and submit artwork for validation before any contact exists.
+Part 1 (design) carries no pricing at all; exact pricing is quoted only
+at the quote step, in Part 2.
 
-This server moves no money itself and issues no invoices:
-a person from Tap.Giving follows up with the invoice. Payment, design approval, and production release
-stay human gates: no tool takes payment, approves a design, or
+This server moves no money itself, and payment happens on the hosted
+invoice: when an order is placed, the invoice and the design proof are
+emailed to the customer (the final step's exact label is "Email me my
+invoice and design proof."). Payment, design approval, and production
+release stay human gates: no tool takes payment, approves a design, or
 releases an order to production.
 
 ## Tools
 
-| Tool | Key | What it does | Annotations | Returns |
-|---|---|---|---|---|
-| `get_discovery` | no | One-call orientation: the product, the two shapes, the price range, the artwork summary, the tool list, and how an organization gets a key. | readOnlyHint: true, idempotentHint: true | `server`, `introduction.product`, `pricing` (range, shipping, the get_quote pointer), `capabilities` (benefits, gates, key route) |
-| `get_quote` (alias `get_pricing`) | no | An exact quote from the published tiers; below 100 discs is refused with the minimum stated. | readOnlyHint: true, idempotentHint: true | `discUnitCents`, `discSubtotalCents`, `grandTotalCents`, `discount.conditionalTotalCents`, `shippingLine`, `taxNote` |
-| `get_product` | no | Product facts: discs, stands, badges, mounting, and shipping terms. | readOnlyHint: true, idempotentHint: true | `discs` (chip, sizes, mounting, metalCaveat, redirectDashboard), `stands`, `badges`, `shipping` |
-| `get_artwork_spec` | no | The production artwork geometry in structured form, with the delivered example designs (real organizations' finished discs) indexed in full in structured content, a bounded set shown inline as images, and the optional logo ask. | readOnlyHint: true, idempotentHint: true | geometry per shape, `guidelines`, `examples` (id, organization, displayUrl) plus the example images, `logoAsk` |
-| `submit_artwork` | optional | Accepts artwork under a permissive intake (three sanity grounds only); that it was accepted is not a production-fitness verdict. | readOnlyHint: false | `artworkRef`, `displayUrl`, `sha256`, `validation`, `benefits` |
-| `start_order_intent` | no | Captures an email contact so a person at Tap.Giving has it. | readOnlyHint: false | `captured`, `source`, `nextStep` |
-| `get_order_questions` | no | The order questions in order: quantity, mounting with pictures, optional link destination, shipping address. | readOnlyHint: true, idempotentHint: true | `questions` in order (quantity, mounting with picture options, linkDestination, shipTo) |
-| `get_recap` | no | The order in display order (artwork, quantity, ship-to, exact total) with the two required notes, returning a recap reference. | readOnlyHint: true, idempotentHint: true | `recapRef`, `cost` (the get_quote object), `shipTo`, `notes`, `exits` |
-| `create_order` | no | Locks an order in behind both exits (pay now, or lock in this price); idempotent on the caller's idempotency key. A person from Tap.Giving follows up with the invoice. | readOnlyHint: false, idempotentHint: true | `orderRef`, `quote`, `exit`, `nextStep` |
-| `get_order_status` | yes | Order stage, invoice state, and fulfillment read from the records of truth. | readOnlyHint: true, idempotentHint: true | `stage`, `invoice` (status, hostedInvoiceUrl), fulfillment with tracking when present |
-| `register_webhook` | yes | Registers one callback per organization for proof_ready and shipped (registration in v1; delivery is v1.1). | readOnlyHint: false | `subscriptionSecret` (shown once), `payloadContract`, `delivery` status |
-
-Annotations are the server's own declarations, read from the live
-`tools/list`: every tool also declares `destructiveHint: false` and
-`openWorldHint: false`. A client can auto-approve the read-only
-tools, ask its person before the writes, and retry `create_order`
-after a network failure with the same idempotency key.
+| Tool | What it does | Annotations | Returns |
+|---|---|---|---|
+| `get_discovery` | One-call orientation: the product, the two shapes, the two-part flow (Part 1 design, Part 2 order), the artwork summary, and the tool list. Part 1 content only: no pricing, no credential of any kind. | readOnlyHint: true, idempotentHint: true | `server`, `introduction.product`, `capabilities` |
+| `get_quote` (alias `get_pricing`) | Part 2: an exact quote from the published tiers; below 100 discs is refused with the minimum stated. | readOnlyHint: true, idempotentHint: true | `discUnitCents`, `discSubtotalCents`, `grandTotalCents`, and the discount-eligibility sentence |
+| `get_product` | Full product facts: sizes, materials, mounting, turnaround, anti-metal facts, related products. Part 1 surface: no prices. | readOnlyHint: true, idempotentHint: true | product facts with images |
+| `get_artwork_spec` | The design spec as machine-followable data: geometry, bleed, safe zones, the numbered delivered-artwork examples with their reproduction data, the P-13 verify-against-example data, and the print-ready PDF output standard (the user's agent produces the PDF; the server never builds or returns one). | readOnlyHint: true, idempotentHint: true | spec data with images |
+| `get_order_questions` | Part 2 entry: the order questions in Ryan's order (email first via the intent capture, then organization name, shipping address and phone, quantity, shape, mounting, and the link destination as a recap confirmation). The price range line is first stated here. | readOnlyHint: true, idempotentHint: true | the question set as structured data, with images |
+| `get_recap` | The pre-order recap: the artwork, the answers, and the exact total, bound to the captured intent's email. | readOnlyHint: true, idempotentHint: true | recap block with the artwork image |
+| `start_order_intent` | Captures the contact email (Part 2 opens here) and returns the plain next step: no key, no login, no account is needed to complete an order. | readOnlyHint: false, idempotentHint: true | `{captured, nextStep}` |
+| `submit_artwork` | Submits the agent's finished artwork file for the on-disc proof; returns the export block (the submitted file byte-identical, a PNG render, the on-disc preview). | readOnlyHint: false, idempotentHint: true | artwork reference, validation, export block with images |
+| `create_order` | The final step, "Email me my invoice and design proof.": places the order (recorded in the CRM, the full order emailed to the Tap.Giving team), a Stripe invoice is created and finalized at the quoted total, and the invoice plus the design proof are emailed to the customer. | readOnlyHint: false, idempotentHint: true | order reference, `statusRef`, step outcomes |
+| `get_order_status` | Where an order stands, read with the order's `statusRef` (a capability issued at placement; only its hash is stored): stage, invoice state, fulfillment and tracking, quantity, and the order's own artwork preview. | readOnlyHint: true, idempotentHint: true | status block with image |
+| `register_webhook` | One callback per organization for proof_ready and shipped. Registration exists in v1; delivery is v1.1. Retirement in v1 is proposed in the spec, pending settlement. | readOnlyHint: false, idempotentHint: true | subscription block |
 
 ## Worked example
 
@@ -171,11 +152,6 @@ Response, structured content (abbreviated):
       "detail": "Only if you want discs from Tap.Giving: the binding quote at an exact quantity, then the order questions, order setup, and the hosted invoice."
     }
   ],
-  "pricing": {
-    "range": "Price range of $3.50 - $5.00 per disc depending on quantity.",
-    "shipping": "Free on every order.",
-    "note": "Call get_quote for the binding quote at an exact quantity."
-  },
   "artworkSpec": {
     "summary": "106 mm (about 4.2 inch) square artboard; 100 mm (4 inch) cut (round or square); 3 mm (about 0.12 inch) bleed; vector artwork back (SVG preferred).",
     "tool": "get_artwork_spec"
@@ -197,9 +173,6 @@ Response, structured content (abbreviated):
       "get_order_questions",
       "get_recap"
     ],
-    "keyedReadTools": [
-      "get_order_status"
-    ],
     "writeTools": [
       "submit_artwork",
       "start_order_intent",
@@ -208,10 +181,10 @@ Response, structured content (abbreviated):
     ],
     "gates": [
       "Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.",
-      "Payment stays human: This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice. A person pays the invoice when it arrives.",
+      "Payment stays human: This server moves no money itself, and a person pays the hosted invoice when it arrives.",
       "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state."
     ],
-    "howToGetAKey": "Placing an order never requires a key: discovery, product facts, the artwork spec, the order questions, the recap, and order setup all run keyless. An organization API key is optional: it enriches the order questions with the key's own organization block, and it governs order status and webhook registration. Keys are issued by the Tap.Giving team: email hello@tap.giving from the address you want associated with the organization, say which organization the key is for, and the team replies with the key within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like tg_test_<orgslug>_<secret>.",
+    "keys": "There are no keys. No user-facing step in this server requires or offers a key, login, or account, including placing an order and reading its status."",
     "kickoff": "get_artwork_spec",
     "benefits": [
       "Works with any platform",
@@ -253,12 +226,10 @@ No subscriptions and no ongoing fees: one-time pricing per order, and the Redire
 - Free shipping
 - Covered by our 30-day money-back guarantee
 
-Pricing
-Price range of $3.50 - $5.00 per disc depending on quantity. Free shipping. Tax, where it applies, is calculated on the invoice. Every order is covered by our 30-day money-back guarantee. Production and delivery run 2 to 3 weeks from artwork approval.
-
 Gates
-Design approval, payment, and production release stay human: a person approves the final proof by email. This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.
-Placing an order needs no key: the whole placement run is keyless (the order questions, the recap, and placing the order), and a person from Tap.Giving follows up with the invoice. Order status is the one read that uses the organization key. Placing an order never requires a key: discovery, product facts, the artwork spec, the order questions, the recap, order setup, and the invoice link all run keyless. An organization API key is optional: it enriches the order questions with the key's own organization block, and it governs order status and webhook registration. Keys are issued by the Tap.Giving team: email hello@tap.giving from the address you want associated with the organization, say which organization the key is for, and the team replies with the key within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like tg_test_<orgslug>_<secret>. Evaluating the server? A test key runs the full journey, including placing a test order, with no real order and no charge. There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies with one (a tg_test_<orgslug>_<secret> key) within one business day.
+Design approval, payment, and production release stay human: a person approves the final proof by email. This server moves no money itself, and a person pays the hosted invoice when it arrives.
+There are no keys: no user-facing step in this server requires or offers a key, login, or account, including placing an order and reading its status (status is read with the order's status reference, issued at placement). Part 1 (design) carries no pricing; pricing is stated only in Part 2, at the order questions, with totals at the quote step.
+(This worked example was captured 2026-11-07 and is amended here to the 2026-11-09 model: the retired key fields and the Part 1 pricing block are removed, and the invoice sentence carries the no-money-movement truth without the superseded clause. These surfaces await the CEO-settled replacement string.)
 The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library.
 ```
 
@@ -313,11 +284,11 @@ The headline total is the list total, $1,000.00. The first-order
 discount is a conditional line only: $900.00 when it applies, never
 baked into the headline.
 
-### 3. submit_artwork (keyed)
+### 3. submit_artwork (no key, no email)
 
 A 1-pixel PNG stands in for the agent-built artwork file here; the
-sha256 is the real hash of those bytes. This call was made with the
-first-user test organization's key.
+sha256 is the real hash of those bytes. This call was made with no
+credential: none exists in this server.
 
 Request:
 
@@ -377,22 +348,21 @@ A retry with the same idempotency key and the same payload returns
 this same orderRef; the same key with a different payload is a
 conflict naming the differing fields.
 
-### 5. The placement is the whole road (P-16, 2026-11-08)
+### 5. The final step: "Email me my invoice and design proof."
 
-There is no step 5. Placing the order in step 4 is the end of the
-server's road: the order is recorded in the CRM (the `invreqKey` in
-the step 4 response), and the full order is emailed to the
-Tap.Giving team, whose reply in the response (`orderEmail`) confirms
-the send. A person from Tap.Giving follows up with the actual
-invoice; this server issues no invoices and returns no invoice
-link. The response's `confirmation` says exactly that: "Your order
-is placed, and a person from Tap.Giving will follow up with your
-invoice."
+Placing the order in step 4 fires the final step, labeled exactly
+"Email me my invoice and design proof.": the order is recorded in
+the CRM (the `invreqKey` in the step 4 response), the full order is
+emailed to the Tap.Giving team (the response's `orderEmail` confirms
+the send), a Stripe invoice is created and finalized at the quoted
+total, and the invoice plus the design proof are emailed to the
+customer, the proof embedded in the email and attached. (This
+supersedes the 2026-11-08 P-16 flow, under which placement minted
+no invoice; Ryan's ruling of 2026-11-09 governs.)
 
 Reading the order back afterwards is `get_order_status` with the
-organization key (the one keyed read). Invoices a person later
-creates in the follow-up, once recorded against the order, surface
-there as read-only state.
+order's `statusRef` from the step 4 response (a capability, not a
+key; only its hash is stored).
 
 ## Errors
 
@@ -405,41 +375,31 @@ trace, or a secret.
 
 | Code | Meaning | Retryable | Next action |
 |---|---|---|---|
-| `unauthorized` | The key is malformed, unknown, or revoked. | no | Fix the key: check the `Authorization: Bearer <key>` header and that the key is current and active. Discovery, pricing, product facts, the artwork spec, and the order questions need no key at all. |
-| `forbidden` | The key is valid, but the record named belongs to another organization (an order, recap, or artwork submitted under a different key). | no | Do not retry. Use the owning organization's key, or start fresh under your own. |
+| `unauthorized` | Retired 2026-11-09: no credential exists in this server, and no tool returns this code. | no | Nothing to fix: connect with the endpoint URL alone. |
+| `forbidden` | Retired 2026-11-09: no credential exists in this server, and no tool returns this code. Records bound to another order read as `not_found`. | no | Nothing to fix: use the reference the flow issued. |
 | `invalid_input` | An input failed validation: missing, malformed, or out of range. The message names the input. | no | Correct the named input and resend. One case to know: `get_quote` and `create_order` refuse quantities under the 100-disc minimum and state it; do not retry with a smaller quantity. |
 | `manual_exception` | The request needs a person, for example a size other than the two built-ins (100 mm round, 100 mm square). | no | Take the human route the message names: Ryan at ryan@tap.giving. |
-| `not_found` | The named record does not exist for this key's organization: an unknown tool, orderRef, or invoiceId. Another organization's records read as not_found, never as their data. | no | Check the reference. Do not retry expecting another organization's record to appear. |
+| `not_found` | The named record does not exist for the reference presented: an unknown status reference, orderRef, or invoiceId. Another order's records read as not_found, never as their data. | no | Check the reference. Do not retry expecting another order's record to appear. |
 | `conflict` | The request conflicts with recorded state: an idempotency key reused with a different payload, order inputs that differ from the recap, or an order path that is already paid. `details` names the differing fields where that is the cause. | no | Reconcile against the details. For a genuinely new order, re-run `get_recap` on the real inputs and use a fresh idempotency key. |
 | `stripe_unavailable` | Stripe did not complete the invoice call. | yes | Retry with the same idempotency key; Stripe's own keys replay safely, so a retry cannot double-mint. |
 | `rate_limited` | Too many calls right now, at this server or at the capture endpoint. | yes | Wait, then retry. On `start_order_intent` the contact is not captured until a call succeeds. |
 | `internal` | Something failed on our side; the message says what, and names the human route when one applies. | yes | Retry. If it persists, reach Ryan at ryan@tap.giving with the message. |
 
-The two distinctions agents most often get wrong: `unauthorized`
-is about the key itself (malformed or unknown, fix the key), while
-`forbidden` means the key is fine and the record is not yours (do
-not retry). And `not_found` is what a cross-organization orderRef
-returns on the read paths; `forbidden` is what the attach paths
-return when a named order, recap, or artwork belongs to another
-organization.
+The distinction agents most often get wrong: `not_found` is what an unknown or unbound reference returns on every read path; there are no credential errors to confuse it with (the credential codes are retired, above).
 
 This catalog is current as of 2026-11-07, when the live-mode
 invoice refusal (`invoice_parity_pending`) was lifted after the
 field-for-field parity check passed; that code no longer exists in
 the server.
 
-## Keys
+## No keys
 
-An organization key looks like `tg_live_<orgslug>_<secret>`; a test
-key looks like `tg_test_<orgslug>_<secret>`. Keys are sent as
-`Authorization: Bearer <key>`. Only the SHA-256 hash of a key is
-stored. A key's mode binds its seat: test keys write test records and
-mint test invoices; live keys serve production. Real organizations
-get a key by emailing hello@tap.giving; the team replies with the key
-within one business day. Evaluating the server? A test key runs the
-full keyed journey with no real order and no charge. There is no
-self-serve signup: email hello@tap.giving and ask for a test key, and
-the team replies with one within one business day.
+There are no keys. No user-facing step in this server requires or
+offers a key, login, or account, including placing an order and
+reading its status. Connect with the endpoint URL alone. Order
+status is read with the order's status reference, a capability
+issued at placement and carried in the order's email; only its hash
+is stored, and it cannot be recovered if lost.
 
 A registry record for this server lives in this repo as
 [`server.json`](server.json), in the official MCP Registry format:
