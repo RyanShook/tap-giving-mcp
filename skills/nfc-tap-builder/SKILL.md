@@ -34,7 +34,7 @@ Claude Code, one line:
 claude mcp add --transport http tap-giving https://tap.giving/mcp
 ```
 
-For the keyed tools, add the organization's key to the same block: `"headers": { "Authorization": "Bearer <key>" }`. Reads need no key; a key is added only when the organization is ready to order.
+For the keyed tools, add the organization's key to the same block: `"headers": { "Authorization": "Bearer <key>" }`. Discovery, pricing, product facts, the artwork spec, and the order questions need no key; a key is added only when the organization is ready to order.
 
 ## The journey
 
@@ -42,7 +42,7 @@ For the keyed tools, add the organization's key to the same block: `"headers": {
 2. Call `get_quote` for the binding quote at an exact quantity, and `get_product` for full product facts.
 3. Call `get_artwork_spec` for the production geometry of the chosen shape, build the artwork from its house example directions, and send it back with `submit_artwork`.
 4. To register interest before any key exists, call `start_order_intent` with a contact email. It captures the email through the same public capture endpoint the website uses.
-5. With the organization's key: call `get_order_questions` and ask its questions in the order given, then `get_recap` to show the person the full order (artwork, quantity, shipping address, exact cost) before anything is locked in.
+5. Call `get_order_questions` (no key needed) and ask its questions in the order given, then, with the organization's key, call `get_recap` to show the person the full order (artwork, quantity, shipping address, exact cost) before anything is locked in.
 6. Call `create_order` with the recap reference, then `request_invoice` and hand the person the hosted invoice link. A person pays on Stripe's hosted page.
 7. Call `get_order_status` for where an order stands. `register_webhook` registers one callback per organization for proof_ready and shipped events.
 
@@ -56,6 +56,7 @@ Keyless reads (no key, no email, nothing asked):
 | `get_quote` (alias `get_pricing`) | The binding quote at an exact quantity. Quantities under the 100-disc minimum are refused with the minimum stated. Maximum 7000. | `discUnitCents`, `discSubtotalCents`, `grandTotalCents`, `discount` (conditional line), `shippingLine`, `taxNote` |
 | `get_product` | Full product facts: discs, stands, badges, mounting, shipping terms. | `discs`, `stands`, `badges`, `shipping` |
 | `get_artwork_spec` | Production artwork geometry as structured millimetre data, plain guidelines, house template examples, and the optional logo ask. | geometry per shape, `guidelines`, `examples`, `logoAsk` |
+| `get_order_questions` | The order questions as structured data, in the exact order to ask them: shape, quantity, metal count, mounting with picture options, the link destination, contact name, email, and phone, and the shipping address last. With a key the answer also carries the key's organization block; without one, none is returned. | `questions` in order |
 
 Keyless or optional-key writes:
 
@@ -68,7 +69,6 @@ Keyed tools (organization API key required):
 
 | Tool | What it does | Returns |
 | --- | --- | --- |
-| `get_order_questions` | The order questions as structured data, in the exact order to ask them: shape, quantity, metal count, mounting with picture options, the link destination, contact name, email, and phone, and the shipping address last. | `questions` in order, plus the key's organization block |
 | `get_recap` | The full recap, the last thing before the exits: submitted artwork, quantity, shipping address as entered, the exact cost from `get_quote`, and both required notes. | `recapRef`, `cost`, `shipTo`, `notes`, `exits` |
 | `create_order` | Sets up an order through the same front door a website order takes. Idempotent on the caller's idempotency key. Exits: pay now, or lock in this price. | `orderRef`, `quote`, `exit`, `nextStep` |
 | `request_invoice` | Returns the payment handoff: a real, finalized Stripe hosted invoice and its link. If the organization already has an open invoice, that link is returned flagged `existing` instead of stacking a second one. | `invoiceId`, `invoiceNumber`, `hostedInvoiceUrl`, `handoffLine`, `totalCents` |
@@ -131,7 +131,7 @@ Every tool error returns MCP's standard error content plus a structured object `
 
 | Code | Meaning | Retryable | Next action |
 | --- | --- | --- | --- |
-| `unauthorized` | The key is malformed, unknown, or revoked. | no | Fix the key and its `Authorization: Bearer <key>` header. Read tools need no key at all. |
+| `unauthorized` | The key is malformed, unknown, or revoked. | no | Fix the key and its `Authorization: Bearer <key>` header. Discovery, pricing, product facts, the artwork spec, and the order questions need no key at all. |
 | `forbidden` | The key is valid, but the named record belongs to another organization. | no | Do not retry. Use the owning organization's key, or start fresh under your own. |
 | `invalid_input` | An input failed validation; the message names it. Includes quantities under the 100-disc minimum. | no | Correct the named input and resend. Do not retry a smaller quantity. |
 | `manual_exception` | The request needs a person, for example a size other than the two built-ins. | no | Take the human route the message names: Ryan at ryan@tap.giving. |

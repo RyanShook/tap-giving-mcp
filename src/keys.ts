@@ -84,7 +84,7 @@ export function requireKey(auth: AuthedKey | null): AuthedKey {
     throw new ToolError(
       "unauthorized",
       "This tool needs your organization API key in the Authorization header (Bearer tg_live_... or tg_test_...). " +
-        "Discovery, pricing, product, and the artwork spec need no key. To get a key, email the Tap.Giving team at " +
+        "Discovery, pricing, product, the artwork spec, and the order questions need no key. To get a key, email the Tap.Giving team at " +
         "hello@tap.giving, say which organization the key is for, and the team replies within one business day.",
     );
   }

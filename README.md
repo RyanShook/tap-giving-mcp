@@ -59,8 +59,9 @@ Claude Code, one line:
 claude mcp add --transport http tap-giving https://tap.giving/mcp
 ```
 
-Reads need no key; a key is added only when the organization is
-ready to order. The live `GET https://tap.giving/mcp` self-description
+Discovery, pricing, product facts, the artwork spec, and the
+order questions need no key; a key is added only when the
+organization is ready to order. The live `GET https://tap.giving/mcp` self-description
 carries this same connect guidance.
 
 ## What the server does
@@ -73,7 +74,8 @@ up to the human payment and proof gates.
 The read side is open and needs no key: an agent can discover the
 product, see the published pricing, read the artwork spec with house
 example designs, and submit artwork for validation before any contact
-exists. Writing an order needs an organization API key (see below).
+exists. Writing an order, and reading recaps or order status, need
+an organization API key (see below).
 
 This server moves no money itself: it returns a hosted invoice link
 for a person to pay. Payment, design approval, and production release
@@ -90,7 +92,7 @@ releases an order to production.
 | `get_artwork_spec` | no | The production artwork geometry in structured form, with the house example directions shown inline as images and the optional logo ask. | readOnlyHint: true, idempotentHint: true | geometry per shape, `guidelines`, `examples` (id, direction, displayUrl) plus the example images, `logoAsk` |
 | `submit_artwork` | optional | Accepts artwork under a permissive intake (three sanity grounds only); that it was accepted is not a production-fitness verdict. | readOnlyHint: false | `artworkRef`, `displayUrl`, `sha256`, `validation`, `benefits` |
 | `start_order_intent` | no | Captures an email contact so a person at Tap.Giving has it, and names the key step for ordering. | readOnlyHint: false | `captured`, `source`, `nextStep` |
-| `get_order_questions` | yes | The order questions in order: quantity, mounting with pictures, optional link destination, shipping address. | readOnlyHint: true, idempotentHint: true | `questions` in order (quantity, mounting with picture options, linkDestination, shipTo) |
+| `get_order_questions` | no | The order questions in order: quantity, mounting with pictures, optional link destination, shipping address. | readOnlyHint: true, idempotentHint: true | `questions` in order (quantity, mounting with picture options, linkDestination, shipTo) |
 | `get_recap` | yes | The order in display order (artwork, quantity, ship-to, exact total) with the two required notes, returning a recap reference. | readOnlyHint: true, idempotentHint: true | `recapRef`, `cost` (the get_quote object), `shipTo`, `notes`, `exits` |
 | `create_order` | yes | Locks an order in behind both exits (pay now, or lock in this price); idempotent on the caller's key. | readOnlyHint: false, idempotentHint: true | `orderRef`, `quote`, `exit`, `nextStep` |
 | `request_invoice` | yes | Mints the order's invoice (or returns the customer's existing open one) and returns the hosted link for the person who pays. | readOnlyHint: false, idempotentHint: true | `invoiceId`, `invoiceNumber`, `hostedInvoiceUrl`, `handoffLine`, `totalCents` |
@@ -148,11 +150,11 @@ Response, structured content (abbreviated):
     {"id": "phone-tap", "alt": "A phone tapping a Tap.Giving disc on a chair back, opening the organization's page", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/phone-tap.webp"}
   ],
   "capabilities": {
-    "readTools": ["get_discovery", "get_quote", "get_product", "get_artwork_spec"],
-    "keyedReadTools": ["get_order_questions", "get_recap", "get_order_status"],
+    "readTools": ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions"],
+    "keyedReadTools": ["get_recap", "get_order_status"],
     "writeTools": ["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"],
     "gates": ["Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.", "Payment stays human: this server moves no money itself. It returns a hosted invoice link and a person pays on Stripe's hosted page.", "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state."],
-    "howToGetAKey": "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, and order status use the organization's key.",
+    "howToGetAKey": "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Discovery, pricing, product facts, the artwork spec, and the order questions need no key; recaps, order setup, invoice requests, and order status use the organization's key.",
     "kickoff": "start_order_intent",
     "benefits": ["Works with any platform", "No subscription fees", "Durable waterproof PVC with a locked tap chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
     "guarantee": "Covered by our 30-day money-back guarantee."
@@ -189,7 +191,7 @@ How it works
 
 Gates
 Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.
-Discovery, quotes, product facts, and the artwork spec need no key. Order questions, recaps, and order status are reads that use your organization key, like the writes. An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, and order status use the organization's key.
+Discovery, quotes, product facts, the artwork spec, and the order questions need no key. Recaps and order status are reads that use your organization key, like the writes. An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Discovery, pricing, product facts, the artwork spec, and the order questions need no key; recaps, order setup, invoice requests, and order status use the organization's key.
 The two photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.
 ```
 
@@ -375,7 +377,7 @@ trace, or a secret.
 
 | Code | Meaning | Retryable | Next action |
 |---|---|---|---|
-| `unauthorized` | The key is malformed, unknown, or revoked. | no | Fix the key: check the `Authorization: Bearer <key>` header and that the key is current and active. Read tools need no key at all. |
+| `unauthorized` | The key is malformed, unknown, or revoked. | no | Fix the key: check the `Authorization: Bearer <key>` header and that the key is current and active. Discovery, pricing, product facts, the artwork spec, and the order questions need no key at all. |
 | `forbidden` | The key is valid, but the record named belongs to another organization (an order, recap, or artwork submitted under a different key). | no | Do not retry. Use the owning organization's key, or start fresh under your own. |
 | `invalid_input` | An input failed validation: missing, malformed, or out of range. The message names the input. | no | Correct the named input and resend. One case to know: `get_quote` and `create_order` refuse quantities under the 100-disc minimum and state it; do not retry with a smaller quantity. |
 | `manual_exception` | The request needs a person, for example a size other than the two built-ins (100 mm round, 100 mm square). | no | Take the human route the message names: Ryan at ryan@tap.giving. |

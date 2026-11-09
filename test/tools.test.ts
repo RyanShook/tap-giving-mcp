@@ -294,12 +294,16 @@ test("register_webhook stores the subscription and says delivery is pending", as
   }, stubFetch([]) as typeof fetch), /https/);
 });
 
-test("writes without a key are unauthorized; garbage keys are unauthorized", async () => {
+test("keyed reads without a key are unauthorized; garbage keys are unauthorized", async () => {
+  // get_order_questions is keyless since the 2026-11-08 F3 amendment;
+  // the keyed reads (get_recap, get_order_status) carry this probe now.
+  // The full 12-tool enforcement matrix lives in
+  // test/discovery-key-honesty.test.ts.
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
-  await assert.rejects(() => runTool(env, req(), "get_order_questions", {}, fetchFn),
+  await assert.rejects(() => runTool(env, req(), "get_order_status", { orderRef: "mcp:none:probe" }, fetchFn),
     (e: Error & { code?: string }) => e.code === "unauthorized");
-  await assert.rejects(() => runTool(env, req("tg_test_nope_short"), "get_order_questions", {}, fetchFn),
+  await assert.rejects(() => runTool(env, req("tg_test_nope_short"), "get_order_status", { orderRef: "mcp:none:probe" }, fetchFn),
     (e: Error & { code?: string }) => e.code === "unauthorized");
 });
 
@@ -442,7 +446,7 @@ test("GET self-description carries the connect guidance", async () => {
   assert.ok(text.includes('"type": "http"'), "http transport in the config block");
   assert.ok(text.includes('"url": "https://tap.giving/mcp"'), "endpoint in the config block");
   assert.ok(text.includes("claude mcp add --transport http tap-giving https://tap.giving/mcp"), "Claude Code one-liner present");
-  assert.ok(text.includes("Reads need no key"), "keyless-reads note present");
+  assert.ok(text.includes("and the order questions need no key"), "keyless-reads note present, order questions named");
 });
 
 test("get_discovery: sectioned first presentation with the no-fees lead line", async () => {
@@ -499,15 +503,15 @@ test("F19: live-mode writes carry no TEST MODE line, test-mode reads neither", a
   assert.ok(!d.text.startsWith("TEST MODE"), "reads are unprefixed");
 });
 
-test("F3 + F1: discovery classifies keyed reads honestly and carries the product photos", async () => {
+test("F3 + F1: discovery classifies reads honestly and carries the product photos", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
   const caps = d.structured.capabilities as { readTools: string[]; keyedReadTools: string[] };
-  assert.deepEqual(caps.readTools, ["get_discovery", "get_quote", "get_product", "get_artwork_spec"]);
-  assert.deepEqual(caps.keyedReadTools, ["get_order_questions", "get_recap", "get_order_status"]);
+  assert.deepEqual(caps.readTools, ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions"]);
+  assert.deepEqual(caps.keyedReadTools, ["get_recap", "get_order_status"]);
   assert.ok(d.images && d.images.length === 2, "discovery returns the two product photos inline");
-  assert.ok(d.text.includes("Order questions, recaps, and order status are reads that use your organization key"));
+  assert.ok(d.text.includes("Recaps and order status are reads that use your organization key"));
   assert.ok(!/ask Ryan/.test(d.text), "no first-name key ask in discovery text");
   const p = await runTool(env, req(), "get_product", {}, fetchFn);
   assert.ok(p.images && p.images.length === 2, "product returns the two photos inline");
@@ -692,14 +696,14 @@ test("R2 F5: customer text drops the chip jargon; the fact stays structured", as
   assert.ok(((p.structured.discs as { chip: string }).chip.includes("NTAG213")), "the chip fact stays in structured data");
 });
 
-test("R2 F15/F19: order questions carry the mounting photos inline and plain closing; keyed reads carry the banner", async () => {
+test("R2 F15/F19: order questions carry the mounting photos inline and plain closing; the keyed recap carries the banner", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const q = await runTool(env, req(TEST_KEY), "get_order_questions", {}, fetchFn);
   assert.ok(q.images && q.images.length === 2, "both mounting photos inline");
   assert.ok(!q.text.includes("idempotencyKey"), "no agent plumbing in the closing line");
   assert.ok(q.text.includes("keep the recap reference it returns"), "plain closing line");
-  assert.ok(q.text.startsWith("TEST MODE:"), "keyed read carries the banner");
+  assert.ok(!q.text.startsWith("TEST MODE:"), "order questions are a keyless read since the F3 amendment: no banner");
   const recap = await runTool(env, req(TEST_KEY), "get_recap", {
     quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO, contactEmail: "mcp-acceptance@example.com",
   }, fetchFn);

@@ -996,8 +996,11 @@ first ask): through start_order_intent's capture semantics (section
 3.4, the /api/lead capture record, source "mcp:intent"), which is what
 makes the dropout follow-up in step 5 real from this point onward. The
 order questions follow. The question
-set is a contract: tool `get_order_questions` (v1, read, key required
-so the answers bind to the organization) returns the questions as
+set is a contract: tool `get_order_questions` (v1, read, keyless
+since the 2026-11-08 F3 amendment recorded at the end of this spec;
+the question set is static and public, and the keyed call also
+returns the key's organization block so the answers bind to the
+organization) returns the questions as
 structured data in exactly this order, each with its input shape,
 because an agent improvising the order or the wording is how the
 standing framings get lost:
@@ -2051,3 +2054,49 @@ echo, register_webhook callbackUrl guidance); prerequisite and
 next-step sentences for get_artwork_spec, get_quote, and
 request_invoice. list_orders, cancel and amend operations, and
 webhook delivery remain v1.1 scope and were not built.
+
+## 2026-11-08 F3 discovery honesty (landing record)
+
+Two CEO rulings in sequence govern the keyless/keyed classification,
+and this note records both, in the order they were made.
+
+First ruling (2026-11-08, 22:00 CT): on the Design chat's keyless
+exercise, which found get_discovery presenting get_order_questions
+in a way that read as keyless while the tool itself refused keyless
+calls, the CEO ruled that the tools stay KEYED and the discovery
+copy is what changes. get_order_status and get_recap expose
+order-specific data, so a keyless read would let anyone query any
+order by reference; get_order_questions stayed keyed with them for
+one consistent rule. The fix commissioned was copy only: split the
+reads honestly into keyless and keyed sets on every surface, and
+add a regression test asserting the published classification
+matches actual key enforcement for every tool.
+
+Amendment (2026-11-08, 22:01 CT, on the MCP cold-user test):
+get_order_questions becomes KEYLESS. It reveals no organization
+data; it is only the question set, and walling it was the single
+worst cold-user friction, because the server itself directs users
+to it right before the wall. get_order_status and get_recap stay
+keyed, unchanged.
+
+As landed: the classification is keyless reads get_discovery,
+get_quote, get_product, get_artwork_spec, get_order_questions;
+keyed reads get_recap, get_order_status; writes keyed as before
+(submit_artwork and start_order_intent keep their optional-key and
+keyless shapes). The one enforcement change is get_order_questions:
+without a key it returns the static question set only (fields,
+options, mounting and size choices), with NO organization block;
+with a key it also returns the whoami block, and the contact-email
+question and its note name the key's address only on keyed calls.
+get_discovery's structured capabilities move get_order_questions
+from keyedReadTools to readTools, and the GET self-description, the
+initialize server description's companion copy, the key-request
+line, the unauthorized error text, the tools/list descriptions,
+the README, and the SKILL.md copies all state the same split; no
+surface claims the reads as a class need no key. The regression
+guard is test/discovery-key-honesty.test.ts: it probes every one
+of the 12 tools without a key against in-memory fakes, asserts the
+empirical split equals the published split exactly, asserts the
+keyless order-questions answer carries no organization data while
+the keyed answer carries the whoami block, and asserts the repo
+docs carry the same classification. F3 is closed by this landing.

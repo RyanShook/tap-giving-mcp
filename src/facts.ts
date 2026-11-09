@@ -30,8 +30,8 @@ export const TEAM_EMAIL = "hello@tap.giving";
 export const KEY_REQUEST_LINE =
   "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address " +
   "you want on the order, say which organization the key is for, and the team replies with the key " +
-  "within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, " +
-  "and order status use the organization's key.";
+  "within one business day. Discovery, pricing, product facts, the artwork spec, and the order questions " +
+  "need no key; recaps, order setup, invoice requests, and order status use the organization's key.";
 
 // The standing differentiators (llms.txt and for-agents fact set),
 // carried in submit_artwork's output and in get_discovery so the

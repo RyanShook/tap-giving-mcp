@@ -300,8 +300,8 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     },
     photos: productPhotoStructured(),
     capabilities: {
-      readTools: ["get_discovery", "get_quote", "get_product", "get_artwork_spec"],
-      keyedReadTools: ["get_order_questions", "get_recap", "get_order_status"],
+      readTools: ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions"],
+      keyedReadTools: ["get_recap", "get_order_status"],
       writeTools: ["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"],
       gates: [GATES.designApproval, GATES.payment, GATES.production],
       howToGetAKey: KEY_REQUEST_LINE,
@@ -333,7 +333,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     ``,
     `Gates`,
     `Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.`,
-    `Discovery, quotes, product facts, and the artwork spec need no key. Order questions, recaps, and order status are reads that use your organization key, like the writes. ${KEY_REQUEST_LINE}`,
+    `Discovery, quotes, product facts, the artwork spec, and the order questions need no key. Recaps and order status are reads that use your organization key, like the writes. ${KEY_REQUEST_LINE}`,
     ...(intentTextLine ? [intentTextLine] : []),
     `The two photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.`,
   ].join("\n");
@@ -822,16 +822,26 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
 // ─── order questions and recap ──────────────────────────────────────
 
 async function toolGetOrderQuestions(ctx: Ctx, _args: Record<string, unknown>): Promise<ToolResult> {
-  const auth = requireKey(ctx.auth);
-  // Every field create_order actually requires, in the order to ask
-  // (F15), plus the whoami block (F4): the key's own organization and
-  // the contact email orders must use.
+  // Keyless since the 2026-11-08 F3 amendment: the question set is
+  // static and public. With a key the answer also carries the whoami
+  // block (F4, F15): the key's own organization and the contact
+  // email orders must use. Without a key there is NO organization
+  // block at all, and the contact-email question states the binding
+  // rule without naming any organization's address.
+  const auth = ctx.auth;
   const structured: Record<string, unknown> = {
-    organization: {
-      name: auth.record.orgName,
-      contactEmail: auth.record.contactEmail,
-      note: "This key belongs to this organization. The order's contact email must be the organization's contact email shown here.",
-    },
+    ...(auth
+      ? {
+          organization: {
+            name: auth.record.orgName,
+            contactEmail: auth.record.contactEmail,
+            note: "This key belongs to this organization. The order's contact email must be the organization's contact email shown here.",
+          },
+        }
+      : {
+          keylessNote:
+            "You are asking without an organization key, so no organization is bound yet. When the order is placed, its contact email must be the contact email of the organization whose key places it.",
+        }),
     questions: [
       {
         order: 1, field: "size", question: "Round or square?",
@@ -870,7 +880,9 @@ async function toolGetOrderQuestions(ctx: Ctx, _args: Record<string, unknown>): 
       {
         order: 7, field: "contactEmail", question: "What email should the proof and order emails go to?",
         input: { type: "email" },
-        note: `Must be the organization's contact email for this key: ${auth.record.contactEmail}. The final proof is emailed to this address for approval.`,
+        note: auth
+          ? `Must be the organization's contact email for this key: ${auth.record.contactEmail}. The final proof is emailed to this address.`
+          : "Must be the contact email of the organization whose key places the order. The final proof is emailed to this address.",
       },
       {
         order: 8, field: "contactPhone", question: "What phone number reaches the contact?",
@@ -893,7 +905,9 @@ async function toolGetOrderQuestions(ctx: Ctx, _args: Record<string, unknown>): 
     emailFirst: "Capture the contact email first in this step (start_order_intent), before the questions: the journey's first ask.",
   };
   const text = [
-    `This key belongs to ${auth.record.orgName}; the contact email for orders is ${auth.record.contactEmail}.`,
+    auth
+      ? `This key belongs to ${auth.record.orgName}; the contact email for orders is ${auth.record.contactEmail}.`
+      : "No key on this call, so no organization is bound yet; when the order is placed, its contact email must be the contact email of the organization whose key places it.",
     "Order questions, in order (every field create_order needs):",
     "1. Shape and size: round or square, both 100 mm (4 inch).",
     `2. Quantity: "How many tap discs?" (minimum ${MIN_QTY}).`,
@@ -901,7 +915,9 @@ async function toolGetOrderQuestions(ctx: Ctx, _args: Record<string, unknown>): 
     '4. Mounting: "How should we mount them?" The two photos with this answer show the options: adhesive backing, and pre-drilled holes for screws (screws not included).',
     `5. Link destination (optional): ${LINK_DESTINATION_NOTE} get_recap and create_order accept it as linkDestination.`,
     "6. Contact name.",
-    `7. Contact email: must be ${auth.record.contactEmail}, the address on this key's organization. The final proof is emailed there.`,
+    auth
+      ? `7. Contact email: must be ${auth.record.contactEmail}, the address on this key's organization. The final proof is emailed there.`
+      : "7. Contact email: must be the contact email of the organization whose key places the order. The final proof is emailed there.",
     "8. Contact phone.",
     "9. Shipping address, phone included, asked last.",
     "Then run get_recap over the answers; keep the recap reference it returns, because placing the order uses it.",
@@ -1692,7 +1708,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "Start here. One call orients a cold agent: the builder's introduction (NFC Tap Builder by Tap.Giving), the product in plain words, " +
       "the first choice (shape: round or square), the pricing tiers, the artwork spec summary, and the full capability list with the human gates. " +
-      "No key, no email, nothing asked. Call this first when an agent is new to the server; call get_product for product facts alone, get_artwork_spec when a shape is chosen and artwork comes next, and get_order_questions only with a key in hand. " +
+      "and get_order_questions when the questions are next (it needs no key). " +
       "The optional intent argument is echoed back as guidance with a quantity headline when it names a disc count. " + GATES.payment,
     inputSchema: { type: "object", properties: { intent: { type: "string", description: "Optional free-text description of what the person wants (for example an organization type and a rough disc count). It is echoed back as guidance, and a disc count in it produces a price headline for that quantity." } } },
     annotations: READ,
@@ -1798,7 +1814,7 @@ export const TOOLS: ToolDef[] = [
     name: "get_order_questions",
     description:
       "The order questions as structured data, returned in the exact order to ask them. The questions cover every field create_order requires: shape, quantity, metal count, and mounting with the picture assets. Then the link destination. Then contact name, email, and phone. The shipping address comes last. " +
-      "The result also returns the key's own organization block: the organization name and the contact email orders must use. The journey captures the contact email before this step, through start_order_intent. Key required. Call this once a key exists and the person is ready to order; for a first orientation without a key, call get_discovery.",
+      "When the call carries a key, the result also returns the key's own organization block: the organization name and the contact email orders must use; without a key, no organization block is returned. The journey captures the contact email before this step, through start_order_intent. No key needed. Call this when the person is ready to order; for a first orientation, call get_discovery.",
     inputSchema: { type: "object", properties: {} },
     annotations: READ,
     run: toolGetOrderQuestions,
@@ -1927,7 +1943,8 @@ export function toolByName(name: string): ToolDef | undefined {
 }
 
 const WRITE_TOOLS = new Set(["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"]);
-const KEYED_READ_TOOLS = new Set(["get_order_questions", "get_recap", "get_order_status"]);
+const KEYED_READ_TOOLS = new Set(["get_recap", "get_order_status"]);
+const KEYED_WRITE_TOOLS = new Set(["create_order", "request_invoice", "register_webhook"]);
 export const TEST_MODE_LINE = "TEST MODE: this call uses a test key, so no real order is placed and no charge is made.";
 
 export async function runTool(
@@ -1944,7 +1961,7 @@ export async function runTool(
   const result = await def.run(ctx, args);
   // With a test key, every write's text opens by saying so (F19), so a
   // first user can never mistake a test order for a real one.
-  if (auth && auth.record.mode === "test" && (WRITE_TOOLS.has(name) || KEYED_READ_TOOLS.has(name))) {
+  if (auth && auth.record.mode === "test" && (KEYED_WRITE_TOOLS.has(name) || KEYED_READ_TOOLS.has(name))) {
     result.text = `${TEST_MODE_LINE}\n${result.text}`;
   }
   return result;
