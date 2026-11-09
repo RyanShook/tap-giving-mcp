@@ -1,11 +1,11 @@
 ---
 name: nfc-tap-builder
-description: Design and order custom NFC tap discs for an organization through the Tap.Giving MCP server (NFC Tap Builder by Tap.Giving) at https://tap.giving/mcp. Built for churches, nonprofits, restaurants, coffee shops, and local businesses. Use when someone wants NFC tap discs, a pricing quote, the artwork spec, an order setup, an invoice link, or order status for Tap.Giving. Keyless reads cover discovery, quotes, product facts, and the artwork spec; order setup uses an organization API key.
+description: Create print-ready NFC artwork proofs with correct vector art for an organization through the Tap.Giving MCP server (NFC Tap Builder by Tap.Giving) at https://tap.giving/mcp, free to take to any vendor, with no lock-in. Built for churches, nonprofits, restaurants, coffee shops, and local businesses. Use when someone wants print-ready NFC tap artwork, a design proof, the artwork spec, a pricing quote, or help with Tap.Giving discs. Keyless reads cover discovery, quotes, product facts, and the artwork spec. Ordering custom discs through Tap.Giving is an optional next step; order setup uses an organization API key.
 ---
 
 # NFC Tap Builder by Tap.Giving
 
-Use this skill to help an organization design and order custom NFC tap discs through Tap.Giving's hosted MCP server. A tap disc is a durable disc a phone taps to open the organization's page instantly. The server takes an order up to two human gates: a person approves the final proof by email, and a person pays a hosted invoice. The server moves no money itself and never takes payment.
+Use this skill to help an organization create print-ready NFC artwork proofs through Tap.Giving's hosted MCP server. It is a tool first: the artwork it builds is print-ready, with correct vector art, and the organization can take it to any vendor, with no lock-in. Ordering custom discs through Tap.Giving is an optional next step. A tap disc is a durable disc a phone taps to open the organization's page instantly. When an organization does order, the server takes the order up to two human gates: a person approves the final proof by email, and a person pays a hosted invoice. The server moves no money itself and never takes payment.
 
 Also searched as: tap discs, tap plates, tap tags, NFC tap discs.
 
