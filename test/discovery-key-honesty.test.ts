@@ -1,18 +1,23 @@
-// F3 discovery honesty (CEO rulings 2026-11-08, 22:00 and the 22:01
-// amendment): the keyless/keyed classification published by
-// get_discovery must match actual key enforcement for every tool,
-// and no agent-facing surface may state or imply that a keyed tool
-// is keyless. Enforcement is established empirically: each tool is
-// called with NO Authorization header against in-memory fakes. A
-// keyed tool refuses with an `unauthorized` ToolError before any
+// F3 discovery honesty, re-pinned to the P-15/P-16 contract
+// (Ryan rulings 2026-11-08, persona round 1): placing an order
+// never requires a key. get_recap and create_order answer keyless,
+// binding to the flow's own data (the contact email and the
+// captured intent); request_invoice is retired (placement records
+// the order and emails it to the team; a person follows up with
+// the invoice). get_order_status and register_webhook stay keyed.
+// The classification published by get_discovery must match actual
+// enforcement for every tool, and no agent-facing surface may
+// state or imply that a keyed tool is keyless or that placement
+// needs a key. Enforcement is established empirically: each tool
+// is called with NO Authorization header against in-memory fakes.
+// A keyed tool refuses with an `unauthorized` ToolError before any
 // other validation; a keyless tool answers, or refuses for a
 // non-auth reason (its own input validation), never `unauthorized`.
 // Key-gated tools are probed with inputs their own validation
 // refuses before any write can happen (the auth gate runs first in
-// every key-gated handler), so the probe creates nothing. The two
-// key-optional writes (submit_artwork, start_order_intent) are
-// probed the same way: they must refuse with a non-auth error,
-// never unauthorized.
+// every key-gated handler), so the probe creates nothing. The
+// key-optional writes (submit_artwork, start_order_intent,
+// create_order) are probed the same way.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -96,17 +101,18 @@ const PROBE_ARGS: Record<string, Record<string, unknown>> = {
   submit_artwork: {},
   start_order_intent: {},
   create_order: {},
-  request_invoice: {},
   register_webhook: {},
 };
 
-const KEYLESS_READS = ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions"];
-const KEYED_READS = ["get_recap", "get_order_status"];
-const KEYED_WRITES = ["create_order", "request_invoice", "register_webhook"];
+const KEYLESS_READS = ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap"];
+const KEYED_READS = ["get_order_status"];
+const KEYED_WRITES = ["register_webhook"];
 // Key-optional writes by standing ruling, NOT key gated: they
 // answer keyless and bind to the key's organization when one is
-// presented. They belong to writeTools and to neither read set.
-const OPTIONAL_WRITES = ["submit_artwork", "start_order_intent"];
+// presented. create_order joined this set under P-15 (keyless
+// placement binds to the flow's contact email and intent instead).
+// They belong to writeTools and to neither read set.
+const OPTIONAL_WRITES = ["submit_artwork", "start_order_intent", "create_order"];
 const KEYED = [...KEYED_READS, ...KEYED_WRITES];
 
 async function probe(env: Env, name: string): Promise<string> {
@@ -118,10 +124,10 @@ async function probe(env: Env, name: string): Promise<string> {
   }
 }
 
-test("discovery classification matches actual key enforcement for all 12 tools", async () => {
+test("discovery classification matches actual key enforcement for all 11 tools", async () => {
   setRasterizerForTests(null);
   const env = await makeEnv();
-  assert.equal(TOOLS.length, 12, "the v1 tool set is twelve tools");
+  assert.equal(TOOLS.length, 11, "the tool set is eleven tools after the request_invoice retirement");
   for (const t of TOOLS) assert.ok(t.name in PROBE_ARGS, `probe args exist for ${t.name}`);
 
   // Empirical enforcement, keyless calls.
@@ -141,17 +147,23 @@ test("discovery classification matches actual key enforcement for all 12 tools",
   // The published classification: exactly the empirical split,
   // each tool in exactly one set.
   const d = await runTool(env, req(), "get_discovery", {}, (async () => new Response("nope", { status: 404 })) as typeof fetch);
-  const caps = (d.structured as { capabilities: { readTools: string[]; keyedReadTools: string[]; writeTools: string[]; howToGetAKey: string } }).capabilities;
-  assert.deepEqual([...caps.readTools].sort(), [...KEYLESS_READS].sort(), "readTools is exactly the keyless reads");
-  assert.deepEqual([...caps.keyedReadTools].sort(), [...KEYED_READS].sort(), "keyedReadTools is exactly the keyed reads");
-  assert.deepEqual([...caps.writeTools].sort(), [...KEYED_WRITES, ...OPTIONAL_WRITES].sort(), "writeTools is exactly the five writes");
+  const caps = (d.structured as { capabilities: { readTools: string[]; keyedReadTools: string[]; writeTools: string[]; howToGetAKey: string; artworkExport: string } }).capabilities;
+  assert.deepEqual([...caps.readTools].sort(), [...KEYLESS_READS].sort(), "readTools is exactly the keyless reads (get_recap among them, per P-15)");
+  assert.deepEqual([...caps.keyedReadTools].sort(), [...KEYED_READS].sort(), "keyedReadTools is exactly the keyed reads (order status only)");
+  assert.deepEqual([...caps.writeTools].sort(), [...KEYED_WRITES, ...OPTIONAL_WRITES].sort(), "writeTools is exactly the four writes");
   const all = [...caps.readTools, ...caps.keyedReadTools, ...caps.writeTools];
-  assert.equal(new Set(all).size, 12, "each tool appears in exactly one discovery set");
+  assert.equal(new Set(all).size, 11, "each tool appears in exactly one discovery set");
+  assert.ok(!all.includes("request_invoice"), "the retired tool appears in no set");
+  // P-12: the artwork export fetch is published as what it is, a
+  // keyless capability read.
+  assert.ok(caps.artworkExport.includes("keyless capability read"), "capabilities describe the artwork export fetch as a keyless capability read");
 
-  // The discovery text and the key-request line name the keyed
-  // reads as keyed and never claim the reads as a class are keyless.
-  assert.ok(d.text.includes("Recaps and order status are reads that use your organization key"), "discovery text names the keyed reads");
-  assert.ok(!/order questions[^.]*use your organization key/i.test(d.text), "discovery text must not call the order questions keyed");
+  // The discovery text states the P-15 scope plainly: placement
+  // needs no key; order status is the one keyed read.
+  assert.ok(d.text.includes("Placing an order needs no key"), "discovery text states keyless placement");
+  assert.ok(d.text.includes("Order status is the one read that uses the organization key"), "discovery text names order status as the keyed read");
+  assert.ok(!d.text.includes("Recaps and order status are reads that use your organization key"), "the pre-P-15 keyed-reads sentence is gone");
+  assert.ok(caps.howToGetAKey.includes("Placing an order never requires a key"), "howToGetAKey leads with keyless placement");
   assert.ok(caps.howToGetAKey.includes("order questions"), "howToGetAKey names the order questions among the keyless reads");
   assert.ok(!/Read tools need no key/.test(caps.howToGetAKey), "howToGetAKey must not claim read tools as a class need no key");
   assert.ok(!/Read tools need no key/.test(KEY_REQUEST_LINE), "KEY_REQUEST_LINE must not claim read tools as a class need no key");
@@ -171,6 +183,7 @@ test("discovery classification matches actual key enforcement for all 12 tools",
   }
   assert.match(TOOLS.find((t) => t.name === "get_order_questions")!.description, /no key/i, "get_order_questions description must say no key is needed");
   assert.match(TOOLS.find((t) => t.name === "get_discovery")!.description, /no key/i, "get_discovery description must say calling get_order_questions needs no key");
+  assert.match(TOOLS.find((t) => t.name === "create_order")!.description, /no key/i, "create_order description must say no key is needed");
 
   // The GET self-description agrees with enforcement.
   const res = await worker.fetch(new Request("https://tap.giving/mcp", { method: "GET" }), env);
@@ -181,8 +194,9 @@ test("discovery classification matches actual key enforcement for all 12 tools",
   assert.ok(authSection.includes("get_order_questions"), "self-description Auth section names get_order_questions");
   const keylessLine = authSection.split("\n").find((l) => l.startsWith("Keyless reads")) ?? "";
   assert.ok(keylessLine.includes("get_order_questions"), "self-description lists get_order_questions among the keyless reads");
-  const keyedLine = authSection.split("\n").find((l) => l.includes("need the organization's key")) ?? "";
-  assert.ok(!/questions/i.test(keyedLine), "self-description must not list the order questions among the keyed reads");
+  assert.ok(keylessLine.includes("get_recap"), "self-description lists get_recap among the keyless reads (P-15)");
+  assert.ok(authSection.includes("Order status is the read that needs the organization's key"), "self-description names order status as the keyed read");
+  assert.ok(!authSection.includes("Recaps and order status"), "self-description must not group the recap with the keyed reads");
 });
 
 test("get_order_questions keyless returns only the static question set", async () => {
@@ -211,16 +225,27 @@ test("repo docs carry the same classification (README, SKILL, spec)", () => {
   const skill = read("../SKILL.md");
   const skillCopy = read("../skills/nfc-tap-builder/SKILL.md");
   const spec = read("../docs/spec.md");
+  const NEW_NO_MONEY = "This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.";
+  const OLD_NO_MONEY = "it returns a hosted invoice link for a person to pay";
   for (const [label, doc] of [["README", readme], ["SKILL.md", skill], ["skills SKILL.md", skillCopy], ["spec", spec]] as const) {
     assert.ok(!doc.includes("Reads need no key;"), `${label} must not claim reads as a class need no key`);
     assert.ok(!doc.includes("Read tools need no key"), `${label} must not claim read tools as a class need no key`);
     assert.ok(!/get_order_questions` \| yes/.test(doc), `${label} must not table get_order_questions as keyed`);
     assert.ok(!doc.includes("(v1, read, key required\nso the answers bind"), `${label} must not spec get_order_questions as key required`);
+    assert.ok(!doc.includes(OLD_NO_MONEY), `${label} must not carry the retired invoice-link sentence (CEO reword, 2026-11-08)`);
+    assert.ok(!doc.includes("| `request_invoice` |"), `${label} must not table the retired request_invoice tool`);
   }
   assert.ok(readme.includes("| `get_order_questions` | no |"), "README tools table lists get_order_questions as keyless");
+  assert.ok(readme.includes("| `get_recap` | no |"), "README tools table lists get_recap as keyless (P-15)");
+  assert.ok(readme.includes("| `create_order` | no |"), "README tools table lists create_order as keyless (P-15)");
+  assert.ok(readme.includes(NEW_NO_MONEY), "README carries the reworded no-money sentence verbatim");
+  assert.ok(skill.includes(NEW_NO_MONEY), "SKILL.md carries the reworded no-money sentence verbatim");
   const keylessBlock = skill.slice(skill.indexOf("Keyless reads"), skill.indexOf("Keyless or optional-key writes"));
   assert.ok(keylessBlock.includes("`get_order_questions`"), "SKILL.md lists get_order_questions among the keyless reads");
+  assert.ok(keylessBlock.includes("`get_recap`"), "SKILL.md lists get_recap among the keyless reads (P-15)");
   const keyedBlock = skill.slice(skill.indexOf("Keyed tools"), skill.indexOf("Every tool declares"));
   assert.ok(!keyedBlock.includes("`get_order_questions`"), "SKILL.md keyed table must not list get_order_questions");
+  assert.ok(!keyedBlock.includes("`get_recap`"), "SKILL.md keyed table must not list get_recap (P-15)");
+  assert.ok(!keyedBlock.includes("`create_order`"), "SKILL.md keyed table must not list create_order (P-15)");
   assert.equal(skill, skillCopy, "the two SKILL.md copies stay identical");
 });

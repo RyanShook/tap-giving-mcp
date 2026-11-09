@@ -43,7 +43,7 @@ Placing an order needs no key and no header. For the organization-bound surfaces
 3. Call `get_artwork_spec` for the production geometry of the chosen shape, build the artwork using the delivered examples in get_artwork_spec as references, and send it back with `submit_artwork`.
 4. To register interest before any key exists, call `start_order_intent` with a contact email. It captures the email through the same public capture endpoint the website uses.
 5. Call `get_order_questions` (no key needed) and ask its questions in the order given, then call `get_recap` (no key needed) to show the person the full order (artwork, quantity, shipping address, exact cost) before anything is locked in.
-6. Call `create_order` with the recap reference to place the order. A person from Tap.Giving follows up with the invoice; the person pays it when it arrives.
+6. Call `create_order` with the recap reference to place the order: it is recorded in the CRM and the full order is emailed to the Tap.Giving team, and the response confirms both. A person from Tap.Giving follows up with the invoice; the person pays it when it arrives.
 7. Call `get_order_status` for where an order stands. `register_webhook` registers one callback per organization for proof_ready and shipped events.
 
 ## Tools
@@ -57,6 +57,7 @@ Keyless reads (no key, no email, nothing asked):
 | `get_product` | Full product facts: discs, stands, badges, mounting, shipping terms. | `discs`, `stands`, `badges`, `shipping` |
 | `get_artwork_spec` | Production artwork geometry as structured millimetre data, plain guidelines, delivered example designs, and the optional logo ask. | geometry per shape, `guidelines`, `examples`, `logoAsk` |
 | `get_order_questions` | The order questions as structured data, in the exact order to ask them: shape, quantity, metal count, mounting with picture options, the link destination, contact name, email, and phone, and the shipping address last. With a key the answer also carries the key's organization block; without one, none is returned. | `questions` in order |
+| `get_recap` | The full recap, the last thing before the exits: submitted artwork, quantity, shipping address as entered, the exact cost from `get_quote`, and both required notes. Keyless: the recap binds to the order's contact email and the captured intent. | `recapRef`, `cost`, `shipTo`, `notes`, `exits` |
 
 Keyless or optional-key writes:
 
@@ -69,18 +70,16 @@ Placing an order (no key needed):
 
 | Tool | What it does | Returns |
 | --- | --- | --- |
-| `get_recap` | The full recap, the last thing before the exits: submitted artwork, quantity, shipping address as entered, the exact cost from `get_quote`, and both required notes. | `recapRef`, `cost`, `shipTo`, `notes`, `exits` |
-| `create_order` | Sets up an order through the same front door a website order takes. Idempotent on the caller's idempotency key. Exits: pay now, or lock in this price. | `orderRef`, `quote`, `exit`, `nextStep` |
+| `create_order` | Places the order through the same front door a website order takes: the order is recorded in the CRM and the full order is emailed to the Tap.Giving team; a person follows up with the actual invoice. Idempotent on the caller's idempotency key. Exits: pay now, or lock in this price. | `orderRef`, `quote`, `exit`, `confirmation`, `orderEmail`, `nextStep` |
 
 Keyed tools (organization API key required):
 
 | Tool | What it does | Returns |
 | --- | --- | --- |
-| `get_order_status` | Where an order stands: CRM stage, fulfillment state with tracking when present, and invoice state with its hosted link. | `stage`, `invoice`, fulfillment |
+| `get_order_status` | Where an order stands: CRM stage, fulfillment state with tracking when present, and any invoice a person recorded against the order in the follow-up. This server issues no invoices itself. | `stage`, `invoice`, fulfillment |
 | `register_webhook` | Registers (or replaces) the organization's one webhook subscription for proof_ready and shipped events. | `subscriptionSecret` (shown once), `payloadContract`, `delivery` |
-| `request_invoice` | For orders already placed through this server: returns the order's invoice link. Placing an order does not use this tool. | `invoiceId`, `invoiceNumber`, `hostedInvoiceUrl`, `handoffLine`, `totalCents` |
 
-Every tool declares `destructiveHint: false` and `openWorldHint: false`; the read-only tools also declare `readOnlyHint: true`. `create_order` and `request_invoice` are safe to retry after a network failure with the same idempotency key.
+Every tool declares `destructiveHint: false` and `openWorldHint: false`; the read-only tools also declare `readOnlyHint: true`. `create_order` is safe to retry after a network failure with the same idempotency key; a retry never re-sends an order email that already went out.
 
 ## Pricing facts
 

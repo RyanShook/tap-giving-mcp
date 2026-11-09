@@ -97,7 +97,6 @@ releases an order to production.
 | `get_order_questions` | no | The order questions in order: quantity, mounting with pictures, optional link destination, shipping address. | readOnlyHint: true, idempotentHint: true | `questions` in order (quantity, mounting with picture options, linkDestination, shipTo) |
 | `get_recap` | no | The order in display order (artwork, quantity, ship-to, exact total) with the two required notes, returning a recap reference. | readOnlyHint: true, idempotentHint: true | `recapRef`, `cost` (the get_quote object), `shipTo`, `notes`, `exits` |
 | `create_order` | no | Locks an order in behind both exits (pay now, or lock in this price); idempotent on the caller's idempotency key. A person from Tap.Giving follows up with the invoice. | readOnlyHint: false, idempotentHint: true | `orderRef`, `quote`, `exit`, `nextStep` |
-| `request_invoice` | yes | For orders already placed through this server: returns the order's invoice link (or the customer's existing open one) for the person who pays. Placing an order does not use this tool; a person from Tap.Giving follows up with the invoice. | readOnlyHint: false, idempotentHint: true | `invoiceId`, `invoiceNumber`, `hostedInvoiceUrl`, `handoffLine`, `totalCents` |
 | `get_order_status` | yes | Order stage, invoice state, and fulfillment read from the records of truth. | readOnlyHint: true, idempotentHint: true | `stage`, `invoice` (status, hostedInvoiceUrl), fulfillment with tracking when present |
 | `register_webhook` | yes | Registers one callback per organization for proof_ready and shipped (registration in v1; delivery is v1.1). | readOnlyHint: false | `subscriptionSecret` (shown once), `payloadContract`, `delivery` status |
 
@@ -105,8 +104,7 @@ Annotations are the server's own declarations, read from the live
 `tools/list`: every tool also declares `destructiveHint: false` and
 `openWorldHint: false`. A client can auto-approve the read-only
 tools, ask its person before the writes, and retry `create_order`
-and `request_invoice` after a network failure with the same
-idempotency key.
+after a network failure with the same idempotency key.
 
 ## Worked example
 
@@ -196,17 +194,16 @@ Response, structured content (abbreviated):
       "get_quote",
       "get_product",
       "get_artwork_spec",
-      "get_order_questions"
+      "get_order_questions",
+      "get_recap"
     ],
     "keyedReadTools": [
-      "get_recap",
       "get_order_status"
     ],
     "writeTools": [
       "submit_artwork",
       "start_order_intent",
       "create_order",
-      "request_invoice",
       "register_webhook"
     ],
     "gates": [
@@ -214,7 +211,7 @@ Response, structured content (abbreviated):
       "Payment stays human: This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice. A person pays the invoice when it arrives.",
       "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state."
     ],
-    "howToGetAKey": "Placing an order never requires a key: discovery, product facts, the artwork spec, the order questions, the recap, order setup, and the invoice link all run keyless. An organization API key is optional: it enriches the order questions with the key's own organization block, and it governs order status and webhook registration. Keys are issued by the Tap.Giving team: email hello@tap.giving from the address you want associated with the organization, say which organization the key is for, and the team replies with the key within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like tg_test_<orgslug>_<secret>.",
+    "howToGetAKey": "Placing an order never requires a key: discovery, product facts, the artwork spec, the order questions, the recap, and order setup all run keyless. An organization API key is optional: it enriches the order questions with the key's own organization block, and it governs order status and webhook registration. Keys are issued by the Tap.Giving team: email hello@tap.giving from the address you want associated with the organization, say which organization the key is for, and the team replies with the key within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like tg_test_<orgslug>_<secret>.",
     "kickoff": "get_artwork_spec",
     "benefits": [
       "Works with any platform",
@@ -380,62 +377,23 @@ A retry with the same idempotency key and the same payload returns
 this same orderRef; the same key with a different payload is a
 conflict naming the differing fields.
 
-### 5. request_invoice (keyed, idempotency key)
+### 5. The placement is the whole road (P-16, 2026-11-08)
 
-Steps 1 to 4 above are the acceptance organization's pass. This step
-replays the reused-invoice case against the first-user test
-organization, whose second order was placed while its first order's
-invoice was still open, so the server returns that invoice instead
-of minting a second one.
+There is no step 5. Placing the order in step 4 is the end of the
+server's road: the order is recorded in the CRM (the `invreqKey` in
+the step 4 response), and the full order is emailed to the
+Tap.Giving team, whose reply in the response (`orderEmail`) confirms
+the send. A person from Tap.Giving follows up with the actual
+invoice; this server issues no invoices and returns no invoice
+link. The response's `confirmation` says exactly that: "Your order
+is placed, and a person from Tap.Giving will follow up with your
+invoice."
 
-Request:
+Reading the order back afterwards is `get_order_status` with the
+organization key (the one keyed read). Invoices a person later
+creates in the follow-up, once recorded against the order, surface
+there as read-only state.
 
-```json
-{"jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": {"name": "request_invoice", "arguments": {"orderRef": "mcp:coo-first-user:e897269bd8c9f078", "idempotencyKey": "worked-example-invoice-refresh-2026-11-07"}}}
-```
-
-Response, structured content:
-
-```json
-{
-  "orderRef": "mcp:coo-first-user:e897269bd8c9f078",
-  "invoiceId": "in_1UZHUIKIjbVAoCpTX1AMZjyQ",
-  "invoiceNumber": "RCMDIGOQ-0001",
-  "status": "open",
-  "hostedInvoiceUrl": "https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVNQdVU1dlRBdFQ2VWRLTVpmZ0RoS0tWZ3lBZ05XLDE4NDYzMzEwMA0200ZqkGjMGe?s=ap",
-  "handoffLine": "Review your invoice: https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVNQdVU1dlRBdFQ2VWRLTVpmZ0RoS0tWZ3lBZ05XLDE4NDYzMzEwMA0200ZqkGjMGe?s=ap",
-  "totalCents": 67500,
-  "currency": "USD",
-  "totalNote": "Totals are structured data for the agent's records; the human-facing handoff line carries no dollar total, the invoice itself carries the money.",
-  "existing": true,
-  "note": "This customer already had an open or draft invoice; that invoice's link is returned, flagged existing, rather than stacking a second one.",
-  "existingFromOrderRef": "mcp:coo-first-user:fddf6e881efb4c5e",
-  "replayed": true,
-  "antiMetal": "unknown",
-  "antiMetalNote": "No anti-metal count was recorded for this order, so the invoice carries no shielding line. If some discs go on metal surfaces, the count must be settled with the person before printing; it cannot be added afterwards.",
-  "nextStep": "Hand the handoffLine to the person. A person pays on Stripe's hosted page; this server moves no money itself. Artwork approval happens separately, by email, before production."
-}
-```
-
-Response, text rendering:
-
-```text
-TEST MODE: this call uses a test key, so no real order is placed and no charge is made.
-Invoice RCMDIGOQ-0001 is open.
-This is not a new invoice for this order: invoice RCMDIGOQ-0001 was already open from order mcp:coo-first-user:fddf6e881efb4c5e (150 discs, $675.00 total), so this order (mcp:coo-first-user:e897269bd8c9f078) is not invoiced separately. Pay that invoice if it is the order you mean; if you need a separate invoice for this order, contact the Tap.Giving team at hello@tap.giving.
-Review your invoice: https://invoice.stripe.com/i/acct_1SWS4YKIjbVAoCpT/test_YWNjdF8xU1dTNFlLSWpiVkFvQ3BULF9WYVNQdVU1dlRBdFQ2VWRLTVpmZ0RoS0tWZ3lBZ05XLDE4NDYzMzEwMA0200ZqkGjMGe?s=ap
-Total on the invoice: $675.00. A person pays it on Stripe's hosted page.
-```
-
-The first-user organization already had this open test invoice from
-its first order, so the server returned it flagged `existing` and
-named the order it belongs to in `existingFromOrderRef`, instead of
-stacking a second one; for an organization with no open invoice,
-the same call mints and returns the new invoice in the same shape,
-without the flag. The invoice total is $675.00 because the
-first-order WELCOME10 discount applied at invoice time; the quote's
-headline stayed the list total for its quantity. The handoff is the
-link: a person pays it, this server takes no payment.
 ## Errors
 
 Every tool error returns MCP's standard error content (a text block

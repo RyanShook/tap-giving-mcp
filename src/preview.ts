@@ -167,12 +167,12 @@ async function initResvg(): Promise<boolean> {
 }
 
 /** Rasterize an SVG document to PNG at 424 px wide. Null on any failure. */
-export async function renderSvgToPng(svgText: string): Promise<Uint8Array | null> {
+export async function renderSvgToPng(svgText: string, width = 424): Promise<Uint8Array | null> {
   if (testRasterizer) return testRasterizer(svgText);
   if (!(await initResvg())) return null;
   try {
     const r = new Resvg(svgText, {
-      fitTo: { mode: "width", value: 424 },
+      fitTo: { mode: "width", value: width },
       font: {
         fontBuffers,
         defaultFontFamily: "DejaVu Sans",
@@ -214,6 +214,40 @@ export async function renderArtworkOnDisc(
     return null;
   } catch (e) {
     console.error(`[preview] on-disc render failed (${detectedType}):`, e);
+    return null;
+  }
+}
+
+/**
+ * P-12: the print render of a submission, rasterized FROM THE
+ * SUBMITTED FILE ITSELF at full submitted resolution (capped at
+ * 4096 px wide), never from the on-disc composite. An SVG document
+ * rasterizes as itself; a raster file is drawn 1:1 at its natural
+ * size. Returns null for formats with no honest render here (PDF)
+ * or when the rasterizer fails; callers say so plainly.
+ */
+export async function renderArtworkFileToPng(
+  bytes: Uint8Array,
+  detectedType: string,
+  naturalWidth?: number,
+  naturalHeight?: number,
+): Promise<Uint8Array | null> {
+  try {
+    if (detectedType === "svg") {
+      return await renderSvgToPng(new TextDecoder().decode(bytes), 2120);
+    }
+    if (detectedType === "png" || detectedType === "jpeg" || detectedType === "webp" || detectedType === "gif") {
+      const mime = { png: "image/png", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif" }[detectedType];
+      const w = Math.min(Math.max(naturalWidth ?? 424, 1), 4096);
+      const h = Math.min(Math.max(naturalHeight ?? w, 1), 4096);
+      const svg =
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+        `<image href="data:${mime};base64,${bytesToBase64(bytes)}" x="0" y="0" width="${w}" height="${h}"/></svg>`;
+      return await renderSvgToPng(svg, w);
+    }
+    return null;
+  } catch (e) {
+    console.error(`[preview] print-file render failed (${detectedType}):`, e);
     return null;
   }
 }

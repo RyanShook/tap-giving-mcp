@@ -72,12 +72,12 @@ test("product facts carry the for-agents strings", () => {
   assert.ok(PRODUCT.sizes.every((s) => s.label.includes("100 mm (4 inch)")));
 });
 
-test("the v1 tool set is exactly the specced twelve", () => {
+test("the tool set is exactly the specced eleven (request_invoice retired by P-16)", () => {
   const names = TOOLS.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "create_order", "get_artwork_spec", "get_discovery", "get_order_questions",
     "get_order_status", "get_product", "get_quote", "get_recap",
-    "register_webhook", "request_invoice", "start_order_intent", "submit_artwork",
+    "register_webhook", "start_order_intent", "submit_artwork",
   ].sort());
 });
 

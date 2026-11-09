@@ -15,7 +15,7 @@
 import type { Env } from "./env.ts";
 import { ENDPOINT, GATES, KEY_REQUEST_LINE, POSITIONING_LINE, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME } from "./facts.ts";
 import { PRODUCT_PHOTOS, TOOLS, artworkBytesKey, readArtworkRecord, runTool } from "./tools.ts";
-import { buildTemplateSvg } from "./preview.ts";
+import { buildTemplateSvg, renderArtworkFileToPng } from "./preview.ts";
 import { ToolError, isRecord } from "./errors.ts";
 import { DETECTED_MEDIA_TYPE } from "./sniff.ts";
 import { EXAMPLES_INDEX } from "./examples-data.ts";
@@ -84,7 +84,7 @@ function selfDescription(): string {
     toolLines,
     ``,
     `## Auth`,
-    `Keyless reads (get_discovery, get_quote, get_product, get_artwork_spec, get_order_questions) need no key.`,
+    `Keyless reads (get_discovery, get_quote, get_product, get_artwork_spec, get_order_questions, get_recap) need no key. Submitted artwork is fetchable at its capability URL (/mcp/artwork/<ref>, and the same address with .png on the end for the print render): a keyless capability read, where the artwork reference itself is the capability.`,
     `Placing an order needs no key: the recap and order setup run keyless, and a person from Tap.Giving follows up with the invoice. Order status is the read that needs the organization's key, and webhook registration is the write that needs it: Authorization: Bearer <redacted><orgslug>_<secret> Test keys look the same with tg_test_ in place of tg_live_: tg_test_<orgslug>_<secret>.`,
     KEY_REQUEST_LINE,
     `Evaluating this server? A test key runs the full journey, including placing a test order, with no real order and no charge. There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies with one within one business day.`,
@@ -268,6 +268,27 @@ export default {
       const headers = { "Content-Type": "image/webp", "Cache-Control": "public, max-age=86400", "Content-Length": String(bytes.length) };
       if (request.method === "HEAD") return new Response(null, { status: 200, headers });
       return new Response(bytes as unknown as BodyInit, { status: 200, headers });
+    }
+
+    // P-12: the print render of a submission: a full-resolution PNG
+    // rendered FROM THE SUBMITTED FILE (never from the on-disc
+    // preview composite), at the same capability URL with .png on
+    // the end. Formats with no honest render here (PDF) answer 415
+    // and say so; the file itself stays fetchable at the base URL.
+    const pngMatch = /^\/mcp\/artwork\/(art_[a-z0-9]+)\.png$/.exec(url.pathname);
+    if (pngMatch && (request.method === "GET" || request.method === "HEAD")) {
+      const ref = pngMatch[1];
+      const record = await readArtworkRecord(env, ref);
+      if (!record) return new Response("not found", { status: 404 });
+      const stored = await env.MCP_ARTWORK.get(artworkBytesKey(ref), "arrayBuffer");
+      if (!stored) return new Response("not found", { status: 404 });
+      const png = await renderArtworkFileToPng(new Uint8Array(stored), record.detectedType, record.width, record.height);
+      if (!png) {
+        return new Response("This submitted file cannot be rendered to a PNG here; the file itself is served at the same address without the .png ending.", { status: 415 });
+      }
+      const headers = { "Content-Type": "image/png", "Cache-Control": "private, max-age=3600", "Content-Length": String(png.length), "X-Content-Type-Options": "nosniff" };
+      if (request.method === "HEAD") return new Response(null, { status: 200, headers });
+      return new Response(png as unknown as BodyInit, { status: 200, headers });
     }
 
     // Stored submission bytes at a capability URL. The artworkRef is

@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "tap-giving",
   "version": "1.0.0",
-  "description": "Connects the agent to NFC Tap Builder by Tap.Giving, the hosted MCP server for Tap.Giving NFC tap discs: keyless discovery, pricing quotes, product facts and artwork specs, plus keyed order setup and hosted invoice links for organizations of every kind: churches, nonprofits, restaurants, coffee shops, and local businesses. Website: https://tap.giving",
+  "description": "Connects the agent to NFC Tap Builder by Tap.Giving, the hosted MCP server for Tap.Giving NFC tap discs: keyless discovery, pricing quotes, product facts and artwork specs, plus keyless order setup for organizations of every kind: churches, nonprofits, restaurants, coffee shops, and local businesses. Website: https://tap.giving",
   "author": {
     "name": "Tap.Giving",
     "url": "https://github.com/RyanShook"

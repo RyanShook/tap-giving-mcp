@@ -55,7 +55,7 @@ export const TEST_KEY_LINE =
   "with one (a tg_test_<orgslug>_<secret> key) within one business day.";
 export const KEY_REQUEST_LINE =
   "Placing an order never requires a key: discovery, product facts, the artwork spec, the order questions, " +
-  "the recap, order setup, and the invoice link all run keyless. An organization API key is optional: " +
+  "the recap, and order setup all run keyless. An organization API key is optional: " +
   "it enriches the order questions with the key's own organization block, and it governs order status and " +
   "webhook registration. Keys are issued by the Tap.Giving team: email hello@tap.giving from the address " +
   "you want associated with the organization, say which organization the key is for, and the team replies " +
@@ -108,7 +108,7 @@ export const PRODUCT = {
   },
 } as const;
 
-export const PRODUCT_TOPICS = ["discs", "stands", "badges", "mounting", "shipping"] as const;
+export const PRODUCT_TOPICS = ["discs", "stands", "badges", "mounting", "shipping", "samples", "ordering"] as const;
 export type ProductTopic = (typeof PRODUCT_TOPICS)[number];
 
 // Production geometry (spec section 2.6), read from the production
@@ -228,6 +228,55 @@ export const RECAP_NOTES: string[] = [
 ];
 
 export const TAX_NOTE = "Tax, where it applies, is calculated on the invoice.";
+
+// Persona round 1 (2026-11-08): the answers the cold-user loop
+// found missing, each stated only as far as the verified record
+// goes (landing record in docs/spec.md).
+export const SAMPLES_LINE =
+  "Samples: we do not offer physical samples, free or paid. Instead, see the finished examples and photos " +
+  "in this server, and when you order, a proof of your own design is emailed for approval before anything " +
+  "is printed. The order itself is covered by the 30-day money-back guarantee.";
+export const SAMPLES_GUIDANCE_LINE =
+  "Samples: we do not offer physical samples, free or paid. The finished examples and photos here show the " +
+  "real thing, your own design is proofed by email before printing, and the order is covered by the 30-day " +
+  "money-back guarantee.";
+export const TAX_EXEMPT_LINE =
+  "Tax-exempt organizations: say so when you order. Your tax-exempt state is recorded on the order, and " +
+  "tax is calculated on the invoice where it applies.";
+export const TAX_EXEMPT_GUIDANCE_LINE =
+  "Tax-exempt: say so when you order and the tax-exempt state is recorded on your order; tax is calculated " +
+  "on the invoice where it applies.";
+export const PAYMENT_GUIDANCE_LINE =
+  "Payment: this server takes no payment. A person from Tap.Giving follows up with the invoice after the " +
+  "order is placed, and invoices are paid by card or ACH bank transfer.";
+export const PLAIN_NFC_LINE =
+  "NFC is the tap itself: a visitor holds a phone near the disc and the page opens. No app is needed, and " +
+  "nothing has to be installed.";
+export const QR_CONDITIONAL_LINE =
+  "A scannable QR code appears on a disc only when the design carries a printed code; the tap works either way.";
+export const VERSUS_PRINTED_CODES_LINE =
+  "Against a printed code on a sticker: a sticker's code is fixed the day it is printed, and stickers peel, " +
+  "fade, and tear. These discs are durable waterproof PVC, the tap chip inside is locked to your address, " +
+  "and every disc can be re-pointed in the Redirect Dashboard when your page moves.";
+export const DURABILITY_LINE =
+  "The discs are waterproof PVC, built to be wiped down and spilled on.";
+export const MOUNTING_SURFACE_GUIDE = [
+  "Adhesive backing: for smooth surfaces where a no-holes fixing is wanted.",
+  "Screws through the pre-drilled holes: for a permanent fixing that does not rely on adhesive. Screws are not included.",
+];
+// P-13: the verify-against-example instruction (an instruction to
+// the calling agent, carried by get_artwork_spec and submit_artwork,
+// in text and as a structured field).
+export const VERIFY_AGAINST_EXAMPLE = {
+  instruction:
+    "Before you consider the design done, compare the rendered art against the example direction you chose, " +
+    "item by item, and revise the artwork and submit again if it diverges on any item.",
+  checklist: ["layout", "palette", "icon treatment", "type hierarchy", "safe zones", "flat solid background"],
+};
+export const VERIFY_AGAINST_EXAMPLE_TEXT =
+  "Verify against your example before you call the design done: compare the rendered art with the direction " +
+  "you chose, item by item (layout, palette, icon treatment, type hierarchy, safe zones, flat solid " +
+  "background). If it diverges on any item, revise the artwork and submit again.";
 
 // The 7-day renewing window in plain words (item 6): the window runs
 // from the quote, and a fresh quote renews it. The recap's priceHold

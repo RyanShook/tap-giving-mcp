@@ -156,7 +156,7 @@ tool, a worked example, and the error catalog).
 | `get_order_questions` | [2.11 The v1 journey](#211-the-v1-journey-in-ryans-order-binding-flow) (step 2 question set) |
 | `get_recap` | [2.11 The v1 journey](#211-the-v1-journey-in-ryans-order-binding-flow) (the recap contract) |
 | `create_order` | [2.5 Tool: create_order](#25-tool-create_order-v1-write-key-required) |
-| `request_invoice` | [2.7 Tool: request_invoice](#27-tool-request_invoice-v1-write-key-required) |
+| `request_invoice` (RETIRED 2026-11-08, P-16; see the Persona Loop Round 1 landing record) | [2.7 Tool: request_invoice](#27-tool-request_invoice-v1-write-key-required) |
 | `get_order_status` | [2.8 Tool: get_order_status](#28-tool-get_order_status-v1-read-key-required) |
 | `register_webhook` | [2.9.1 Webhooks](#291-webhooks-proof_ready-and-shipped-contracts-in-v1-delivery-v11) |
 | All tools | [2.1 Auth header shape](#21-auth-header-shape-all-tools), [2.9 Error shape](#29-error-shape-all-tools) |
@@ -854,6 +854,8 @@ What is NOT open: no validation level makes a submission approved
 artwork. Approval stays Gate 1 (section 4) at every level.
 
 ### 2.7 Tool: request_invoice (v1, write, key required)
+
+RETIRED 2026-11-08 (P-16): this tool no longer exists. Placement records the order and emails it to the team; a person follows up with the actual invoice. This section is kept as the historical record of the retired design; the Persona Loop Round 1 landing record at the end of this spec carries the current contract.
 
 In Ryan's flow this is the second half of the LOCK-IN exit: create_order
 creates the order, request_invoice returns its payment handoff. The two
@@ -2257,3 +2259,269 @@ product photo, and the get_product mounting topic carries the
 mounting photos alongside the product photo. No generated renders:
 only existing verified assets or renders of the organization's own
 submitted artwork.
+
+## Persona Loop Round 1 landing record (2026-11-08, enforcement pass)
+
+This pass closes the Cold-User Test chat's Persona Loop Round 1
+findings P-1 to P-16 against the live server. It landed on top of
+the pricing, positioning, and flow pass (commit 2546cb2) and the
+examples/photos swap (commit 4467a6e, delivered-proof examples and
+labeled photos, which this base contains). Suite at landing: 75
+tests, all passing, including the re-pinned key-honesty guard.
+
+Items, as landed:
+
+- P-1 Samples: discovery (structured `samples` and text) and
+  get_product (a `samples` topic) state there is no physical sample
+  program, free or paid; the alternatives named are the delivered
+  examples and photos in this server, the emailed proof of the
+  buyer's own design before production, and the 30-day money-back
+  guarantee on the order.
+- P-2 Deadlines: get_quote carries a delivery-framing line beside
+  the totals (production and delivery run 2 to 3 weeks from artwork
+  approval, anchored on approving today). Discovery guidance
+  computes a stated deadline against that window: inside 14 days it
+  cannot be met; 14 to 20 days is at risk and turns on approval
+  timing; no rush option exists and none is implied.
+- P-3 Tax-exempt: guidance and the get_product ordering topic
+  carry the verified facts only: say so when ordering, the
+  tax-exempt state is recorded on the order, tax is calculated on
+  the invoice where it applies.
+- P-4 Guidance question map: a deterministic map over recognizable
+  phrasings answers, before the next step: samples, tax-exempt,
+  metal surfaces, app (none needed), destination changes (anytime,
+  Redirect Dashboard), reorder (design stays on file), design help
+  and no logo, payment (hosted invoice in the follow-up, card or
+  ACH bank transfer), deadline, and under-minimum. One test per
+  entry.
+- P-5 Metal trap: get_quote warns whenever the anti-metal count is
+  absent or zero that metal surfaces need the shielding layer and
+  that it is decided before printing and cannot be added afterwards.
+- P-6 Mounting photos: the get_product mounting topic carries the
+  two mounting explainer photos plus the product photo (landed with
+  the earlier passes; verified in this pass's tests).
+- P-8 Surfaces: mounting copy carries the verified contrast only:
+  adhesive for smooth surfaces where a no-holes fixing is wanted;
+  screws through pre-drilled holes for a permanent fixing that does
+  not rely on adhesive; screws are not included.
+- P-9 Minimum early: see the pricing-rule exceptions below.
+- P-10 Product prose: every get_product topic renders prose in the
+  text channel; structured content is unchanged.
+- P-11 Plain language: discovery carries a plain-language block:
+  NFC in plain words (tap a phone, no app), and the key story as
+  re-ruled by P-15 below.
+- P-12 Print-ready export: submit_artwork's response carries an
+  export block: the PRINT FILE (the submitted file itself, at the
+  artwork capability URL) and a PRINT RENDER (PNG) at the same URL
+  plus ".png", a full-resolution render derived from the submitted
+  file, never from the preview composite; the response labels the
+  ON-DISC PREVIEW as the mock composite it is. "Print-ready" means
+  the artwork as submitted at full submitted resolution; nothing is
+  validated, traced, or converted, and a raster exports as that
+  raster. The export fetch is a keyless capability read and is
+  published as such in discovery's capabilities.
+- P-13 Verify-against-example: get_artwork_spec and submit_artwork
+  carry the checklist (layout, palette, icon treatment, type
+  hierarchy, safe zones, flat solid background) as an instruction
+  to the calling agent, in text and as the structured
+  `verifyAgainstExample` field, pinned by tests on both tools.
+- P-14(a) The complete path: discovery's journey and numbered path
+  present the whole road in order: design and proof path, quote,
+  questions, recap, place the order, then the human follow-up
+  (proof approval by email, then the invoice). Parts (b) and (c)
+  are superseded by P-16 below.
+- Objection layer: the DIY printed-code comparison (verified facts
+  only: durable waterproof PVC, locked chip, per-disc re-pointing,
+  no app) in product and guidance material; the QR-conditional
+  stated plainly (a scannable QR appears only when the design
+  carries a printed code; the tap works either way); screws not
+  included in the mounting prose; the name-only path named in the
+  artwork spec; the first-order discount's eligibility stated in
+  plain words at the quote step only (the first order spends it;
+  quoting does not; a fresh quote restarts the 7-day window).
+
+Pricing-rule exceptions, named as such: the pricing presentation
+rule (per-disc range only on opening surfaces; minimums, tiers,
+discounts, and totals only at get_quote and after) has exactly two
+guidance exceptions in this pass. (i) P-9: when the intent states a
+quantity under 100, discovery guidance says plainly and early that
+the smallest order is 100 discs, with the spread-the-extras
+framing; guidance is intent-responsive, not opening copy. (ii)
+P-2b: the deadline verdicts state the 2 to 3 week window against
+the caller's own date; the window is a delivery fact, not a price.
+No other addition puts a price, total, tier, or minimum statement
+on discovery, GET, initialize, or get_product; the pricing guard
+deep-scans those surfaces and stays green.
+
+CEO-flagged unknowns (no copy written for any of these; flagged to
+the CEO in this round): what tax-exempt documentation a buyer must
+provide and whether the flag removes tax from the invoice; whether
+the adhesive is safe on finished wood; check and purchase-order
+payment (no such process exists in the record, and none is
+mentioned anywhere); continuity, escrow, or wind-down commitments
+for the redirect service; and any replacement, loss, or theft
+policy. Product copy carries the verified material facts
+(waterproof PVC, wipeable) and nothing beyond them.
+
+### P-15 landing section: keyless placement (Ryan ruling, 2026-11-08)
+
+Ruling: "Placing an order should never require a key."
+
+Enforcement: get_recap and create_order no longer call requireKey.
+A presented key keeps its exact prior behavior (whoami enrichment,
+organization binding, TEST MODE semantics). Keyless is additive.
+
+Classification as published and as enforced (the re-pinned guard,
+test/discovery-key-honesty.test.ts, probes all 11 tools keyless):
+
+- Keyless reads: get_discovery, get_quote, get_product,
+  get_artwork_spec, get_order_questions, get_recap.
+- Keyed read: get_order_status (unchanged).
+- Writes: submit_artwork (key-optional), start_order_intent
+  (keyless), create_order (key-optional; keyless under this
+  ruling), register_webhook (keyed, unchanged).
+
+Identity binding, keyless: the order binds to the flow's own data.
+The recap record binds by the contact email collected in the flow;
+create_order requires the recap to be the keyless recap for the
+same contact email, derives the organization slug from the
+organization name (the intent's, then the call's), falling back to
+the email's local part, and stores a keylessBinding (contact email
+and intent reference) on the order. A caller-named intentRef is
+validated: the intent must exist and its captured email must equal
+the order's contact email. Artwork submitted under an organization
+key cannot be placed keyless (submit it again without the key, or
+place with the key); the recapRef requirement, the recap drift
+check, and create_order idempotency are preserved exactly.
+
+Test-mode answer: a keyless placement has no mode, so it is a real
+(live) placement, bounded by the human proof and payment gates,
+exactly like intent capture, which is already real in every mode;
+test isolation is scoped to order records and CRM adoption (the
+Spec 3.3 amendment), and a keyless placement's records are live
+records by design. A placement made WITH a test key stays in the
+test lane exactly as before (DEV_ORDERS INVREQ record; no live
+door call). Under P-16 the order email for a test-key placement is
+visibly marked TEST (subject and first body line) and goes only to
+the team's own alert inboxes.
+
+Abuse bounds: intent capture's reserved-domain refusal and
+per-email dedupe; the recap-then-order sequence with the recap
+bound to the order's contact email; the intentRef email-match
+validation above; rate limits at the capture door; and the human
+gates (proof approval by email; the invoice follow-up) before
+anything is produced or paid.
+
+Scope call: get_order_status and register_webhook stay keyed in
+this pass (the ruling named placement only). The tension is
+recorded: a keyless placer cannot read their own order status
+until a key is issued by email. Options for a later ruling: a
+capability-style status reference minted at order time, or
+email-based status.
+
+Guard note: test/discovery-key-honesty.test.ts now pins this P-15
+contract empirically (published classification equals keyless
+enforcement for all 11 tools), replacing the earlier pin; the
+guard's structure and its pre-fix failure discipline are unchanged.
+
+### P-16 landing section: record plus email, no server invoices (Ryan ruling, 2026-11-08)
+
+Ruling: "It should literally just email me the order and record it
+in the CRM, then it's my job to follow up with the actual invoice."
+
+Placement is exactly two effects. (1) The CRM record: create_order's
+existing POST to the website's own invoice-request door, writing
+the same INVREQ record the website writes (test mode: the
+DEV_ORDERS INVREQ write), unchanged, idempotency and recapRef
+requirement preserved. (2) NEW: the full order emailed to the team.
+Investigation found the existing door notification insufficient:
+the tap-order handler's notify call carries only a subset (no
+contact name, shape or size, mounting, destination URL, artwork
+reference, or shipping address), so the email step was built:
+create_order calls the tap-mail invocation seat (POST
+/api/mcp-invoke, the server's existing authenticated seat) with a
+new op, notifyOrderPlaced, after the record write is durable. The
+seat composes a plain-text, recap-style email carrying the whole
+order: organization, contact name, contact email, contact phone,
+quantity, shape and size, mounting, anti-metal count, destination
+URL, artwork reference, shipping address with phone, and the
+quoted totals as quoted (discs, shielding, first-order total),
+plus the order reference and CRM record reference. Recipients: the
+business's own order-alert addresses (Ryan's inbox and the
+duplicate alert inbox, from the machinery's exported recipient
+constants in worker/tap-mail). The subject carries no dollar
+amount. The seat op landed in the business repo (commit fec7e3dc)
+and the tap-mail Worker deployed (version 841f4ba0) BEFORE this
+pass deployed tap-mcp.
+
+Confirmation shape: create_order's response confirms both effects:
+the record reference and `orderEmail` (sent, seat, and the seat's
+message reference), under the plain confirmation "Your order is
+placed, and a person from Tap.Giving will follow up with your
+invoice."
+
+Email-failure behavior: partial success, decided and tested. The
+record is durable first, the email second; if the email fails, the
+placement stands, the failure is logged loudly in the server logs,
+recorded on the order record, and stated plainly in the response;
+an idempotent replay re-attempts a failed email and never re-sends
+a sent one.
+
+request_invoice: REMOVED. No legitimate non-placement caller could
+be named; its only story was placement, which this ruling ends.
+Fallout handled in the same pass: the tool registry (11 tools),
+the honesty guard's classification, discovery capabilities and
+journey, README, both SKILL.md copies, this spec, and the contract
+test's tool-set pin. The Stripe mint path on tap-mcp (mintInvoice
+and its memo builder) is removed with it; Stripe reads remain for
+get_order_status's display of invoices that already exist.
+F22 disposition: the mint-time reused-invoice comparison is
+deleted with the mint; the eligibility rule it fed survives
+(create_order's discount scan still treats an order carrying an
+invoice as having spent first-order eligibility), and the stored
+comparison fields on historical order records are still read, and
+named in plain text, by get_order_status. Nothing recomputes them.
+
+Test-mode treatment of both effects: a test-key placement writes
+the DEV_ORDERS INVREQ record (never the live door) and sends the
+order email marked TEST to the team's alert inboxes only. A
+keyless placement has no test lane (see the P-15 test-mode answer).
+
+Protected-string confirmation: the CEO reword settled 2026-11-08
+is in force on every surface after this landing: "This server
+moves no money itself and issues no invoices: a person from
+Tap.Giving follows up with the invoice." The retired invoice-link wording has zero occurrences on the
+shipped surfaces (src, README, both SKILL.md copies, package.json,
+plugin.json, server.json) after this landing; it survives only in
+the honesty guards absence-pin constant and in section 2.7s
+historical record of the retired tool, both deliberate. The other
+two protected strings are byte-identical to before.
+
+### Visual standard: per-tool image map after this landing
+
+- get_discovery: yes. The labeled photo set in structured content
+  plus the phone-tap product photo inline.
+- get_quote: yes. The product photo.
+- get_product: yes. The labeled photos; the mounting topic adds
+  both mounting explainer photos.
+- get_artwork_spec: yes. The delivered-proof examples, the mounting
+  photos, and the explainer photo set.
+- submit_artwork: yes. The submission's own on-disc preview.
+- start_order_intent: none. No honest image exists for an email
+  capture.
+- get_order_questions: yes. Mounting option images in the question
+  set.
+- get_recap: yes. The order's own artwork rendered on the disc.
+- create_order: yes. The order's artwork render, where the order
+  carries artwork.
+- get_order_status: yes, where the order carries artwork: the
+  submitted artwork shown on the disc, labeled as submitted artwork
+  and not the proof; where the order carries none, no image, and
+  the text states the proof arrives by email.
+- register_webhook: none. No honest image exists for a callback
+  registration.
+
+No generated renders anywhere: only verified existing assets, the
+delivered-proof examples, labeled website photos, or renders of
+the organization's own submitted artwork. A preview composite is
+never labeled a proof or a print file (the P-12 discipline).

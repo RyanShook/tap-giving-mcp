@@ -128,8 +128,11 @@ test("opening surfaces: range line only, positioning leads, ordering optional an
   assert.ok(d.text.startsWith("NFC Tap Builder by Tap.Giving\n" + POSITIONING_LINE), "discovery text leads with the positioning line");
   assert.equal((d.structured.introduction as { positioning: string }).positioning, POSITIONING_LINE, "structured introduction carries the positioning line");
   const journey = d.structured.journey as Array<{ step: string; tool: string }>;
-  assert.deepEqual(journey.map((j) => j.tool), ["get_artwork_spec", "get_artwork_spec", "submit_artwork", "get_quote"], "journey order: spec, build, submit and proof, then the optional order step");
-  assert.ok(/optional/.test(journey[3].step), "the last journey step is framed optional");
+  // Persona round 1 (P-14a as amended by P-16): the journey states
+  // the complete path: the design walk first, then the optional
+  // order run (quote, questions, recap, place the order) in order.
+  assert.deepEqual(journey.map((j) => j.tool), ["get_artwork_spec", "get_artwork_spec", "submit_artwork", "get_quote", "get_order_questions", "get_recap", "create_order"], "journey order: spec, build, submit and proof, then the optional order run through placing the order");
+  assert.ok(/optional/.test(journey[3].step), "the order step is framed optional");
   assert.equal((d.structured.capabilities as { kickoff: string }).kickoff, "get_artwork_spec", "capabilities kickoff is the design path, not capture");
 
   // GET self-description and initialize instructions.

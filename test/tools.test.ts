@@ -91,6 +91,16 @@ function req(key?: string): Request {
 
 // A fetch stub: business doors record their calls; Stripe INVOKED
 // returns canned objects; everything else 404s.
+const LIVE_KEY = `tg_live_live-org-church_${"B".repeat(43)}`;
+async function seedLiveKey(keys: MemoryKV): Promise<void> {
+  const now = new Date().toISOString();
+  const rec: KeyRecord = {
+    orgSlug: "live-org-church", orgName: "live-org-church", contactEmail: "live@example.com",
+    mode: "live", scopes: ["orders"], status: "active", createdAt: now, issuedTo: "live@example.com", issuedBy: "test", issuedAt: now,
+  };
+  await keys.put(`KEYHASH:${await sha256Hex(LIVE_KEY)}`, JSON.stringify(rec));
+}
+
 function stubFetch(calls: Array<{ url: string; body?: string }>) {
   return async (input: unknown, init?: { method?: string; body?: string }): Promise<Response> => {
     const url = String((input as { url?: string })?.url ?? input);
@@ -100,6 +110,7 @@ function stubFetch(calls: Array<{ url: string; body?: string }>) {
     if (url.includes("/api/mcp-invoke")) {
       const parsed = JSON.parse(init?.body || "{}");
       if (parsed.op === "recordArtworkSubmission") return new Response(JSON.stringify({ ok: true, recordKey: "STEPCAP:1:x" }), { status: 200 });
+      if (parsed.op === "notifyOrderPlaced") return new Response(JSON.stringify({ ok: true, messageId: "msg_stub_order_email" }), { status: 200 });
       if (parsed.op === "readOrderRecords") return new Response(JSON.stringify({ ok: true, found: false, crmRow: null, fulfillment: null }), { status: 200 });
       return new Response(JSON.stringify({ ok: false }), { status: 400 });
     }
@@ -247,7 +258,7 @@ test("dedupe: a repeat call links a new artworkRef to the existing intent", asyn
   assert.equal(calls.filter((c) => c.url.includes("/api/lead")).length, 1, "still exactly one lead");
 });
 
-test("keyed journey: recap, create_order (idempotent), request_invoice, status", async () => {
+test("keyed journey: recap, create_order (idempotent, record plus order email), status", async () => {
   const { env } = await makeEnv();
   const calls: Array<{ url: string; body?: string }> = [];
   const fetchFn = stubFetch(calls) as typeof fetch;
@@ -295,14 +306,26 @@ test("keyed journey: recap, create_order (idempotent), request_invoice, status",
     () => runTool(env, req(TEST_KEY), "create_order", { ...orderArgs, quantity: 300 }, fetchFn),
     /differing fields are: quantity/);
 
-  const inv = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef, idempotencyKey: "acceptance-invoice-0001" }, fetchFn);
-  assert.equal(inv.structured.status, "open");
-  assert.equal(inv.structured.handoffLine, "Review your invoice: https://invoice.stripe.com/i/stub");
-  assert.equal(inv.structured.totalCents, 90000);
+  // P-16: placement is the record plus the full-order email. The
+  // response confirms both, and the seat saw the whole order.
+  assert.equal(order.structured.confirmation, "Your order is placed, and a person from Tap.Giving will follow up with your invoice.");
+  const emailState = order.structured.orderEmail as { sent: boolean; messageRef?: string };
+  assert.equal(emailState.sent, true, "the order email is confirmed sent");
+  assert.equal(emailState.messageRef, "msg_stub_order_email");
+  const notifyCalls = calls.filter((c) => (c.body ?? "").includes("notifyOrderPlaced"));
+  assert.equal(notifyCalls.length, 1, "exactly one order email for the placement");
+  const notifyBody = JSON.parse(notifyCalls[0].body ?? "{}") as { input: Record<string, unknown> };
+  assert.equal(notifyBody.input.organizationName, "mcp-acceptance-test-church");
+  assert.equal(notifyBody.input.contactEmail, "mcp-acceptance@mcptest.org");
+  assert.equal(notifyBody.input.quantity, 250);
+  assert.equal(notifyBody.input.testMode, true);
+  // The idempotent replay does not re-send the email.
+  assert.equal(calls.filter((c) => (c.body ?? "").includes("notifyOrderPlaced")).length, 1, "replay does not re-send a sent email");
 
   const status = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef }, fetchFn);
   assert.equal(status.structured.stage, "received"); // seat says no CRM row yet
-  assert.ok(JSON.stringify(status.structured).includes("invoice.stripe.com"));
+  assert.equal(status.structured.invoice, null, "no server invoice exists under P-16 placement");
+  assert.ok(status.text.includes("a person from Tap.Giving follows up with the invoice by email"), "status states the human invoice follow-up");
 
   // Another org's key reads not_found for this orderRef.
   await assert.rejects(
@@ -353,65 +376,22 @@ test("keyed reads without a key are unauthorized; garbage keys are unauthorized"
     (e: Error & { code?: string }) => e.code === "unauthorized");
 });
 
-// ─── request_invoice: live-mode keys proceed (parity passed 2026-11-07) ─────────────────
+// ─── request_invoice: retired by P-16 (2026-11-08) ─────────────────
+// Placement never mints an invoice: create_order records the order
+// and emails it to the team, and a person follows up with the actual
+// invoice. The tool, and the Stripe mint path behind it, are gone.
 
-const LIVE_KEY = `tg_live_live-org-church_${"C".repeat(43)}`;
-
-async function seedLiveKey(keys: MemoryKV): Promise<void> {
-  const now = new Date().toISOString();
-  const rec: KeyRecord = {
-    orgSlug: "live-org-church", orgName: "live-org-church", contactEmail: "live@example.com",
-    mode: "live", scopes: ["orders"], status: "active", createdAt: now,
-    issuedTo: "live@example.com", issuedBy: "test", issuedAt: now,
-  };
-  await keys.put(`KEYHASH:${await sha256Hex(LIVE_KEY)}`, JSON.stringify(rec));
-}
-
-test("request_invoice with a live-mode key proceeds past the former parity gate to the order lookup", async () => {
-  const { env, keys } = await makeEnv();
-  await seedLiveKey(keys);
-  // The parity gate is lifted (leg (f) passed 2026-11-07): a live-mode
-  // key now enters the normal flow. With no order under this ref, the
-  // flow stops at the order lookup, before any fetch or Stripe call.
-  (env as unknown as Record<string, unknown>).STRIPE_API_KEY_LIVE = "sk_live_stub";
-  const calls: Array<{ url: string; body?: string }> = [];
+test("request_invoice no longer exists as a tool", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  assert.equal(TOOLS.some((t) => t.name === "request_invoice"), false, "the tool is not registered");
   await assert.rejects(
-    () => runTool(env, req(LIVE_KEY), "request_invoice", { orderRef: "mcp:live-org-church:abc123", idempotencyKey: "live-invoice-0001" }, stubFetch(calls) as typeof fetch),
+    () => runTool(env, req(TEST_KEY), "request_invoice", { orderRef: "mcp:x:y", idempotencyKey: "gone-0001" }, fetchFn),
     (e: unknown) => {
       assert.equal((e as { code?: string }).code, "not_found");
       return true;
     },
   );
-  assert.equal(calls.length, 0, "no fetch of any kind: the order lookup stops the flow before Stripe");
-});
-
-test("request_invoice in test mode still stops at stripe_unavailable while no test secret is set", async () => {
-  const { env } = await makeEnv();
-  const calls: Array<{ url: string; body?: string }> = [];
-  const fetchFn = stubFetch(calls) as typeof fetch;
-  const sha = await pngSha();
-  const art = await runTool(env, req(TEST_KEY), "submit_artwork", {
-    file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
-  }, fetchFn);
-  const recapArgs = {
-    quantity: 250, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
-    artworkRef: art.structured.artworkRef as string, contactEmail: "mcp-acceptance@mcptest.org",
-  };
-  const recap = await runTool(env, req(TEST_KEY), "get_recap", recapArgs, fetchFn);
-  const order = await runTool(env, req(TEST_KEY), "create_order", {
-    ...recapArgs, contactName: "Test Pastor", contactPhone: "+17135550199",
-    recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: "parity-probe-order-0001",
-  }, fetchFn);
-  const orderRef = order.structured.orderRef as string;
-  (env as unknown as Record<string, unknown>).STRIPE_API_KEY_TEST = undefined;
-  await assert.rejects(
-    () => runTool(env, req(TEST_KEY), "request_invoice", { orderRef, idempotencyKey: "parity-probe-invoice-0001" }, fetchFn),
-    (e: unknown) => {
-      assert.equal((e as { code?: string }).code, "stripe_unavailable");
-      return true;
-    },
-  );
-  assert.equal(calls.filter((c) => c.url.includes("api.stripe.com")).length, 0);
 });
 
 test("get_artwork_spec: full delivered set in the structured index, bounded inline images, numbered pick list", async () => {
@@ -689,7 +669,7 @@ test("F14: intent with a key skips the get-a-key line, returns intentRef, links 
   assert.ok(!/ask Ryan/.test(keyless.text));
 });
 
-test("F20: order status returns the dashboard address and login hint and the same-invoice note", async () => {
+test("F20: order status returns the dashboard address and login hint and the P-16 invoice line", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const sha = await pngSha();
@@ -708,12 +688,12 @@ test("F20: order status returns the dashboard address and login hint and the sam
   assert.ok(order.text.startsWith("TEST MODE"), "create_order text carries the TEST MODE line");
   assert.ok(!order.text.includes("adoption pass"), "no machinery voice in the order text");
   const orderRef = order.structured.orderRef as string;
-  await runTool(env, req(TEST_KEY), "request_invoice", { orderRef, idempotencyKey: "f20-status-inv-0001" }, fetchFn);
   const status = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef }, fetchFn);
   const dash = status.structured.dashboard as { tapAddress: string; loginUrl: string; username: string };
   assert.equal(dash.tapAddress, "https://go.tap.giving/mcp-acceptance-test-church");
   assert.equal(dash.loginUrl, "https://tap.giving/login");
-  assert.ok(status.text.includes("Both links open the same invoice"), "same-invoice note in status text");
+  assert.equal(status.structured.invoice, null, "a P-16 order carries no server invoice");
+  assert.ok(status.text.includes("No invoice on this server: a person from Tap.Giving follows up with the invoice by email"), "the P-16 invoice line in status text");
 });
 
 test("F12 routes: the template SVG and the product photos are served", async () => {
@@ -872,7 +852,18 @@ test("R2 F22: a second order is discount-ineligible, and a reused invoice is nam
   const orderRef1 = order1.structured.orderRef as string;
   const devRecs = () => [...(env.DEV_ORDERS as unknown as MemoryKV).store.values()].map((v) => JSON.parse(v) as { mcpOrderRef: string; discountEligible: boolean });
   assert.equal(devRecs().find((r) => r.mcpOrderRef === orderRef1)?.discountEligible, true, "the first order is discount-eligible");
-  await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRef1, idempotencyKey: "r2-invoice-0001" }, fresh);
+  // P-16: no invoice is minted by this server anymore. Order 1
+  // later carries an invoice on its record (the human follow-up,
+  // recorded back), and carrying one is what spends the eligibility.
+  const keysStore = (env.MCP_KEYS as unknown as MemoryKV).store;
+  const seedInvoice = (ref: string, invoice: Record<string, unknown>) => {
+    const raw = keysStore.get(`ORDER:${ref}`);
+    assert.ok(raw, `order record exists for ${ref}`);
+    const rec = JSON.parse(raw as string) as Record<string, unknown>;
+    rec.invoice = invoice;
+    keysStore.set(`ORDER:${ref}`, JSON.stringify(rec));
+  };
+  seedInvoice(orderRef1, { invoiceId: "in_prior", invoiceNumber: "PRIOR-0001", status: "open", hostedInvoiceUrl: "https://invoice.stripe.com/i/prior", totalCents: 67500 });
 
   const recap2 = await runTool(env, req(TEST_KEY), "get_recap", { ...shipArgs, quantity: 200 }, fresh);
   const order2 = await runTool(env, req(TEST_KEY), "create_order", {
@@ -880,42 +871,18 @@ test("R2 F22: a second order is discount-ineligible, and a reused invoice is nam
     recapRef: recap2.structured.recapRef as string, exit: "pay_now", idempotencyKey: "r2-order-0002",
   }, fresh);
   const orderRef2 = order2.structured.orderRef as string;
-  assert.equal(devRecs().find((r) => r.mcpOrderRef === orderRef2)?.discountEligible, false, "the second order is NOT discount-eligible");
+  assert.equal(devRecs().find((r) => r.mcpOrderRef === orderRef2)?.discountEligible, false, "the second order is NOT discount-eligible once the first carries an invoice");
   assert.ok(String(order2.structured.crmExpectation).includes("does NOT enter the production CRM"), "test order states its isolation");
 
-  // Stripe now shows order 1's invoice still open for this customer.
-  const existingStub = (async (input: unknown, init?: { method?: string; body?: string }): Promise<Response> => {
-    const url = String((input as { url?: string })?.url ?? input);
-    if (url.includes("/api/")) return fresh(input as RequestInfo, init as RequestInit);
-    if (url.includes("api.stripe.com")) {
-      if (url.includes("/customers") && (!init || init.method === "GET" || !init.method)) {
-        return new Response(JSON.stringify({ data: [{ id: "cus_prior" }] }), { status: 200 });
-      }
-      if (url.includes("/customers")) return new Response(JSON.stringify({ id: "cus_prior" }), { status: 200 });
-      if (url.includes("/invoices") && init?.method !== "POST") {
-        if (url.includes("status=open")) {
-          return new Response(JSON.stringify({ data: [{ id: "in_prior", number: "PRIOR-0001", status: "open", hosted_invoice_url: "https://invoice.stripe.com/i/prior", total: 67500, metadata: { mcp_order_ref: orderRef1 } }] }), { status: 200 });
-        }
-        return new Response(JSON.stringify({ data: [] }), { status: 200 });
-      }
-      return new Response(JSON.stringify({}), { status: 200 });
-    }
-    return new Response("nope", { status: 404 });
-  }) as typeof fetch;
-
-  const inv2 = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRef2, idempotencyKey: "r2-invoice-0002" }, existingStub);
-  assert.equal(inv2.structured.existing, true);
-  assert.equal(inv2.structured.existingFromOrderRef, orderRef1, "the prior order is named in structured data");
-  assert.ok(inv2.text.includes("PRIOR-0001"), "the prior invoice number is in the text");
-  assert.ok(inv2.text.includes(orderRef1), "the prior order is named in the text");
-  assert.ok(inv2.text.includes("150 discs, $675.00 total"), "the prior order's quantity and the invoice total are in the text");
-  assert.ok(inv2.text.includes("is not invoiced separately"), "the consequence is stated");
-
-  // The two orders differ on quantity (150 vs 200), so the stored
-  // mint-time comparison names it on the invoice surfaces too.
-  assert.deepEqual(inv2.structured.existingDifferingFields, ["quantity"], "the quantity difference is stored and returned");
-  assert.ok(inv2.text.includes("The earlier order differs from this order in: quantity."), "the invoice text names the differing field");
-
+  // The reused-invoice naming survives as a stored record fact: an
+  // order whose invoice block records the shared invoice and the
+  // mint-time comparison is named by get_order_status in plain text,
+  // read from the record, never recomputed.
+  seedInvoice(orderRef2, {
+    invoiceId: "in_prior", invoiceNumber: "PRIOR-0001", status: "open",
+    hostedInvoiceUrl: "https://invoice.stripe.com/i/prior", totalCents: 67500,
+    existing: true, existingOrderRef: orderRef1, existingDifferingFields: ["quantity"],
+  });
   const status2 = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRef2 }, fresh);
   assert.ok(status2.text.startsWith("TEST MODE:"), "status carries the banner");
   assert.ok(status2.text.includes(`was already open from order ${orderRef1}`), "status names the shared invoice's order");
@@ -923,13 +890,12 @@ test("R2 F22: a second order is discount-ineligible, and a reused invoice is nam
 });
 
 
-test("R2 F22 comparison: identical re-present warns on nothing; artwork and mounting diffs are named; status never recomputes", async () => {
+test("R2 F22 stored comparison: status names the recorded differing fields and never recomputes them", async () => {
   const { env, keys } = await makeEnv();
   const calls: Array<{ url: string; body?: string }> = [];
   const fresh = stubFetch(calls) as typeof fetch;
   const shipArgs = { size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO, contactEmail: "mcp-acceptance@mcptest.org" };
 
-  // Submit two real artworks so both refs are valid order inputs.
   const artRefs: string[] = [];
   for (const seed of ["alpha", "beta"]) {
     const bytes = new Uint8Array(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" data-seed="${seed}"></svg>`));
@@ -949,65 +915,50 @@ test("R2 F22 comparison: identical re-present warns on nothing; artwork and moun
     }, fresh);
     return order.structured.orderRef as string;
   };
+  const seedExisting = (ref: string, differing: string[], fromRef: string) => {
+    const raw = keys.store.get(`ORDER:${ref}`);
+    assert.ok(raw);
+    const rec = JSON.parse(raw as string) as Record<string, unknown>;
+    rec.invoice = {
+      invoiceId: "in_prior", invoiceNumber: "PRIOR-0001", status: "open",
+      hostedInvoiceUrl: "https://invoice.stripe.com/i/prior", totalCents: 67500,
+      existing: true, existingOrderRef: fromRef, existingDifferingFields: differing,
+    };
+    keys.store.set(`ORDER:${ref}`, JSON.stringify(rec));
+  };
 
-  // Order 1 carries artwork A; its own invoice mints fresh.
   const orderRef1 = await mkOrder({ artworkRef: artRefs[0] }, "r2c-order-0001");
-  await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRef1, idempotencyKey: "r2c-invoice-0001" }, fresh);
 
-  // Stripe reports order 1's invoice open for this customer from here on.
-  const existingStub = (async (input: unknown, init?: { method?: string; body?: string }): Promise<Response> => {
-    const url = String((input as { url?: string })?.url ?? input);
-    if (url.includes("/api/")) return fresh(input as RequestInfo, init as RequestInit);
-    if (url.includes("api.stripe.com")) {
-      if (url.includes("/customers") && (!init || init.method === "GET" || !init.method)) {
-        return new Response(JSON.stringify({ data: [{ id: "cus_prior" }] }), { status: 200 });
-      }
-      if (url.includes("/customers")) return new Response(JSON.stringify({ id: "cus_prior" }), { status: 200 });
-      if (url.includes("/invoices") && init?.method !== "POST") {
-        if (url.includes("status=open")) {
-          return new Response(JSON.stringify({ data: [{ id: "in_prior", number: "PRIOR-0001", status: "open", hosted_invoice_url: "https://invoice.stripe.com/i/prior", total: 67500, metadata: { mcp_order_ref: orderRef1 } }] }), { status: 200 });
-        }
-        return new Response(JSON.stringify({ data: [] }), { status: 200 });
-      }
-      return new Response(JSON.stringify({}), { status: 200 });
-    }
-    return new Response("nope", { status: 404 });
-  }) as typeof fetch;
-
-  // (a) Identical re-present: same five fields, new idempotency key.
+  // (a) Identical re-present: an empty stored comparison warns on nothing.
   const orderRefSame = await mkOrder({ artworkRef: artRefs[0] }, "r2c-order-0002");
-  const invSame = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRefSame, idempotencyKey: "r2c-invoice-0002" }, existingStub);
-  assert.equal(invSame.structured.existingFromOrderRef, orderRef1);
-  assert.deepEqual(invSame.structured.existingDifferingFields, [], "identical orders carry an empty comparison");
-  assert.ok(!invSame.text.includes("differs from this order"), "no warning line when nothing differs");
+  seedExisting(orderRefSame, [], orderRef1);
   const statusSame = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefSame }, fresh);
+  assert.ok(statusSame.text.includes(`was already open from order ${orderRef1}`), "the shared invoice is named");
   assert.ok(!statusSame.text.includes("differs from this order"), "status carries no warning for the identical re-present");
 
-  // (b) Same price, different artwork: the warning names artwork.
+  // (b) Different artwork in the stored comparison: status names artwork.
   const orderRefArt = await mkOrder({ artworkRef: artRefs[1] }, "r2c-order-0003");
-  const invArt = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRefArt, idempotencyKey: "r2c-invoice-0003" }, existingStub);
-  assert.deepEqual(invArt.structured.existingDifferingFields, ["artworkRef"], "structured names the record field");
-  assert.ok(invArt.text.includes("The earlier order differs from this order in: artwork."), "text names artwork");
+  seedExisting(orderRefArt, ["artworkRef"], orderRef1);
   const statusArt = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefArt }, fresh);
   assert.ok(statusArt.text.includes("The earlier order differs from this order in: artwork."), "status names artwork");
 
   // (c) Mounting only: names mounting, not artwork.
   const orderRefMount = await mkOrder({ artworkRef: artRefs[0], mounting: "screws" }, "r2c-order-0004");
-  const invMount = await runTool(env, req(TEST_KEY), "request_invoice", { orderRef: orderRefMount, idempotencyKey: "r2c-invoice-0004" }, existingStub);
-  assert.deepEqual(invMount.structured.existingDifferingFields, ["mounting"]);
-  assert.ok(invMount.text.includes("in: mounting."), "text names mounting");
-  assert.ok(!invMount.text.includes("in: artwork"), "artwork is not named");
+  seedExisting(orderRefMount, ["mounting"], orderRef1);
+  const statusMount = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefMount }, fresh);
+  assert.ok(statusMount.text.includes("in: mounting."), "status names mounting");
+  assert.ok(!statusMount.text.includes("in: artwork"), "artwork is not named");
 
   // (d) Stored, not recomputed: mutate the prior order's mounting in
   // the record store; status for the artwork case must still report
-  // the mint-time diff (artwork only, no mounting added).
+  // the recorded diff (artwork only, no mounting added).
   const priorRaw = keys.store.get(`ORDER:${orderRef1}`);
   assert.ok(priorRaw);
   const priorRec = JSON.parse(priorRaw as string) as { mounting: string };
   priorRec.mounting = "screws";
   keys.store.set(`ORDER:${orderRef1}`, JSON.stringify(priorRec));
   const statusArt2 = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefArt }, fresh);
-  assert.ok(statusArt2.text.includes("The earlier order differs from this order in: artwork."), "status still reports the mint-time diff");
+  assert.ok(statusArt2.text.includes("The earlier order differs from this order in: artwork."), "status still reports the recorded diff");
   assert.ok(!statusArt2.text.includes("mounting"), "the mutated prior field does not leak into status");
 });
 
@@ -1156,14 +1107,16 @@ test("items 1, 2: with a working render, submit_artwork nextStep does direct the
 });
 
 test("item 3: key error texts name both key formats", async () => {
+  // Probed on get_order_status, the read that stays keyed after
+  // P-15 (get_recap answers keyless now, by the ruling).
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   await assert.rejects(
-    () => runTool(env, req(), "get_recap", {}, fetchFn),
+    () => runTool(env, req(), "get_order_status", {}, fetchFn),
     (e: Error) => /tg_test_<orgslug>_<secret>/.test(e.message),
   );
   await assert.rejects(
-    () => runTool(env, req("bogus"), "get_recap", {}, fetchFn),
+    () => runTool(env, req("bogus"), "get_order_status", {}, fetchFn),
     (e: Error) => /tg_test_<orgslug>_<secret>/.test(e.message),
   );
 });
