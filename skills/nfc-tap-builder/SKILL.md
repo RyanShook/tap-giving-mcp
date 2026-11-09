@@ -38,7 +38,7 @@ For the keyed tools, add the organization's key to the same block: `"headers": {
 
 ## The journey
 
-1. Call `get_discovery` first. It orients a cold start in one call: the product, the first choice (shape: round or square), the pricing tiers, the artwork summary, and how an organization gets a key.
+1. Call `get_discovery` first. It orients a cold start in one call: the product, the first choice (shape: round or square), the per-disc price range, the artwork summary, and how an organization gets a key.
 2. Call `get_quote` for the binding quote at an exact quantity, and `get_product` for full product facts.
 3. Call `get_artwork_spec` for the production geometry of the chosen shape, build the artwork from its house example directions, and send it back with `submit_artwork`.
 4. To register interest before any key exists, call `start_order_intent` with a contact email. It captures the email through the same public capture endpoint the website uses.
@@ -52,7 +52,7 @@ Keyless reads (no key, no email, nothing asked):
 
 | Tool | What it does | Returns |
 | --- | --- | --- |
-| `get_discovery` | One-call orientation: product, shapes, price tiers, artwork summary, capabilities, key route. | `server`, `introduction`, `pricing`, `capabilities` |
+| `get_discovery` | One-call orientation: product, shapes, the per-disc price range, artwork summary, capabilities, key route. | `server`, `introduction`, `pricing`, `capabilities` |
 | `get_quote` (alias `get_pricing`) | The binding quote at an exact quantity. Quantities under the 100-disc minimum are refused with the minimum stated. Maximum 7000. | `discUnitCents`, `discSubtotalCents`, `grandTotalCents`, `discount` (conditional line), `shippingLine`, `taxNote` |
 | `get_product` | Full product facts: discs, stands, badges, mounting, shipping terms. | `discs`, `stands`, `badges`, `shipping` |
 | `get_artwork_spec` | Production artwork geometry as structured millimetre data, plain guidelines, house template examples, and the optional logo ask. | geometry per shape, `guidelines`, `examples`, `logoAsk` |
@@ -78,6 +78,8 @@ Keyed tools (organization API key required):
 Every tool declares `destructiveHint: false` and `openWorldHint: false`; the read-only tools also declare `readOnlyHint: true`. `create_order` and `request_invoice` are safe to retry after a network failure with the same idempotency key.
 
 ## Pricing facts
+
+These facts belong to the quote step and after it. On the opening surfaces (discovery, the GET self-description, the first presentation of the server) only the per-disc range is stated: Price range of $3.50 - $5.00 per disc depending on quantity.
 
 Quote from list pricing only. Headline totals are always list totals.
 

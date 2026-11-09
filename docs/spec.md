@@ -8,6 +8,8 @@ and key model, the human gates, and the build and acceptance runbook.
 
 
 Status: SPEC, written 2026-11-06 against live machinery read the same day.
+Positioning (Ryan, 2026-11-08): this server is a design tool first: it helps agents and users create print-ready NFC tap artwork proofs from its published spec and design directions, art the organization owns and can take to any vendor. Ordering discs through Tap.Giving is the optional next step after the design path, and pricing is presented in that same order: the per-disc range only up front, minimums and totals only at the quote step. The full rulings and what changed are recorded in the landing note at the end of this document (2026-11-08 pricing presentation, positioning, and flow).
+
 Owner: TG Engineering. Commissioned by the CEO lane for Ryan's direction of
 2026-11-06: Tap.Giving works the MCP / connector angle before any bigger
 builds, so a general-purpose agent (Muse, Grok, an assistant like Muse
@@ -350,10 +352,10 @@ the first tool a new agent calls and its description says so.
   and the FIRST CHOICE the person makes is the shape, round or square,
   carried in the output as firstChoice: {field: "shape", options:
   ["round", "square"]} so no client improvises a different opening
-  question, pricing:
-  the tier table and minimum from the price contract (the get_quote
-  figures at the tier boundaries, so the agent can quote a real range
-  without a second call), artworkSpec: the get_artwork_spec summary
+  question, pricing (as amended by the 2026-11-08 pricing
+  presentation ruling recorded at the end of this document: the
+  per-disc range line only; the tier table and minimum moved to the
+  quote step), artworkSpec: the get_artwork_spec summary
   (shapes, artboard, format wanted back), capabilities: {readTools,
   writeTools, gates in one line each, how an organization gets a key,
   the kickoff tool's name}}. Every figure inside it is the same object
@@ -2100,3 +2102,67 @@ empirical split equals the published split exactly, asserts the
 keyless order-questions answer carries no organization data while
 the keyed answer carries the whoami block, and asserts the repo
 docs carry the same classification. F3 is closed by this landing.
+
+## 2026-11-08 pricing presentation, positioning, and flow (landing record)
+
+Three rulings from Ryan, relayed by the CEO on 2026-11-08, landed
+together as one copy state.
+
+Pricing presentation (2026-11-08, about 23:38 CT): at the start,
+the MCP lists ONLY the per-disc range, "Price range of $3.50 -
+$5.00 per disc depending on quantity." Minimums, tier breakdowns,
+discounts, and totals appear only at the very end, the quote step.
+Applied to get_discovery (text and structured: the tiers array,
+minimumQuantity, and the discount string come out; structured
+pricing keeps the range line, free shipping, and the get_quote
+pointer), the GET self-description and the initialize
+instructions (the range line is the only pricing statement allowed
+pre-quote), and get_product (no disc pricing beyond the range, and
+no minimum stated anywhere, including the stands' minimum fields;
+stand and badge product prices stay). The F27 intent headline no
+longer quotes worked totals; it points at get_quote. get_quote and
+everything after it keep the full detail unchanged: the tiers, the
+100-disc minimum and its enforcement, the discount scope, and the
+first-order payable total. This supersedes the 2026-11-07
+settlement that kept tiers and minimumQuantity in discovery's
+structured content; section 2.2.1's discovery contract is amended
+accordingly in place above. Guard: test/pricing-presentation.test.ts
+deep-scans the opening surfaces and the product payload for tier
+structures, minimum statements, and discount mentions, and asserts
+the quote step keeps its full detail.
+
+Positioning (2026-11-08, about 23:39 CT, sharpened about 23:40
+CT): the server is a tool first. It helps agents and users build
+print-ready NFC tap designs, correct vector art, that they can
+take to ANY vendor; there is no lock-in, and ordering through
+Tap.Giving is the easy optional next step when they want it. On
+every opening surface the LEAD identity is the tool that creates
+print-ready NFC tap artwork proofs, proofs named in the lead; the
+vendor-neutral point sits with the tool lead; ordering appears
+only after, last and light, never in the lead sentence. The
+canonical positioning sentence lives in src/facts.ts as
+POSITIONING_LINE and leads the server description, the GET
+self-description, the initialize instructions, and discovery's
+text and structured introduction. get_artwork_spec and
+submit_artwork carry the same point at the artwork moment: the
+artwork composed from the spec is the organization's own,
+print-ready and vendor-neutral. Honesty boundary, binding: the
+server publishes the spec and design directions, the calling agent
+composes the artwork with its own tools, submit_artwork takes the
+finished file in and shows it back on the disc, and an emailed
+proof follows only at the order stage; no copy claims the server
+generates, renders, or exports finished proof files.
+
+Flow (2026-11-08, about 23:40 CT): discovery's journey and
+how-it-works walk the design and proof path first (artwork spec,
+examples and build, artwork submission, proof), with the ordering
+steps after and framed optional; the structured journey array and
+capabilities.kickoff (now get_artwork_spec, previously
+start_order_intent) carry the same order. The keyless tools'
+nextStep guidance points toward proof creation before ordering;
+submit_artwork's nextStep presents the proof path first and the
+order path as the optional continuation, keeping its key-honesty
+facts. No tool behavior, enforcement, key classification, or
+payload contract changed beyond presentation order and nextStep
+guidance; the protected verbatim strings (the range line, the
+no-money line, the no-fees line) are byte-identical.

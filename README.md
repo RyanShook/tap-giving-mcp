@@ -1,12 +1,10 @@
 # NFC Tap Builder by Tap.Giving
 
 Welcome. This is the public home of Tap.Giving's MCP server, "NFC Tap
-Builder by Tap.Giving": the connector that lets an AI agent help an
-organization design and order custom NFC tap discs, tap
-plates, and tap tags end to end, from first discovery to a hosted
-invoice link a person pays. No subscriptions and no ongoing fees:
-one-time pricing per order, and the Redirect Dashboard is included
-free, permanently.
+Builder by Tap.Giving". A design tool first: this server helps you create print-ready NFC tap artwork proofs. Work from its published spec and design directions, compose the artwork with your own tools, and submit the finished file to see it on the disc as a proof. The artwork is yours: print-ready, vendor-neutral, yours to take to any printer. Ordering discs through Tap.Giving is an optional next step, only if you want it. The discs it designs for are custom
+NFC tap discs, tap plates, and tap tags. No subscriptions and no
+ongoing fees: one-time pricing per order, and the Redirect Dashboard
+is included free, permanently.
 
 - **Website:** [https://tap.giving](https://tap.giving)
 - **Endpoint:** `POST https://tap.giving/mcp` (MCP over Streamable
@@ -59,22 +57,23 @@ Claude Code, one line:
 claude mcp add --transport http tap-giving https://tap.giving/mcp
 ```
 
-Discovery, pricing, product facts, the artwork spec, and the
-order questions need no key; a key is added only when the
-organization is ready to order. The live `GET https://tap.giving/mcp` self-description
+Discovery, product facts, the artwork spec, and the
+order questions need no key; exact totals come from get_quote at the
+end, and a key is added only when the organization is ready to order. The live `GET https://tap.giving/mcp` self-description
 carries this same connect guidance.
 
 ## What the server does
 
-Build and order custom NFC tap discs, tap plates, and tap tags for
-organizations of every kind: built for churches, nonprofits, restaurants, coffee shops, and local businesses,
-designed by your own agent, priced from the published tiers, ordered
-up to the human payment and proof gates.
+A design tool first: this server helps you create print-ready NFC tap artwork proofs. Work from its published spec and design directions, compose the artwork with your own tools, and submit the finished file to see it on the disc as a proof. The artwork is yours: print-ready, vendor-neutral, yours to take to any printer. Ordering discs through Tap.Giving is an optional next step, only if you want it.
+
+The discs themselves are custom NFC tap discs, tap plates, and tap
+tags for organizations of every kind: built for churches, nonprofits, restaurants, coffee shops, and local businesses,
+designed by your own agent.
 
 The read side is open and needs no key: an agent can discover the
-product, see the published pricing, read the artwork spec with house
+product, see the per-disc price range, read the artwork spec with house
 example designs, and submit artwork for validation before any contact
-exists. Writing an order, and reading recaps or order status, need
+exists. Exact pricing is quoted only at the quote step. Writing an order, and reading recaps or order status, need
 an organization API key (see below).
 
 This server moves no money itself: it returns a hosted invoice link
@@ -86,7 +85,7 @@ releases an order to production.
 
 | Tool | Key | What it does | Annotations | Returns |
 |---|---|---|---|---|
-| `get_discovery` | no | One-call orientation: the product, the two shapes, the price range, the artwork summary, the tool list, and how an organization gets a key. | readOnlyHint: true, idempotentHint: true | `server`, `introduction.product`, `pricing` (tiers, minimumQuantity), `capabilities` (benefits, gates, key route) |
+| `get_discovery` | no | One-call orientation: the product, the two shapes, the price range, the artwork summary, the tool list, and how an organization gets a key. | readOnlyHint: true, idempotentHint: true | `server`, `introduction.product`, `pricing` (range, shipping, the get_quote pointer), `capabilities` (benefits, gates, key route) |
 | `get_quote` (alias `get_pricing`) | no | An exact quote from the published tiers; below 100 discs is refused with the minimum stated. | readOnlyHint: true, idempotentHint: true | `discUnitCents`, `discSubtotalCents`, `grandTotalCents`, `discount.conditionalTotalCents`, `shippingLine`, `taxNote` |
 | `get_product` | no | Product facts: discs, stands, badges, mounting, and shipping terms. | readOnlyHint: true, idempotentHint: true | `discs` (chip, sizes, mounting, metalCaveat, redirectDashboard), `stands`, `badges`, `shipping` |
 | `get_artwork_spec` | no | The production artwork geometry in structured form, with the house example directions shown inline as images and the optional logo ask. | readOnlyHint: true, idempotentHint: true | geometry per shape, `guidelines`, `examples` (id, direction, displayUrl) plus the example images, `logoAsk` |
@@ -127,35 +126,101 @@ Response, structured content (abbreviated):
 
 ```json
 {
-  "server": {"name": "NFC Tap Builder by Tap.Giving", "endpoint": "https://tap.giving/mcp", "synonyms": ["tap discs", "tap plates", "tap tags", "NFC tap to give"]},
+  "server": {
+    "name": "NFC Tap Builder by Tap.Giving",
+    "endpoint": "https://tap.giving/mcp",
+    "synonyms": [
+      "tap discs",
+      "tap plates",
+      "tap tags",
+      "NFC tap discs"
+    ]
+  },
   "introduction": {
     "builder": "NFC Tap Builder by Tap.Giving",
+    "positioning": "A design tool first: this server helps you create print-ready NFC tap artwork proofs. Work from its published spec and design directions, compose the artwork with your own tools, and submit the finished file to see it on the disc as a proof. The artwork is yours: print-ready, vendor-neutral, yours to take to any printer. Ordering discs through Tap.Giving is an optional next step, only if you want it.",
     "product": "A tap disc is a small physical disc a phone taps to open your page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.",
-    "firstChoice": {"field": "shape", "options": ["round", "square"]}
+    "firstChoice": {
+      "field": "shape",
+      "options": [
+        "round",
+        "square"
+      ]
+    }
   },
+  "journey": [
+    {
+      "step": "artwork spec",
+      "tool": "get_artwork_spec",
+      "detail": "The production geometry and the house design directions for the chosen shape."
+    },
+    {
+      "step": "build the artwork",
+      "tool": "get_artwork_spec",
+      "detail": "Compose the artwork from a design direction with your own tools."
+    },
+    {
+      "step": "submit and proof",
+      "tool": "submit_artwork",
+      "detail": "Submit the finished file and see it on the disc as a proof. The artwork is yours to take to any printer."
+    },
+    {
+      "step": "order, optional",
+      "tool": "get_quote",
+      "detail": "Only if you want discs from Tap.Giving: the binding quote at an exact quantity, then the order questions, order setup, and the hosted invoice."
+    }
+  ],
   "pricing": {
-    "tiers": [
-      {"quantity": 100, "tier": "100-199 discs", "unitCents": 500, "unitPrice": "$5.00"},
-      {"quantity": 200, "tier": "200-399 discs", "unitCents": 400, "unitPrice": "$4.00"},
-      {"quantity": 400, "tier": "400+ discs", "unitCents": 350, "unitPrice": "$3.50"}
-    ],
-    "minimumQuantity": 100,
-    "discount": "10 percent off the first order with code WELCOME10, inside a 7-day renewing window; a conditional first-order line, never a price gate. Quotes headline list totals.",
+    "range": "Price range of $3.50 - $5.00 per disc depending on quantity.",
     "shipping": "Free on every order.",
     "note": "Call get_quote for the binding quote at an exact quantity."
   },
-  "artworkSpec": {"summary": "106 mm square artboard; 100 mm cut (round or square); 3 mm bleed; vector artwork back (SVG preferred).", "tool": "get_artwork_spec"},
+  "artworkSpec": {
+    "summary": "106 mm (about 4.2 inch) square artboard; 100 mm (4 inch) cut (round or square); 3 mm (about 0.12 inch) bleed; vector artwork back (SVG preferred).",
+    "tool": "get_artwork_spec"
+  },
   "photos": [
-    {"id": "phone-tap", "alt": "A phone tapping a Tap.Giving disc on a chair back, opening the organization's page", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/phone-tap.webp"}
+    {
+      "id": "phone-tap",
+      "alt": "A phone tapping a Tap.Giving disc on a chair back, opening the organization's page",
+      "mimeType": "image/webp",
+      "displayUrl": "https://tap.giving/mcp/photos/phone-tap.webp"
+    }
   ],
   "capabilities": {
-    "readTools": ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions"],
-    "keyedReadTools": ["get_recap", "get_order_status"],
-    "writeTools": ["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"],
-    "gates": ["Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.", "Payment stays human: this server moves no money itself. It returns a hosted invoice link and a person pays on Stripe's hosted page.", "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state."],
-    "howToGetAKey": "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Discovery, pricing, product facts, the artwork spec, and the order questions need no key; recaps, order setup, invoice requests, and order status use the organization's key.",
-    "kickoff": "start_order_intent",
-    "benefits": ["Works with any platform", "No subscription fees", "Durable waterproof PVC with a locked tap chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
+    "readTools": [
+      "get_discovery",
+      "get_quote",
+      "get_product",
+      "get_artwork_spec",
+      "get_order_questions"
+    ],
+    "keyedReadTools": [
+      "get_recap",
+      "get_order_status"
+    ],
+    "writeTools": [
+      "submit_artwork",
+      "start_order_intent",
+      "create_order",
+      "request_invoice",
+      "register_webhook"
+    ],
+    "gates": [
+      "Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.",
+      "Payment stays human: this server moves no money itself. It returns a hosted invoice link and a person pays on Stripe's hosted page.",
+      "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state."
+    ],
+    "howToGetAKey": "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like tg_test_<orgslug>_<secret>. Discovery, pricing, product facts, the artwork spec, and the order questions need no key; recaps, order setup, invoice requests, and order status use the organization's key.",
+    "kickoff": "get_artwork_spec",
+    "benefits": [
+      "Works with any platform",
+      "No subscription fees",
+      "Durable waterproof PVC with a locked tap chip",
+      "Custom branding on every design",
+      "Free shipping",
+      "Covered by our 30-day money-back guarantee"
+    ],
     "guarantee": "Covered by our 30-day money-back guarantee."
   }
 }
@@ -164,34 +229,37 @@ Response, structured content (abbreviated):
 Response, text rendering (complete):
 
 ```text
-NFC Tap Builder by Tap.Giving: Build and order custom NFC tap discs and tap tags for organizations of every kind: built for churches, nonprofits, restaurants, coffee shops, and local businesses, designed by your own agent, priced from the published tiers, ordered up to the human payment and proof gates. No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently. This server moves no money itself: it returns a hosted invoice link for a person to pay.
+NFC Tap Builder by Tap.Giving
+A design tool first: this server helps you create print-ready NFC tap artwork proofs. Work from its published spec and design directions, compose the artwork with your own tools, and submit the finished file to see it on the disc as a proof. The artwork is yours: print-ready, vendor-neutral, yours to take to any printer. Ordering discs through Tap.Giving is an optional next step, only if you want it.
 
 What it is
 A tap disc is a small physical disc a phone taps to open your page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.
-First choice: the shape, round or square.
+The discs themselves are for organizations of every kind, designed by your own agent.
+Every disc carries its own Tap.Giving address, so where a tap lands is set per disc. An order starts with one destination for the whole set, the page you give at order setup. To run two destinations, for example counter discs opening your menu and door discs opening your review profile, split the set afterwards in the free Redirect Dashboard: re-point any single disc, or any group of discs, in seconds, and re-point them again anytime. Your dashboard sign-in works from order setup: the address is go.tap.giving/<your-organization-slug>, the username is that slug, and the password arrives by email with the shipping notice, before your discs arrive. Tapping needs no app: iPhone XS (2018) and later and most Android phones from about 2015 read the disc automatically in the background. Where a design carries a printed QR code (your artwork includes one, or the Tap.Giving address line on the design), a phone without NFC, or with NFC off, scans that code and lands on the same destination; a design with no printed code has the tap as its only door, and the design choice is yours at artwork time.
+
+How it works: the design path first
+1. Start with the shape, round or square.
+2. Get the artwork spec and the design directions for that shape from get_artwork_spec.
+3. Build the artwork from a direction with your own tools, adding the organization's logo or name.
+4. Submit the finished file with submit_artwork and see it on the disc as a proof. The artwork is yours from here: take it to any printer, or order the discs from Tap.Giving.
+5. Optional, only if you want the discs made: get the binding quote from get_quote, answer the order questions, and set the order up. The final proof is emailed for a person's approval before anything is printed, and a person pays the hosted invoice.
 
 Why Tap.Giving
 No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently.
 - Works with any platform
 - No subscription fees
 - Durable waterproof PVC with a locked tap chip
-- Custom branding from 100 discs
+- Custom branding on every design
 - Free shipping
 - Covered by our 30-day money-back guarantee
 
 Pricing
-Price range of $3.50 - $5.00 per disc depending on quantity. Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. Tax, where it applies, is calculated on the invoice. Every order is covered by our 30-day money-back guarantee.
-
-How it works
-1. Start with the shape, round or square.
-2. Build artwork from the example directions in get_artwork_spec, and submit it with submit_artwork.
-3. Order setup: quantity, mounting, an optional link destination, and the shipping address, through start_order_intent and create_order.
-4. A person approves the final proof by email, and a person pays the hosted invoice.
+Price range of $3.50 - $5.00 per disc depending on quantity. Free shipping. Tax, where it applies, is calculated on the invoice. Every order is covered by our 30-day money-back guarantee. Production and delivery run 2 to 3 weeks from artwork approval.
 
 Gates
 Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.
-Discovery, quotes, product facts, the artwork spec, and the order questions need no key. Recaps and order status are reads that use your organization key, like the writes. An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Discovery, pricing, product facts, the artwork spec, and the order questions need no key; recaps, order setup, invoice requests, and order status use the organization's key.
-The two photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.
+Discovery, quotes, product facts, the artwork spec, and the order questions need no key. Recaps and order status are reads that use your organization key, like the writes, so plan for the key wait before the order steps: An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like tg_test_<orgslug>_<secret>. Discovery, pricing, product facts, the artwork spec, and the order questions need no key; recaps, order setup, invoice requests, and order status use the organization's key. Evaluating the server? A test key runs the full keyed journey with no real order and no charge. There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies with one (a tg_test_<orgslug>_<secret> key) within one business day.
+The photo with this answer shows the disc in use: a phone tapping a disc on a chair back.
 ```
 
 
