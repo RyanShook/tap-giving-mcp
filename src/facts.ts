@@ -24,9 +24,9 @@ export const POSITIONING_LINE =
   "and submit the finished file to see it on the disc as a proof. The artwork is yours: print-ready, " +
   "vendor-neutral, yours to take to any printer. Ordering discs through Tap.Giving is an optional " +
   "next step, only if you want it.";
-// The no-fees lead line: stated once here, used in the server
-// description and as the lead line of get_discovery's Why section.
-// Facts: no subscription fees (BENEFITS), and the Redirect Dashboard
+// The no-fees line (phase two only, Ryan 2026-11-09): stated once
+// here and first served at the order questions. Facts: no
+// subscription fees (llms.txt fact set), and the Redirect Dashboard
 // is included free on every order, permanently (PRODUCT).
 export const NO_FEES_LINE =
   "No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently.";
@@ -56,7 +56,22 @@ export const TEAM_EMAIL = "hello@tap.giving";
 // The standing differentiators (llms.txt and for-agents fact set),
 // carried in submit_artwork's output and in get_discovery so the
 // wording exists in exactly one shape (spec section 2.6).
+// The standing differentiators carried on phase-one surfaces
+// (get_discovery, submit_artwork): the phase-one-safe subset of the
+// llms.txt and for-agents fact set. The price claims (no
+// subscription fees, free shipping, the money-back guarantee) are
+// pricing references and ride only the phase-two set below (CEO
+// ruling, Ryan's zero-pricing phase one, 2026-11-09).
 export const BENEFITS: string[] = [
+  "Works with any platform",
+  "Durable waterproof PVC with a locked tap chip",
+  "Custom branding on every design",
+];
+
+// The phase-two differentiators: BENEFITS plus the three price
+// claims, served where pricing is stated (the order questions and
+// the surfaces after them).
+export const BENEFITS_PHASE_TWO: string[] = [
   "Works with any platform",
   "No subscription fees",
   "Durable waterproof PVC with a locked tap chip",
@@ -75,17 +90,17 @@ export const PRODUCT = {
     { size: "100mm-square", label: "100 mm (4 inch) square", shape: "square" },
   ],
   sizePolicy:
-    "Built-in sizes are 100 mm (4 inch) round and 100 mm (4 inch) square at the same price. " +
+    "Built-in sizes are 100 mm (4 inch) round and 100 mm (4 inch) square. " +
     "Every other size or shape is a manual exception handled by hand through the Tap.Giving team (hello@tap.giving), never self-serve.",
   mounting: ["adhesive", "screws"],
   mountingDetail:
-    "Every disc carries 3M adhesive backing as standard. Pre-drilled screw holes (2 holes, 6 mm) are optional at no extra cost, and discs with holes keep the adhesive too.",
+    "Every disc carries 3M adhesive backing as standard. Pre-drilled screw holes (2 holes, 6 mm) are optional, and discs with holes keep the adhesive too.",
   metalCaveat:
-    "Discs do not work on metal surfaces without the anti-metal shielding layer: a ferrite shielding layer at a per-disc charge settled at the quote step, decided before printing because it cannot be added afterwards.",
+    "Discs do not work on metal surfaces without the anti-metal shielding layer: a ferrite shielding layer, decided before printing because it cannot be added afterwards.",
   redirectDashboard:
-    "The Redirect Dashboard is included free on every order, permanently: re-point where a tap lands anytime (change where any disc points in seconds), and see tap counts.",
+    "The Redirect Dashboard comes with every order: re-point where a tap lands anytime (change where any disc points in seconds), and see tap counts.",
   guarantee: "Covered by our 30-day money-back guarantee.",
-  worksWith: "Works with any platform. No subscription fees.",
+  worksWith: "Works with any platform.",
   stands: [
     { name: "Table stand, small", size: "70 x 100 mm" },
     { name: "Table stand, large", size: "120 x 140 mm" },
@@ -194,7 +209,7 @@ export const DESTINATION_MODEL =
   "Every disc carries its own Tap.Giving address, so where a tap lands is set per disc. An order " +
   "starts with one destination for the whole set, the page you give at order setup. To run two " +
   "destinations, for example counter discs opening your menu and door discs opening your review " +
-  "profile, split the set afterwards in the free Redirect Dashboard: re-point any single disc, or " +
+  "profile, split the set afterwards in the Redirect Dashboard: re-point any single disc, or " +
   "any group of discs, in seconds, and re-point them again anytime. Your dashboard sign-in works " +
   "from order setup: the address is go.tap.giving/<your-organization-slug>, the username is that " +
   "slug, and the password arrives by email with the shipping notice, before your discs arrive. " +
@@ -212,7 +227,7 @@ export const TURNAROUND = "Production and delivery run 2 to 3 weeks from artwork
 export const LINK_DESTINATION_NOTE =
   "Where should a tap send people? Give the page URL and your discs start pointed there. " +
   "Leaving it blank is fine too, and a tap is never left going nowhere: your discs ship pointed at your " +
-  "own Tap.Giving page (your free Redirect Dashboard), and you can set or change the destination anytime " +
+  "own Tap.Giving page (your Redirect Dashboard), and you can set or change the destination anytime " +
   "from the dashboard.";
 
 export const RECAP_NOTES: string[] = [
@@ -228,11 +243,10 @@ export const TAX_NOTE = "Tax, where it applies, is calculated on the invoice.";
 export const SAMPLES_LINE =
   "Samples: we do not offer physical samples, free or paid. Instead, see the finished examples and photos " +
   "in this server, and when you order, a proof of your own design is emailed for approval before anything " +
-  "is printed. The order itself is covered by the 30-day money-back guarantee.";
+  "is printed.";
 export const SAMPLES_GUIDANCE_LINE =
   "Samples: we do not offer physical samples, free or paid. The finished examples and photos here show the " +
-  "real thing, your own design is proofed by email before printing, and the order is covered by the 30-day " +
-  "money-back guarantee.";
+  "real thing, and your own design is proofed by email before printing.";
 export const TAX_EXEMPT_LINE =
   "Tax-exempt organizations: say so when you order. Your tax-exempt state is recorded on the order, and " +
   "tax is calculated on the invoice where it applies.";

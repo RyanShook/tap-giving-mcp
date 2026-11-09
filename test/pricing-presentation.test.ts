@@ -11,16 +11,30 @@
 // Surfaces guarded here: the get_discovery payload (text and
 // structured content, deep-scanned), the GET self-description,
 // the initialize instructions, the tools/list first sentences
-// (the lines the GET renders as its tool list), and the
-// get_product payload (disc pricing beyond the range, and any
-// minimum stated anywhere in it). Quote and post-quote surfaces
-// keep their full detail and are asserted intact at the end, so
-// the guard cannot be satisfied by stripping the wrong surface.
+// (the lines the GET renders as its tool list), the get_product
+// payload (disc pricing beyond the range, and any minimum stated
+// anywhere in it), the get_artwork_spec and submit_artwork
+// payloads, the explainer resources, and the tools/list
+// descriptions of the four phase-one tools. Quote and post-quote
+// surfaces keep their full detail and are asserted intact at the
+// end, so the guard cannot be satisfied by stripping the wrong
+// surface.
+//
+// Zero-price pattern class (CEO ruling, Ryan's spec "Phase 1
+// carries ZERO pricing references, full stop", 2026-11-09, after
+// the Goal 1 cold run still found them): the ferrite per-disc
+// charge sentence, "at the same price", "at no extra cost", "Free
+// shipping", "No subscription fees", "free Redirect Dashboard",
+// and the "30-day money-back guarantee" are pricing references.
+// None may appear on a phase-one surface; each stays available at
+// the phase-two order questions, where the guard asserts them.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runTool } from "../src/tools.ts";
-import { NO_FEES_LINE, POSITIONING_LINE, PRICE_RANGE_LINE, SERVER_DESCRIPTION } from "../src/facts.ts";
+import { BENEFITS_PHASE_TWO, NO_FEES_LINE, POSITIONING_LINE, PRICE_RANGE_LINE, SERVER_DESCRIPTION } from "../src/facts.ts";
+import { EXPLAINER_TOPICS } from "../src/explainer.ts";
+
 import worker from "../src/index.ts";
 import type { Env } from "../src/env.ts";
 
@@ -90,6 +104,16 @@ function scanPhaseOne(label: string, text: string, structuredJson: string): void
     assert.ok(!/100-199|200-399/.test(body), `${label} ${where}: no tier ranges`);
     assert.ok(!/\$\d/.test(body), `${label} ${where}: no dollar amounts`);
     assert.ok(!/\d+\.\d{2} per disc/i.test(body), `${label} ${where}: no per-disc prices`);
+    // Zero-price pattern class (CEO ruling 2026-11-09): the price
+    // claims are pricing references too, not just amounts.
+    assert.ok(!/per[- ]disc (charge|price|pricing|cost|fee)/i.test(body), `${label} ${where}: no per-disc pricing phrasing`);
+    assert.ok(!/\bcharge (settled|applies|added|per|of)\b/i.test(body), `${label} ${where}: no charge phrasing`);
+    assert.ok(!/at the same price/i.test(body), `${label} ${where}: no same-price claim`);
+    assert.ok(!/at no extra cost/i.test(body), `${label} ${where}: no extra-cost claim`);
+    assert.ok(!/free shipping/i.test(body), `${label} ${where}: no free-shipping claim`);
+    assert.ok(!/subscription fees/i.test(body), `${label} ${where}: no subscription-fees claim`);
+    assert.ok(!/free Redirect Dashboard/i.test(body), `${label} ${where}: no free-dashboard claim`);
+    assert.ok(!/money-back guarantee/i.test(body), `${label} ${where}: no money-back guarantee claim`);
   }
 }
 
@@ -159,11 +183,50 @@ test("phase one carries zero pricing; pricing first appears at the order questio
   const spec = await runTool(env, req(), "get_artwork_spec", { shape: "round" }, fetchFn);
   scanPhaseOne("get_artwork_spec", spec.text, JSON.stringify(spec.structured));
 
+  // The tools/list descriptions of the four phase-one tools are
+  // phase-one surfaces: the whole description is scanned, not just
+  // its first sentence. "Free-text" input wording is protocol
+  // language, not a price claim, and is masked before the scan.
+  const phaseOneToolNames = ["get_discovery", "get_product", "get_artwork_spec", "submit_artwork"];
+  for (const t of list.result.tools) {
+    if (!phaseOneToolNames.includes(t.name)) continue;
+    scanPhaseOne(`tools/list ${t.name}`, t.description.replace(/free-text/gi, "open-text"), "");
+  }
+  // The schema description of chosenExampleRef rides the artwork
+  // spec and submit listings; it names the pick paths only.
+  const specTool = list.result.tools.find((t) => t.name === "get_artwork_spec")!;
+  assert.ok(JSON.stringify(specTool).includes("description words"), "listed spec schema names description picks");
+
+  // The explainer resources are phase-one surfaces.
+  for (const topic of EXPLAINER_TOPICS) {
+    scanPhaseOne(`explainer ${topic.slug}`, topic.body, "");
+  }
+
+  // submit_artwork is scanned on a real minimal submission.
+  const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+  const sub = await runTool(env, req(), "submit_artwork", {
+    file: { filename: "guard.png", mediaType: "image/png", contentBase64: PNG_B64 },
+    sha256: [...new Uint8Array(await crypto.subtle.digest("SHA-256", new Uint8Array(Buffer.from(PNG_B64, "base64"))))].map((b) => b.toString(16).padStart(2, "0")).join(""),
+  }, fetchFn);
+  scanPhaseOne("submit_artwork", sub.text, JSON.stringify(sub.structured));
+
   // Pricing first appears at get_order_questions: the range line
   // and the no-fees line, in text and structured content.
   const oq = await runTool(env, req(), "get_order_questions", {}, fetchFn);
   assert.ok(oq.text.includes(PRICE_RANGE_LINE) && oq.text.includes(NO_FEES_LINE), "both pricing lines present at the order questions");
   assert.equal((oq.structured.pricing as { range: string }).range, PRICE_RANGE_LINE, "structured pricing carries the range line at the order questions");
+
+  // Phase-two availability (CEO ruling 2026-11-09): every claim
+  // removed from phase one remains available at the order
+  // questions, in the structured set or the answer text.
+  assert.deepEqual(oq.structured.benefits, BENEFITS_PHASE_TWO, "the full benefits set, price claims included, rides the order questions");
+  const oqAll = oq.text + JSON.stringify(oq.structured);
+  assert.ok(/free shipping/i.test(oqAll), "free shipping available at the order questions");
+  assert.ok(/money-back guarantee/i.test(oqAll), "the guarantee available at the order questions");
+  assert.ok(/included free on every order/i.test(oqAll), "the free-dashboard claim available at the order questions");
+  assert.ok(/priced the same/i.test(oqAll), "the same-price fact available at the order questions");
+  assert.ok(/at no extra cost/i.test(oqAll), "the no-extra-cost claim available at the order questions");
+  assert.ok(/per shielded disc/i.test(oqAll), "the anti-metal per-disc price stated at the order questions");
 
   // The quote step keeps the full detail: this guard fails if the
   // stripping ever reaches the wrong surface.

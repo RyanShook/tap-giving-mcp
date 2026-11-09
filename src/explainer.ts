@@ -24,7 +24,7 @@ export const EXPLAINER_TOPICS: ExplainerTopic[] = [
     slug: "what-a-tap-disc-does",
     title: "What a tap disc does",
     body:
-      "A visitor holds a phone near the disc and the page opens. NFC is the tap itself: no app is needed and nothing has to be installed. Tapping works on iPhone XS (2018) and later and most Android phones from about 2015, which read the disc automatically in the background. Every disc carries its own Tap.Giving address, so where a tap lands is set per disc, and it can be changed anytime in the free Redirect Dashboard.",
+      "A visitor holds a phone near the disc and the page opens. NFC is the tap itself: no app is needed and nothing has to be installed. Tapping works on iPhone XS (2018) and later and most Android phones from about 2015, which read the disc automatically in the background. Every disc carries its own Tap.Giving address, so where a tap lands is set per disc, and it can be changed anytime in the Redirect Dashboard.",
   },
   {
     slug: "nfc-vs-qr",
@@ -48,7 +48,7 @@ export const EXPLAINER_TOPICS: ExplainerTopic[] = [
     slug: "materials-and-care",
     title: "Materials and care",
     body:
-      "The discs are 0.85 mm double-laminated matte waterproof PVC with a locked NTAG213 tap chip, built to be wiped down and spilled on. Every disc carries 3M adhesive backing as standard; pre-drilled screw holes (2 holes, 6 mm) are optional at no extra cost, discs with holes keep the adhesive too, and screws are not included. Discs do not work on metal surfaces without the anti-metal shielding layer, which is decided before printing because it cannot be added afterwards. We do not offer physical samples, free or paid; the whole order is the trial, covered by the 30-day money-back guarantee.",
+      "The discs are 0.85 mm double-laminated matte waterproof PVC with a locked NTAG213 tap chip, built to be wiped down and spilled on. Every disc carries 3M adhesive backing as standard; pre-drilled screw holes (2 holes, 6 mm) are optional, discs with holes keep the adhesive too, and screws are not included. Discs do not work on metal surfaces without the anti-metal shielding layer, which is decided before printing because it cannot be added afterwards. We do not offer physical samples.",
   },
 ];
 
