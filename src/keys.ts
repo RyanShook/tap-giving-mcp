@@ -58,7 +58,7 @@ export async function authenticate(
   const key = m[1].trim();
   const parsed = parseKeyFormat(key);
   if (!parsed) {
-    throw new ToolError("unauthorized", "That API key is malformed. Keys look like tg_live_<orgslug>_<secret>.");
+    throw new ToolError("unauthorized", "That API key is malformed. Keys look like tg_live_<orgslug>_<secret>; test keys look like tg_test_<orgslug>_<secret>.");
   }
   const keyHash = await sha256Hex(key);
   const raw = await kv.get(`KEYHASH:${keyHash}`);
@@ -84,8 +84,8 @@ export function requireKey(auth: AuthedKey | null): AuthedKey {
     throw new ToolError(
       "unauthorized",
       "This tool needs your organization API key in the Authorization header (Bearer tg_live_... or tg_test_...). " +
-        "Discovery, pricing, product, the artwork spec, and the order questions need no key. To get a key, email the Tap.Giving team at " +
-        "hello@tap.giving, say which organization the key is for, and the team replies within one business day.",
+        "Discovery, pricing, product, the artwork spec, and the order questions need no key. Keys look like tg_live_<orgslug>_<secret>; test keys look like tg_test_<orgslug>_<secret>. To get a key, email the Tap.Giving team at " +
+        "hello@tap.giving, say which organization the key is for, and the team replies within one business day. Evaluating the server? Ask for a test key in the same email.",
     );
   }
   return auth;

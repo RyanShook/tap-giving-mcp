@@ -27,10 +27,20 @@ export const REPO_URL = "https://github.com/RyanShook/tap-giving-mcp";
 // name, plus the turnaround and what to say. hello@tap.giving is the
 // published contact address (it is on the website's own emails).
 export const TEAM_EMAIL = "hello@tap.giving";
+
+// The test seat, stated plainly (item 3): a Registry evaluator or an
+// agent developer can hold a test key and run the whole keyed journey
+// with no real order and no charge. There is no self-serve issuance;
+// asking the team by email is the route.
+export const TEST_KEY_LINE =
+  "Evaluating the server? A test key runs the full keyed journey with no real order and no charge. " +
+  "There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies " +
+  "with one (a tg_test_<orgslug>_<secret> key) within one business day.";
 export const KEY_REQUEST_LINE =
   "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address " +
   "you want on the order, say which organization the key is for, and the team replies with the key " +
-  "within one business day. Discovery, pricing, product facts, the artwork spec, and the order questions " +
+  "within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like " +
+  "tg_test_<orgslug>_<secret>. Discovery, pricing, product facts, the artwork spec, and the order questions " +
   "need no key; recaps, order setup, invoice requests, and order status use the organization's key.";
 
 // The standing differentiators (llms.txt and for-agents fact set),
@@ -160,6 +170,33 @@ export const MOUNTING_OPTIONS = [
   },
 ] as const;
 
+// The destination model, stated once (item 4): pointing is per disc
+// at the record level (the shipped dashboard's own copy says it can
+// change where any disc points), the whole set starts at one
+// destination, and two destinations work by splitting the set in the
+// dashboard. The printed-code fallback is stated conditionally on the
+// design carrying a code, and Dashboard login timing follows the
+// status answer's own contract (password by email with the shipping
+// notice).
+export const DESTINATION_MODEL =
+  "Every disc carries its own Tap.Giving address, so where a tap lands is set per disc. An order " +
+  "starts with one destination for the whole set, the page you give at order setup. To run two " +
+  "destinations, for example counter discs opening your menu and door discs opening your review " +
+  "profile, split the set afterwards in the free Redirect Dashboard: re-point any single disc, or " +
+  "any group of discs, in seconds, and re-point them again anytime. Your dashboard sign-in works " +
+  "from order setup: the address is go.tap.giving/<your-organization-slug>, the username is that " +
+  "slug, and the password arrives by email with the shipping notice, before your discs arrive. " +
+  "Tapping needs no app: iPhone XS (2018) and later and most Android phones from about 2015 read " +
+  "the disc automatically in the background. Where a design carries a printed QR code (your " +
+  "artwork includes one, or the Tap.Giving address line on the design), a phone without NFC, or " +
+  "with NFC off, scans that code and lands on the same destination; a design with no printed code " +
+  "has the tap as its only door, and the design choice is yours at artwork time.";
+
+// The production turnaround, one canonical wording (item 8): the
+// product shipping terms and the recap notes already state it; this
+// constant carries it into discovery and quotes too.
+export const TURNAROUND = "Production and delivery run 2 to 3 weeks from artwork approval.";
+
 export const LINK_DESTINATION_NOTE =
   "Where should a tap send people? Give the page URL and your discs start pointed there. " +
   "Leaving it blank is fine too, and a tap is never left going nowhere: your discs ship pointed at your " +
@@ -172,6 +209,14 @@ export const RECAP_NOTES: string[] = [
 ];
 
 export const TAX_NOTE = "Tax, where it applies, is calculated on the invoice.";
+
+// The 7-day renewing window in plain words (item 6): the window runs
+// from the quote, and a fresh quote renews it. The recap's priceHold
+// note states the same terms to keyed callers.
+export const DISCOUNT_WINDOW_MEANING =
+  "The 7-day renewing window means: the first-order discount applies to a first order placed " +
+  "within 7 days of this quote. If the 7 days pass unused, ask for a fresh quote and the window " +
+  "starts again; the discount is never lost for good, and it never applies to a second order.";
 
 // The discovery text's pricing lead (Ryan, 2026-11-07): the range
 // line only. The tier breakdown and the minimum live in get_quote

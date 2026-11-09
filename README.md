@@ -268,7 +268,7 @@ Response, structured content:
   "sha256": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
   "validation": {"policy": "permissive", "checks": {"notMalicious": true, "sizeOk": true, "decodable": true}, "findings": ["accepted; vector preferred for production"]},
   "benefits": ["Works with any platform", "No subscription fees", "Durable waterproof PVC with a locked tap chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
-  "preview": {"kind": "on-disc", "shapes": ["round", "square"], "note": "Your design on the disc, cut shape applied. This is a preview render; the final proof comes by email before production."},
+  "preview": {"kind": "on-disc", "shapes": ["round", "square"], "note": "Your design on the disc, cut shape applied. This preview render is the design check at this stage; nothing is emailed at the artwork stage, because no contact is captured yet. The emailed final proof belongs to the order stage, after order setup."},
   "nextStep": "Show the person their design on the disc (the preview image), then capture the contact email at order setup (start_order_intent) and ask the order questions (get_order_questions)."
 }
 ```
@@ -402,12 +402,16 @@ the server.
 
 ## Keys
 
-An organization key looks like `tg_live_<orgslug>_<secret>` (or
-`tg_test_...` for the test lane) and is sent as
+An organization key looks like `tg_live_<orgslug>_<secret>`; a test
+key looks like `tg_test_<orgslug>_<secret>`. Keys are sent as
 `Authorization: Bearer <key>`. Only the SHA-256 hash of a key is
 stored. A key's mode binds its seat: test keys write test records and
 mint test invoices; live keys serve production. Real organizations
-get a key by asking Ryan at ryan@tap.giving.
+get a key by emailing hello@tap.giving; the team replies with the key
+within one business day. Evaluating the server? A test key runs the
+full keyed journey with no real order and no charge. There is no
+self-serve signup: email hello@tap.giving and ask for a test key, and
+the team replies with one within one business day.
 
 A registry record for this server lives in this repo as
 [`server.json`](server.json), in the official MCP Registry format:

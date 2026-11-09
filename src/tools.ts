@@ -7,6 +7,7 @@
 import {
   ARTWORK_GUIDELINES, ARTWORK_GEOMETRY, BENEFITS, ENDPOINT, GATES, KEY_REQUEST_LINE,
   LINK_DESTINATION_NOTE, MOUNTING_OPTIONS, PRODUCT, PRODUCT_TOPICS, RECAP_NOTES,
+  DESTINATION_MODEL, DISCOUNT_WINDOW_MEANING, TEST_KEY_LINE, TURNAROUND,
   NO_FEES_LINE, TEAM_EMAIL,
   SERVER_DESCRIPTION, SERVER_NAME, PRESENTATION_SYNONYMS, TAX_NOTE, PRICE_RANGE_LINE } from "./facts.ts";
 import { PRICING_TIERS } from "./pricing.ts";
@@ -86,12 +87,18 @@ function quoteOutput(quote: Quote): Record<string, unknown> {
       window: "7-day renewing window",
       appliedInHeadlineTotals: false,
       conditionalTotalCents: quote.discountedTotalCents,
+      appliesToAddOns: "The 10 percent comes off the discs only. Add-ons are billed at full price inside both totals: the add-on amount rides unchanged in the discounted total.",
+      windowMeaning: DISCOUNT_WINDOW_MEANING,
       description:
-        "First-order discount: 10 percent off with code WELCOME10, inside a 7-day renewing window. " +
+        "First-order discount: 10 percent off the discs with code WELCOME10, inside a 7-day renewing window. " +
         "It is a conditional first-order line, not a price gate: the headline totals above are list totals, " +
-        "and the discount applies at invoice time only when the order is the organization's first. " +
+        "and the discount applies at invoice time only when the order is the organization's first. Add-ons are " +
+        "not discounted: their full amount is included in both totals. " +
         `conditionalTotalCents (${dollars(quote.discountedTotalCents)}) is what the total becomes when that first-order discount applies.`,
     },
+    firstOrderTotalCents: quote.discountedTotalCents,
+    firstOrderTotalNote: `If this is the organization's first order, the one payable total is ${dollars(quote.discountedTotalCents)} (list ${dollars(quote.grandTotalCents)} less 10 percent off the discs; add-ons at full price; shipping free). On any later order the payable total is the list total.`,
+    turnaround: TURNAROUND,
     addOns: quote.addOns,
     addOnCents: quote.addOnCents,
     antiMetal: quote.antiMetalMeta === "unknown"
@@ -117,11 +124,14 @@ function quoteText(q: Record<string, unknown>): string {
   const cmp = q.tierComparison as { line: string } | undefined;
   return [
     `Quote for ${q.quantity} discs (${q.tier}): ${dollars(q.grandTotalCents as number)} total.`,
-    `Discs: ${q.quantity} at ${dollars(q.unitCents as number)} list, ${dollars(q.discSubtotalCents as number)} list subtotal. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window: ${dollars(q.grandTotalWithFirstOrderDiscountCents as number)} when it applies.`,
+    `Discs: ${q.quantity} at ${dollars(q.unitCents as number)} list, ${dollars(q.discSubtotalCents as number)} list subtotal. First orders take 10 percent off the discs with code WELCOME10: if this is the organization's first order, the total to pay is ${dollars(q.grandTotalWithFirstOrderDiscountCents as number)}.`,
+    `The discount covers the discs only; add-ons are billed at full price in both totals.`,
+    DISCOUNT_WINDOW_MEANING,
     ...(cmp ? [cmp.line] : []),
     addOns ? `Add-ons:\n${addOns}` : "Add-ons: none.",
     `Shipping: Free`,
     `${q.taxNote}`,
+    TURNAROUND,
   ].join("\n");
 }
 
@@ -179,7 +189,7 @@ export function belowMinimumMessage(quantity: number): string {
     `The minimum order is ${MIN_QTY} discs. Quantity ${quantity} is below the minimum; orders under ${MIN_QTY} are not available. ` +
     `The smallest order is ${MIN_QTY} discs for ${dollars(smallest.grandTotalCents)} list ` +
     `(${dollars(smallest.discountedTotalCents)} when the first-order discount applies). ` +
-    `Many organizations order the 100 and use the extras at the entrance, in other rooms, or wherever people gather.`
+    `Many organizations order the 100 and spread the extras across the places their people already are: entrances, tables, counters, rooms, handouts.`
   );
 }
 
@@ -226,13 +236,16 @@ function artworkSpecObject(shape?: string): Record<string, unknown> {
   return {
     sizes: "100 mm (4 inch), round or square. Every other size or shape is a manual exception handled by hand.",
     canvasMm: g.canvasMm,
+    canvasInches: 4.17,
     bleedMm: g.bleedMm,
+    bleedInches: 0.12,
     ...(shape ? { geometry: shapes[shape] } : { geometry: shapes }),
     formatWanted: g.formatWanted,
     background: g.background,
     minimumLogoMm: g.minimumLogoMm,
     encoding: g.encoding,
-    screwHoles: (g as Record<string, unknown>).screwHoles,
+    screwHoles: { ...(g.screwHoles as unknown as Record<string, unknown>), diameterInches: 0.24, centreOffsetInches: 1.7 },
+    minimumLogoInches: 0.71,
     template: {
       note: "A downloadable template with the bleed, cut, safe, and screw-hole guides as layers; draw on it and delete the guide layers before submitting.",
       ...(shape
@@ -295,9 +308,12 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       note: "Call get_quote for the binding quote at an exact quantity.",
     },
     artworkSpec: {
-      summary: "106 mm square artboard; 100 mm cut (round or square); 3 mm bleed; vector artwork back (SVG preferred).",
+      summary: "106 mm (about 4.2 inch) square artboard; 100 mm (4 inch) cut (round or square); 3 mm (about 0.12 inch) bleed; vector artwork back (SVG preferred).",
       tool: "get_artwork_spec",
     },
+    destination: DESTINATION_MODEL,
+    turnaround: TURNAROUND,
+    testKey: TEST_KEY_LINE,
     photos: productPhotoStructured(),
     capabilities: {
       readTools: ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions"],
@@ -305,6 +321,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       writeTools: ["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"],
       gates: [GATES.designApproval, GATES.payment, GATES.production],
       howToGetAKey: KEY_REQUEST_LINE,
+      keyWait: "Completing an order needs the key, and the key takes up to one business day by email (hello@tap.giving). Everything before it is keyless: discovery, quotes, product facts, the artwork spec, the order questions, artwork submission, and the contact capture.",
       kickoff: "start_order_intent",
       benefits: BENEFITS,
       guarantee: "Covered by our 30-day money-back guarantee.",
@@ -317,13 +334,14 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `What it is`,
     `A tap disc is a small physical disc a phone taps to open your page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.`,
     `First choice: the shape, round or square.`,
+    DESTINATION_MODEL,
     ``,
     `Why Tap.Giving`,
     NO_FEES_LINE,
     ...BENEFITS.map((b) => `- ${b}`),
     ``,
     `Pricing`,
-    `${PRICE_RANGE_LINE} Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. ${TAX_NOTE} Every order is covered by our 30-day money-back guarantee.`,
+    `${PRICE_RANGE_LINE} Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. ${TAX_NOTE} Every order is covered by our 30-day money-back guarantee. Production and delivery run 2 to 3 weeks from artwork approval.`,
     ``,
     `How it works`,
     `1. Start with the shape, round or square.`,
@@ -333,7 +351,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     ``,
     `Gates`,
     `Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.`,
-    `Discovery, quotes, product facts, the artwork spec, and the order questions need no key. Recaps and order status are reads that use your organization key, like the writes. ${KEY_REQUEST_LINE}`,
+    `Discovery, quotes, product facts, the artwork spec, and the order questions need no key. Recaps and order status are reads that use your organization key, like the writes, so plan for the key wait before the order steps: ${KEY_REQUEST_LINE} ${TEST_KEY_LINE}`,
     ...(intentTextLine ? [intentTextLine] : []),
     `The two photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.`,
   ].join("\n");
@@ -375,31 +393,39 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       mounting: p.mountingDetail,
       metalCaveat: p.metalCaveat,
       redirectDashboard: p.redirectDashboard,
+      destination: DESTINATION_MODEL,
       worksWith: p.worksWith,
       guarantee: p.guarantee,
     },
     photos: productPhotoStructured(),
-    stands: { products: p.stands, ordering: "Stands are priced here for information; they are not ordered through this server. If you need stands with an order, ask the Tap.Giving team at hello@tap.giving. Discs are the orderable product here." },
-    badges: { products: p.badges, ordering: "Badges are priced here for information; they are not ordered through this server. Discs are the orderable product here." },
+    stands: { products: p.stands, ordering: "Stands come from the Tap.Giving team, not through this server: email hello@tap.giving to add them to an order. Discs are the orderable product here." },
+    badges: { products: p.badges, ordering: "Badges come from the Tap.Giving team, not through this server: email hello@tap.giving to add them to an order. Discs are the orderable product here." },
     mounting: { options: MOUNTING_OPTIONS.map((o) => ({ value: o.value, text: o.text })), detail: p.mountingDetail, metalCaveat: p.metalCaveat },
     shipping: { cost: p.shipping.cost, terms: p.shipping.terms },
   };
-  const structured = topic ? { topic, ...(full[topic] as Record<string, unknown>) } : full;
+  // Item 9: a topic answer carries the same structure as the
+  // all-topics answer: the topic block under its topic name, beside
+  // the server's photos and the destination model, not flattened
+  // bare fields with the context blocks dropped.
+  const structured = topic
+    ? { topic, [topic]: full[topic], photos: productPhotoStructured(), destination: DESTINATION_MODEL }
+    : full;
   const text = topic
-    ? JSON.stringify(structured, null, 2)
+    ? JSON.stringify(structured[topic as string], null, 2)
     : [
       `Tap discs: ${p.chipPlain}. ${p.material}.`,
       p.sizePolicy,
       p.mountingDetail,
       p.metalCaveat,
       p.redirectDashboard,
+      DESTINATION_MODEL,
       p.worksWith,
       p.guarantee,
-      `Table stands: 70 x 100 mm at $7, 120 x 140 mm at $9, minimum 100. Lanyard badges: 90 x 130 mm at $5, minimum 100. (Priced for information; discs are the orderable product here.)`,
+      `Table stands (70 x 100 mm, 120 x 140 mm) and lanyard badges (90 x 130 mm) come from the Tap.Giving team: email hello@tap.giving to add them to an order. Discs are the orderable product here.`,
       `${p.shipping.cost} ${p.shipping.terms}`,
       `The photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.`,
     ].join("\n");
-  return { structured, text, ...(topic === undefined || topic === "discs" ? { images: productPhotoImages() } : {}) };
+  return { structured, text, images: productPhotoImages() };
 }
 
 // Resolve the caller's direction choice (F12): a pick-list number
@@ -456,11 +482,11 @@ async function toolGetArtworkSpec(_ctx: Ctx, args: Record<string, unknown>): Pro
   const images = shownExamples.map((x) => ({ data: x.pngBase64, mimeType: "image/png" }));
   const shapeWord = shape ?? "round and square";
   const text = [
-    `Artwork spec: 106 mm square artboard for both shapes.`,
-    `Round: cut radius 50 mm, bleed radius 53 mm, safe radius 45 mm, centre (53, 53) mm.`,
-    `Square: cut is a 100 mm box spanning 3 to 103 mm; bleed half-width 53 mm; safe half-width 47 mm.`,
+    `Artwork spec: 106 mm (about 4.2 inch) square artboard for both shapes; the cut disc is 100 mm (4 inch).`,
+    `Round: cut radius 50 mm (about 2 inch), bleed radius 53 mm (about 2.1 inch), safe radius 45 mm (about 1.8 inch), centre (53, 53) mm.`,
+    `Square: cut is a 100 mm (4 inch) box spanning 3 to 103 mm; bleed half-width 53 mm (about 2.1 inch); safe half-width 47 mm (about 1.85 inch).`,
     `Screw holes (only when screws mounting is chosen): ${SCREW_HOLES.note}`,
-    `If you choose screws, keep the two 6 mm hole areas clear: the holes are drilled on the left and right midline, so frames and borders should not cross those spots.`,
+    `If you choose screws, keep the two 6 mm (about 0.24 inch) hole areas clear: the holes are drilled on the left and right midline, so frames and borders should not cross those spots.`,
     `Template with bleed, cut, safe, and screw-hole guides: https://tap.giving/mcp/templates/disc-template-${shape === "square" ? "square" : "round"}.svg${shape ? "" : " (a square template is at disc-template-square.svg)"}.`,
     ARTWORK_GEOMETRY.formatWanted,
     ARTWORK_GEOMETRY.background,
@@ -696,22 +722,30 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
     benefits: BENEFITS,
     preview: {
       kind: previewKind,
-      ...(previewKind === "on-disc" ? { shapes: previewShapes, note: "Your design on the disc, cut shape applied. This is a preview render; the final proof comes by email before production." } : {}),
-      ...(previewKind === "submitted-file" ? { note: "The on-disc render was unavailable in this call, so the submitted file itself is shown; the emailed proof shows it on the disc." } : {}),
-      ...(previewKind === "unavailable" ? { note: "This file could not be rendered to an image here; it is on record, and the emailed proof shows it on the disc." } : {}),
+      ...(previewKind === "on-disc" ? { shapes: previewShapes, note: "Your design on the disc, cut shape applied. This preview render is the design check at this stage; nothing is emailed at the artwork stage, because no contact is captured yet. The emailed final proof belongs to the order stage, after order setup." } : {}),
+      ...(previewKind === "submitted-file" ? { note: "The on-disc render was unavailable in this call, so the submitted file itself is shown. Nothing is emailed at the artwork stage, because no contact is captured yet; the emailed final proof belongs to the order stage." } : {}),
+      ...(previewKind === "unavailable" ? { note: "This file could not be rendered to an image here; it is on record. Nothing is emailed at the artwork stage, because no contact is captured yet; the emailed final proof belongs to the order stage." } : {}),
     },
-    nextStep: "Show the person their design on the disc (the preview image), then capture the contact email at order setup (start_order_intent) and ask the order questions (get_order_questions).",
+    nextStep:
+      (previewKind === "on-disc"
+        ? "Show the person their design on the disc (the preview image with this answer). "
+        : previewKind === "submitted-file"
+          ? "The submitted file is shown with this answer as-is; this server could not render it on the disc in this call, so do not describe it as an on-disc preview. "
+          : "No preview image could be rendered in this call, so do not tell the person a preview is shown; the file is on record under the artworkRef. ") +
+      "Then capture the contact email (start_order_intent; no key needed) and ask the order questions (get_order_questions; no key needed). " +
+      "Everything after that needs the organization's API key: the recap (get_recap) and order setup (create_order). If the organization has no key yet, ask for one now: " +
+      "email hello@tap.giving, say which organization the key is for, and the team replies with the key within one business day; the captured contact and this artwork wait safely meanwhile.",
   };
   const text = [
     `Artwork received: ${artworkRef} (${filename}, ${detectedType}, ${bytes.length} bytes).`,
     findings.length ? findings.join(" ") : "Accepted under the permissive intake policy.",
     previewKind === "on-disc"
       ? (shapeArg
-          ? `Here is your design on the ${shapeArg} disc, in the images that follow. The final proof comes by email before anything is printed.`
-          : `Here is your design on the disc, shown on both shapes in the images that follow; the shape chosen at order setup settles which one is printed. The final proof comes by email before anything is printed.`)
+          ? `Here is your design on the ${shapeArg} disc, in the images that follow; this preview is the design check at this stage.`
+          : `Here is your design on the disc, shown on both shapes in the images that follow; the shape chosen at order setup settles which one is printed. This preview is the design check at this stage.`)
       : previewKind === "submitted-file"
-        ? `The on-disc render was unavailable in this call, so your submitted file is shown as-is; the proof we email you shows it on the disc.`
-        : `Your file is on record; it could not be rendered to an image here, and the proof we email you shows it on the disc.`,
+        ? `The on-disc render was unavailable in this call, so your submitted file is shown as-is. Nothing is emailed at this stage: no contact is captured yet.`
+        : `Your file is on record; it could not be rendered to an image here. Nothing is emailed at this stage: no contact is captured yet.`,
     ...(fontNote ? [fontNote] : []),
   ].join("\n");
   return { structured, text, images: previewImages };
@@ -721,9 +755,42 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
 
 const INTENT_SOURCE = "mcp:intent";
 
+// Reserved and undeliverable domains (item 5): the RFC-reserved
+// TLDs can never receive the follow-up email an intent promises, so
+// an intent naming one is refused at the door instead of being
+// captured behind a promise nobody can keep. The other suite
+// fixtures on reserved domains sit on paths that promise no email
+// follow-up (recap and create_order contact binding) and stay valid.
+export const RESERVED_TLDS = new Set([
+  "example", "test", "invalid", "localhost", "localdomain", "alt", "arpa",
+  "corp", "domain", "home", "host", "internal", "intranet", "lan", "local", "onion", "private",
+]);
+export function emailDomainProblem(email: string): string | null {
+  const at = email.lastIndexOf("@");
+  if (at < 1) return "email must be an email address.";
+  const domain = email.slice(at + 1).toLowerCase().replace(/\.+$/, "");
+  if (!domain || /\s/.test(domain) || !domain.includes(".")) {
+    return "email must carry a complete domain, like name.org or school.edu.";
+  }
+  const labels = domain.split(".");
+  if (labels.some((l) => !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(l))) {
+    return "email domain is not a valid domain name.";
+  }
+  const tld = labels[labels.length - 1];
+  if (RESERVED_TLDS.has(tld)) {
+    return `".${tld}" is a reserved domain ending that can never receive email, so no follow-up could ever reach it. Give the organization's real email address.`;
+  }
+  if (email.toLowerCase().endsWith("@example.com") || email.toLowerCase().endsWith("@example.org") || email.toLowerCase().endsWith("@example.net")) {
+    return "example.com, example.org, and example.net are reserved example domains that can never receive email. Give the organization's real email address.";
+  }
+  return null;
+}
+
 async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
   const email = reqString(args, "email", 200).toLowerCase();
   if (!email.includes("@")) throw invalidInput("email must be an email address.");
+  const domainProblem = emailDomainProblem(email);
+  if (domainProblem) throw invalidInput(domainProblem);
   const organizationName = optString(args, "organizationName", 300) ?? optString(args, "church", 300);
   const quantityHint = optInt(args, "quantityHint");
   const sourceNote = optString(args, "sourceNote", 300);
@@ -801,8 +868,9 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
       "the same capture the website uses, so the follow-up is the ordinary first email, not a sales list.",
     nextStep: keyed
       ? "This call carries the organization's key, so order setup can continue right now: get_order_questions, then get_recap, then create_order. The captured contact also gets the team's follow-up email."
-      : "Completing an order needs an organization API key. " + KEY_REQUEST_LINE +
-        " An intent is a lead, not an order: it creates no invoice and reserves nothing.",
+      : "The order questions (get_order_questions) need no key. Everything after them that completes an order does: the recap (get_recap) and order setup (create_order) need the organization's API key, and the key takes up to one business day. " +
+        KEY_REQUEST_LINE +
+        " The captured contact and any submitted artwork wait safely while the key is on its way. An intent is a lead, not an order: it creates no invoice and reserves nothing.",
   };
   const baseText = keyed
     ? `Captured as ${intentRef}. The Tap.Giving team will also follow up with ${email} by email, usually within one business day. Your key is on this call, so order setup can continue now: order questions, recap, then create_order.${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`
@@ -1708,7 +1776,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "Start here. One call orients a cold agent: the builder's introduction (NFC Tap Builder by Tap.Giving), the product in plain words, " +
       "the first choice (shape: round or square), the pricing tiers, the artwork spec summary, and the full capability list with the human gates. " +
-      "and get_order_questions when the questions are next (it needs no key). " +
+      "and get_order_questions when the questions are next (it needs no key). Discovery states the key wait up front: completing an order needs the organization's key, which takes up to one business day by email. " +
       "The optional intent argument is echoed back as guidance with a quantity headline when it names a disc count. " + GATES.payment,
     inputSchema: { type: "object", properties: { intent: { type: "string", description: "Optional free-text description of what the person wants (for example an organization type and a rough disc count). It is echoed back as guidance, and a disc count in it produces a price headline for that quantity." } } },
     annotations: READ,
@@ -1717,8 +1785,8 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_quote",
     description:
-      "The binding quote for a prospective order (also known as get_pricing): quantity, tier, list totals as the headline, the first-order 10 percent discount (code WELCOME10, 7-day renewing window) shown as a conditional line, " +
-      "add-ons, free shipping as its own line, and the exact grand total. No tax line: " + TAX_NOTE + " " +
+      "The binding quote for a prospective order (also known as get_pricing): quantity, tier, list totals as the headline, and one payable total for a first order (the list total less 10 percent off the discs with code WELCOME10; add-ons are never discounted), with the 7-day renewing window explained in plain words (a first order placed within 7 days of the quote; a fresh quote renews it), " +
+      "add-ons, free shipping as its own line, the exact grand total, and the turnaround (2 to 3 weeks from artwork approval). No tax line: " + TAX_NOTE + " " +
       "Quantities below the 100-disc minimum are refused by this tool itself. No key needed. Call this when the person names a quantity and wants the exact price; for product facts without a quantity, call get_product instead. The next step after a quote is get_artwork_spec for the artwork, then start_order_intent.",
     inputSchema: {
       type: "object",
@@ -1734,7 +1802,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_product",
     description:
-      "The full product facts, with no key needed. Returns one block per topic: discs (the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, the 100 mm (4 inch) round and square built-ins; every other size is a manual exception), mounting (options and the metal caveat), stands and badges (table stands and lanyard badges, priced for information), and shipping (free; 2 to 3 weeks from artwork approval), plus the free Redirect Dashboard. " +
+      "The full product facts, with no key needed. Returns one block per topic: discs (the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, the 100 mm (4 inch) round and square built-ins; every other size is a manual exception), mounting (options and the metal caveat), stands and badges (table stands and lanyard badges, from the team by email, not ordered through this server), and shipping (free; 2 to 3 weeks from artwork approval), plus the free Redirect Dashboard and the destination model: per-disc pointing, two destinations, dashboard sign-in timing, and phone compatibility with the printed-code fallback. " +
       "Pass the optional topic argument to return only one block. Call this for product facts alone; for a first orientation call get_discovery, and for the price at a quantity call get_quote.",
     inputSchema: {
       type: "object",
@@ -1765,7 +1833,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "Send the finished artwork back. Intake is permissive by ruling: a real image is accepted in any format and rejected only on three sanity grounds " +
       "(malicious or masquerading content, over 5 MB decoded, or not decodable as the type it claims). Production fitness is judged later in the normal proof flow, never here. " +
-      "No key and no email are needed on the cold path; a keyed submission binds to the key's organization. The file argument carries the artwork file (filename, mediaType, contentBase64); sha256 is the hex SHA-256 of those file bytes; shape optionally names the shape the artwork was designed for; orderRef optionally attaches the submission to an existing order; logo optionally carries the source logo the artwork was built from; note is free text for the team. Each call creates a separate submission: resubmitting the same file mints a new artworkRef rather than replacing the earlier one. Returns the artworkRef every later step carries, a displayUrl, and a preview of the person's own design composited on the disc (cut shape applied). " +
+      "No key and no email are needed on the cold path; a keyed submission binds to the key's organization. The file argument carries the artwork file (filename, mediaType, contentBase64); sha256 is the hex SHA-256 of those file bytes; shape optionally names the shape the artwork was designed for; orderRef optionally attaches the submission to an existing order; logo optionally carries the source logo the artwork was built from; note is free text for the team. Each call creates a separate submission: resubmitting the same file mints a new artworkRef rather than replacing the earlier one. Returns the artworkRef every later step carries, a displayUrl, and, where this server can render the file, a preview of the person's own design composited on the disc (cut shape applied); where it cannot render the file, the answer says so plainly and never promises a preview or an email at this stage. " +
       GATES.designApproval,
     inputSchema: {
       type: "object",
@@ -1794,7 +1862,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "The kickoff and the journey's first ask: capture a contact email through the same public capture endpoint the website's email-first door uses, " +
       "so follow-up rides the existing lead machinery. No key needed. An intent is a lead, not an order: it creates no invoice and reserves nothing. " +
-      "Returns an intentRef, links an artworkRef when given, and says plainly what follow-up to expect. " +
+      "Returns an intentRef, links an artworkRef when given, and says plainly what follow-up to expect. The email must be a real, reachable address: reserved domain endings (.example, .test, .invalid) and the example domains are refused, because no follow-up could ever reach them. " +
       "Completing an order needs an organization API key (issued by the Tap.Giving team; get_discovery says how to ask). Call this once per contact: a repeat call with the same email creates a second lead record rather than updating the first. This call captures the contact only; create_order is the later, keyed call that sets up the order itself.",
     inputSchema: {
       type: "object",
@@ -1923,7 +1991,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "register_webhook",
     description:
-      "Register (or replace) the organization's one webhook subscription for proof_ready and shipped events. The subscription secret is shown once, here. " +
+      "Developer tool, optional: register (or replace) the organization's one webhook subscription for proof_ready and shipped events. Most organizations never need this; order status is read with get_order_status. The subscription secret is shown once, here. " +
       "Registration is live in v1; delivery is pending and lands in v1.1, so until then get_order_status is the state read. Nothing about registration implies live push. Key required.",
     inputSchema: {
       type: "object",
