@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "tap-giving": {
+      "type": "streamable-http",
+      "url": "https://tap.giving/mcp"
+    }
+  }
+}
