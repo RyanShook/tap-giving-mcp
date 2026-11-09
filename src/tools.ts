@@ -5,7 +5,7 @@
 // meets the boundaries in tools/list.
 
 import {
-  ARTWORK_GUIDELINES, ARTWORK_GEOMETRY, BENEFITS, ENDPOINT, GATES,
+  ARTWORK_GUIDELINES, ARTWORK_GEOMETRY, BENEFITS, BENEFITS_PHASE_TWO, ENDPOINT, GATES,
   LINK_DESTINATION_NOTE, MOUNTING_OPTIONS, PRODUCT, PRODUCT_TOPICS, RECAP_NOTES,
   DESTINATION_MODEL, DISCOUNT_WINDOW_MEANING, TURNAROUND,
   NO_FEES_LINE, TEAM_EMAIL,
@@ -209,7 +209,13 @@ export function examplesForShape(shape?: string): DeliveredExample[] {
 }
 
 export function exampleEntry(e: DeliveredExample): Record<string, unknown> {
+  // The printed pick number (cold-run fix, 2026-11-09): per shape,
+  // sequential from 1 in index order, the same number the pick list
+  // prints and resolveChosenExample accepts. The position in the
+  // global index is not a pick number and is never printed as one.
+  const pick = examplesForShape(e.shape).findIndex((x) => x.id === e.id) + 1;
   return {
+    pick, pickNumber: pick,
     id: e.id, organization: e.organization, shape: e.shape,
     displayUrl: `https://tap.giving/mcp/examples/${e.id}.png`,
     description: e.description,
@@ -415,7 +421,7 @@ function intentAnswerLines(intent: string): string[] {
     lines.push("No app is needed: a visitor taps a phone to the disc and the page opens; a phone without tap scans the printed code when the design carries one.");
   }
   if (/(change|update|re-?point|edit|switch)[\s\S]{0,40}(destination|link|url|page)|(destination|link|url)[\s\S]{0,30}(later|anytime|after)/i.test(intent)) {
-    lines.push("You can change where a disc points anytime in the free Redirect Dashboard, per disc, in seconds.");
+    lines.push("You can change where a disc points anytime in the Redirect Dashboard, per disc, in seconds.");
   }
   if (/re-?order|order (again|more) (later|again)|more discs later/i.test(intent)) {
     lines.push("Reordering: your design stays on file with your order, and the team can set up a reorder from the existing order when you need more.");
@@ -519,7 +525,6 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       gates: [GATES.designApproval, GATES.payment, GATES.production],
       kickoff: "get_artwork_spec",
       benefits: BENEFITS,
-      guarantee: "Covered by our 30-day money-back guarantee.",
     },
     ...(guidance ? { guidance } : {}),
   };
@@ -546,7 +551,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     ``,
     `Why Tap.Giving`,
     ...BENEFITS.map((b) => `- ${b}`),
-    `Every order is covered by our 30-day money-back guarantee. ${TAX_NOTE} Production and delivery run 2 to 3 weeks from artwork approval.`,
+    `${TAX_NOTE} Production and delivery run 2 to 3 weeks from artwork approval.`,
     SAMPLES_LINE,
     ``,
     `Gates`,
@@ -599,14 +604,13 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       qrConditional: QR_CONDITIONAL_LINE,
       versusPrintedCodes: VERSUS_PRINTED_CODES_LINE,
       worksWith: p.worksWith,
-      guarantee: p.guarantee,
     },
     photos: productPhotoStructured(),
     stands: { products: p.stands, ordering: "Stands come from the Tap.Giving team, not through this server: email hello@tap.giving to add them to an order. Discs are the orderable product here." },
     badges: { products: p.badges, ordering: "Badges come from the Tap.Giving team, not through this server: email hello@tap.giving to add them to an order. Discs are the orderable product here." },
     mounting: { options: MOUNTING_OPTIONS.map((o) => ({ value: o.value, text: o.text })), detail: p.mountingDetail, surfaceGuide: MOUNTING_SURFACE_GUIDE, metalCaveat: p.metalCaveat },
-    shipping: { cost: p.shipping.cost, terms: p.shipping.terms },
-    samples: { samples: SAMPLES_LINE, guarantee: p.guarantee },
+    shipping: { terms: p.shipping.terms },
+    samples: { samples: SAMPLES_LINE },
     ordering: {
       taxExempt: TAX_EXEMPT_LINE,
       payment: PAYMENT_GUIDANCE_LINE,
@@ -635,7 +639,6 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       QR_CONDITIONAL_LINE,
       VERSUS_PRINTED_CODES_LINE,
       p.worksWith,
-      p.guarantee,
     ].join("\n"),
     stands: [
       `Table stands carry the same tap disc on a standing card for counters and tables. Two sizes: the small stand is 70 x 100 mm (about 2.8 by 3.9 inches) and the large stand is 120 x 140 mm (about 4.7 by 5.5 inches).`,
@@ -652,7 +655,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       p.metalCaveat,
       `The two explainer photos with this answer show the adhesive backing and the pre-drilled screw holes up close.`,
     ].join("\n"),
-    shipping: `${p.shipping.cost} ${p.shipping.terms}`,
+    shipping: `${p.shipping.terms}`,
     samples: SAMPLES_LINE,
     ordering: [
       TAX_EXEMPT_LINE,
@@ -669,7 +672,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       topicText.badges,
       `Mounting: ${p.mountingDetail} ${p.metalCaveat}`,
       SAMPLES_LINE,
-      `${p.shipping.cost} ${p.shipping.terms}`,
+      `${p.shipping.terms}`,
       `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library (settings, tap moments, product details, mounting): show them whenever the person wants to see the disc in place.`,
     ].join("\n");
   const images = topic === "mounting"
@@ -678,10 +681,20 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
   return { structured, text, images };
 }
 
-// Resolve the caller's example choice: an example id from the full
-// delivered set for the shape, or a pick-list number within the shown
-// inline subset. An unknown value is refused, naming what is valid,
-// never silently echoed.
+// Resolve the caller's example choice (cold-run fix, 2026-11-09):
+// ONE numbering everywhere. A pick is the per-shape pick-list number
+// (sequential from 1 in index order: the number the pick list prints
+// and each structured entry carries as its pick field), an example
+// id from the full delivered set for the shape, or the example's
+// description words (Ryan, 2026-11-09: picks by number or description
+// in plain text): an exact normalized match, or a unique prefix or
+// substring match. An ambiguous description refuses naming the
+// candidates; anything else refuses naming what is valid. A pick
+// never silently selects a different example than the one named.
+function normalizePickText(v: string): string {
+  return v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().replace(/\s+/g, " ");
+}
+
 function resolveChosenExample(
   ref: string,
   shape?: string,
@@ -692,10 +705,29 @@ function resolveChosenExample(
   if (/^\d+$/.test(ref)) {
     const n = parseInt(ref, 10);
     if (n >= 1 && n <= all.length) return all[n - 1];
+  } else {
+    const needle = normalizePickText(ref);
+    if (needle.length >= 3) {
+      const exact = all.filter((e) => normalizePickText(e.description) === needle);
+      if (exact.length === 1) return exact[0];
+      const partial = all.filter((e) => {
+        const d = normalizePickText(e.description);
+        return d.startsWith(needle) || d.includes(needle);
+      });
+      if (partial.length === 1) return partial[0];
+      if (partial.length > 1) {
+        throw invalidInput(
+          `chosenExampleRef "${ref}" matches more than one delivered example${shape ? ` for the ${shape} shape` : ""}: ` +
+          partial.map((e) => `"${e.description}" (number ${all.indexOf(e) + 1})`).join("; ") +
+          `. Name one by its number, its full description, or its example id.`,
+          { candidateExampleIds: partial.map((e) => e.id) },
+        );
+      }
+    }
   }
   throw invalidInput(
     `chosenExampleRef "${ref}" is not one of the delivered examples${shape ? ` for the ${shape} shape` : ""}. ` +
-    `Pick by number from the pick list (1 to ${all.length}) or pass any example id from the structured examples index.`,
+    `Pick by its number from the pick list (1 to ${all.length}), by the example's description words, or pass any example id from the structured examples index.`,
     { validExampleIds: all.map((e) => e.id) },
   );
 }
@@ -705,7 +737,7 @@ async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Prom
   if (shape !== undefined && shape !== "round" && shape !== "square") {
     throw invalidInput(`shape must be "round" or "square".`);
   }
-  const chosenExampleRef = optString(args, "chosenExampleRef", 80);
+  const chosenExampleRef = optString(args, "chosenExampleRef", 200);
   const chosen = chosenExampleRef ? resolveChosenExample(chosenExampleRef, shape) : undefined;
   const structured = artworkSpecObject(shape);
   if (chosenExampleRef && chosen) {
@@ -716,12 +748,14 @@ async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Prom
   // The structured index carries the FULL delivered set for the shape.
   // Inline images stay bounded: the first INLINE_EXAMPLE_LIMIT examples
   // for the shape (or the single chosen one), then the two mounting
-  // photos. The numbered pick list covers the inline subset, in the
-  // same order as the image blocks that follow the text.
+  // photos. The numbered pick list covers the FULL set for the shape,
+  // numbered per shape from 1 in index order; the printed number is
+  // the number resolveChosenExample accepts, and each structured
+  // entry carries the same number as its pick field.
   const allForShape = examplesForShape(shape);
   const inlineSubset = allForShape.slice(0, INLINE_EXAMPLE_LIMIT);
-  const pickList = allForShape.map((e) =>
-    `${EXAMPLES_INDEX.findIndex((x) => x.id === e.id) + 1}. ${e.description}, ${e.shape}, ${e.size}: the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`);
+  const pickList = allForShape.map((e, i) =>
+    `${i + 1}. ${e.description}, ${e.shape}, ${e.size}: the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`);
   const shown = chosen ? [chosen] : inlineSubset;
   const images: Array<{ data: string; mimeType: string }> = [];
   for (const e of shown) {
@@ -748,7 +782,7 @@ async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Prom
       : [
           `Delivered examples: ${allForShape.length} real ${shapeWord} designs that Tap.Giving produced and delivered to organizations. The numbered pick list below covers the full set; the first ${inlineSubset.length} ride along in the images that follow, then the two mounting photos, and every entry is in the structured examples index with its reproduction data (description, size, palette, layout, icon treatment, logo slot).`,
           ...pickList,
-          `Tell me the number of an example from the list above, or pass any example id from the structured index as chosenExampleRef. Then compose original artwork for the organization you are working with, using the example as a reference, and submit it with submit_artwork. An example is a real organization's delivered design: it is never shipped to a different organization as-is.`,
+          `Tell me the number of an example from the list above, pass any example id from the structured index, or name the example by its description words, as chosenExampleRef. Then compose original artwork for the organization you are working with, using the example as a reference, and submit it with submit_artwork. An example is a real organization's delivered design: it is never shipped to a different organization as-is.`,
           `The artwork you compose is yours: print-ready and vendor-neutral, yours to take to any printer. Nothing in this spec or the proof obliges an order from Tap.Giving.`,
         ]),
     `No logo? Name-only artwork is a standing shape: build from the organization's name alone, or tell the team the organization name and a name-only design and proof follow by email.`,
@@ -820,7 +854,7 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
     throw invalidInput(`shape must be "round" or "square" when given.`);
   }
   const designUrl = screenDestination(optString(args, "designUrl", 500), "designUrl");
-  const chosenExampleRef = optString(args, "chosenExampleRef", 80);
+  const chosenExampleRef = optString(args, "chosenExampleRef", 200);
   const logo = args.logo;
   let logoDataUrl: string | undefined;
   if (logo !== undefined && logo !== null) {
@@ -1214,6 +1248,14 @@ async function toolGetOrderQuestions(_ctx: Ctx, _args: Record<string, unknown>):
       noFees: NO_FEES_LINE,
       note: "Prices are first stated here, at the order questions. Exact totals come from get_quote and the recap.",
     },
+    benefits: BENEFITS_PHASE_TWO,
+    zeroPriceTerms: {
+      shipping: PRODUCT.shipping.cost,
+      guarantee: PRODUCT.guarantee,
+      dashboard: "The Redirect Dashboard is included free on every order, permanently.",
+      sizePricing: "Both built-in sizes are priced the same.",
+      screwHoles: "Pre-drilled screw holes are included at no extra cost.",
+    },
     questions: [
       {
         order: 1, field: "contactEmail", question: "What email should the invoice, the proof, and the order emails go to?",
@@ -1291,6 +1333,7 @@ async function toolGetOrderQuestions(_ctx: Ctx, _args: Record<string, unknown>):
     `8. Link destination, as a confirmation: the destination carried from the design. ${LINK_DESTINATION_NOTE}`,
     "The contact name rides create_order with these answers.",
     `${PRICE_RANGE_LINE} ${NO_FEES_LINE}`,
+    "Shipping is free on every order, and every order is covered by our 30-day money-back guarantee.",
     "Then run get_recap over the answers; keep the recap reference it returns, because placing the order at the final step (Email me my invoice and design proof) uses it.",
   ].join("\n");
   return { structured, text, images: mountingPhotoImages() };
@@ -2272,7 +2315,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_product",
     description:
-      "The full product facts. Prices are stated in the order phase (get_order_questions, get_quote, get_recap), not here. Returns one block per topic: discs (the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, the 100 mm (4 inch) round and square built-ins; every other size is a manual exception), mounting (options and the metal caveat), stands and badges (table stands and lanyard badges, from the team by email, not ordered through this server), shipping (free; 2 to 3 weeks from artwork approval), samples (there is no sample program; the guarantee and the proof stand in for it), and ordering (tax-exempt, payment, reorder, and design help), plus the free Redirect Dashboard and the destination model: per-disc pointing, two destinations, dashboard sign-in timing, and phone compatibility with the printed-code fallback. " +
+      "The full product facts. Prices are stated in the order phase (get_order_questions, get_quote, get_recap), not here. Returns one block per topic: discs (the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, the 100 mm (4 inch) round and square built-ins; every other size is a manual exception), mounting (options and the metal caveat), stands and badges (table stands and lanyard badges, from the team by email, not ordered through this server), shipping (2 to 3 weeks from artwork approval), samples (there is no sample program; the emailed proof stands in for it), and ordering (tax-exempt, payment, reorder, and design help), plus the Redirect Dashboard and the destination model: per-disc pointing, two destinations, dashboard sign-in timing, and phone compatibility with the printed-code fallback. " +
       "Pass the optional topic argument to return only one block. Call this for product facts alone; for a first orientation call get_discovery, and for the price at a quantity call get_quote.",
     inputSchema: {
       type: "object",
@@ -2292,7 +2335,7 @@ export const TOOLS: ToolDef[] = [
       type: "object",
       properties: {
         shape: { type: "string", enum: ["round", "square"], description: "The disc shape to return geometry for: round or square. Omit it to return both shapes." },
-        chosenExampleRef: { type: "string", description: "The delivered example the person picked: any example id from the structured examples index, or its pick-list number within the shown subset for the chosen shape. It is carried with the spec as the design reference." },
+        chosenExampleRef: { type: "string", description: "The delivered example the person picked: its pick-list number for the chosen shape, any example id from the structured examples index, or the example's description words. It is carried with the spec as the design reference." },
       },
     },
     annotations: READ,
@@ -2323,7 +2366,7 @@ export const TOOLS: ToolDef[] = [
         },
         note: { type: "string", description: "Optional free-text note for the Tap.Giving team, carried with the submission." },
         designUrl: { type: "string", description: "Optional: the URL the disc should open, entered in the design phase. The design QR code is a labeled mock built from it; production encodes the disc's Redirect Dashboard link to this same destination, and the recap confirms it." },
-        chosenExampleRef: { type: "string", description: "Optional: the delivered example this design follows (an example id or its pick-list number); its reproduction data rides the answer." },
+        chosenExampleRef: { type: "string", description: "Optional: the delivered example this design follows (its pick-list number, an example id, or the example's description words); its reproduction data rides the answer." },
       },
     },
     annotations: WRITE,
