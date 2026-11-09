@@ -1065,3 +1065,29 @@ test("item 9, settled: register_webhook is absent from tools/list and no tool de
   assert.equal(TOOLS.find((t) => t.name === "register_webhook"), undefined);
   for (const t of TOOLS) assert.ok(!/API key/i.test(t.description), `${t.name} description carries no key framing`);
 });
+
+test("final-step chain: a failed mint still records the test-lane suppression on the order", async () => {
+  const { env, keys } = await makeEnv();
+  const base = stubFetch([]);
+  const fetchFn = (async (input: unknown, init?: { body?: string }) => {
+    const url = String(input);
+    if (url.includes("/api/mcp-invoke") && (init?.body ?? "").includes("mintOrderInvoice")) {
+      return new Response(JSON.stringify({ ok: false, error: "stripe key not configured for the test lane" }), { status: 502 });
+    }
+    return (base as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init);
+  }) as typeof fetch;
+  const flowArgs = {
+    quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
+    contactEmail: "mintfail@mcptest.org", organizationName: "Mintfail Test Church",
+  };
+  const recap = await runTool(env, req(), "get_recap", flowArgs, fetchFn);
+  const order = await runTool(env, req(), "create_order", {
+    ...flowArgs, contactName: "Test Pastor", contactPhone: "+17135550199",
+    recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: "mintfail-order-0001",
+  }, fetchFn);
+  assert.equal(order.structured.invoice, null, "no invoice when the mint fails");
+  assert.ok((order.structured.partialStates as string[]).some((p) => p.startsWith("invoice_pending")), "the partial state names the pending invoice");
+  const stored = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as { invoiceAttempt?: { error: string }; customerEmail?: { suppressed?: string } };
+  assert.equal(stored.invoiceAttempt?.error, "stripe key not configured for the test lane", "the seat error is recorded on the order");
+  assert.ok(stored.customerEmail?.suppressed, "the test-lane suppression is recorded on the order even though the mint failed");
+});

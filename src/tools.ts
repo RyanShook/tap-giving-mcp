@@ -2041,7 +2041,11 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
   if (!order.invoice) {
     await attemptInvoiceMint(ctx, order);
   }
-  if (order.invoice && !order.customerEmail) {
+  if (!order.customerEmail && (order.invoice || order.mode === "test" || !order.artworkRef)) {
+    // The terminal non-send states (test-lane suppression, and
+    // proof_pending on a no-artwork order) are recorded even when
+    // the mint failed, so the record always states why no customer
+    // email went out; the send itself still requires the invoice.
     await attemptCustomerEmail(ctx, order, statusRefPlain);
   }
   const quoteObj = quoteOutput(order.quote);
