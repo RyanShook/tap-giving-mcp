@@ -1,6 +1,6 @@
 ---
 name: nfc-tap-builder
-description: Create print-ready NFC artwork proofs with correct vector art for an organization through the Tap.Giving MCP server (NFC Tap Builder by Tap.Giving) at https://tap.giving/mcp, free to take to any vendor, with no lock-in. Built for churches, nonprofits, restaurants, coffee shops, and local businesses. Use when someone wants print-ready NFC tap artwork, a design proof, the artwork spec, a pricing quote, or help with Tap.Giving discs. Discovery, quotes, product facts, and the artwork spec need nothing. Ordering custom discs through Tap.Giving is an optional next step. No key, login, or account exists anywhere in this server.
+description: Create print-ready NFC artwork proofs with correct vector art for an organization through the Tap.Giving MCP server (NFC Tap Builder by Tap.Giving) at https://tap.giving/mcp, free to take to any vendor, with no lock-in. Built for churches, nonprofits, restaurants, coffee shops, and local businesses. Use when someone wants print-ready NFC tap artwork, a design proof, the artwork spec, a pricing quote, or help with Tap.Giving discs. Discovery, quotes, product facts, and the artwork spec need nothing. Ordering custom discs through Tap.Giving is an optional next step. No account, key, or login exists anywhere in this server.
 ---
 
 # NFC Tap Builder by Tap.Giving
@@ -34,7 +34,7 @@ Claude Code, one line:
 claude mcp add --transport http tap-giving https://tap.giving/mcp
 ```
 
-No key, login, or account exists anywhere in this server, at any step. Order status is read with the order's status reference, issued at placement and carried in the order's email; keep it, it cannot be recovered if lost.
+No account, key, or login exists anywhere in this server, at any step. Order status is read with the order's status reference, issued at placement and carried in the order's email; keep it, it cannot be recovered if lost.
 
 ## The journey
 
@@ -44,7 +44,7 @@ No key, login, or account exists anywhere in this server, at any step. Order sta
 4. Part 2 opens with `start_order_intent`: call it with a contact email, first in Ryan's collection order (email, organization name, shipping address and phone, quantity, shape, mounting, link destination). It captures the email through the same public capture endpoint the website uses.
 5. Call `get_order_questions` and ask its questions in the order given, then call `get_recap` to show the person the full order (artwork, quantity, shipping address, exact cost) before anything is locked in.
 6. Call `create_order` with the recap reference: this is the final step, "Email me my invoice and design proof." The order is recorded in the CRM, the full order is emailed to the Tap.Giving team, a Stripe invoice is created and finalized at the quoted total, and the invoice plus the design proof are emailed to the customer. A person pays the hosted invoice when it arrives.
-7. Call `get_order_status` with the order's status reference for where an order stands. (`register_webhook`'s retirement in v1 is proposed in the spec, pending settlement; delivery was never built.)
+7. Call `get_order_status` with the order's status reference for where an order stands.
 
 ## Tools
 
@@ -77,7 +77,6 @@ Status:
 | Tool | What it does | Returns |
 | --- | --- | --- |
 | `get_order_status` | Where an order stands, read with the order's `statusRef` (a capability issued at placement; only its hash is stored): stage, invoice state including the hosted link, fulfillment state with tracking when present, quantity, and the order's own artwork preview. | `stage`, `invoice`, fulfillment |
-| `register_webhook` | Registers (or replaces) one webhook subscription for proof_ready and shipped events. Registration exists in v1; delivery is v1.1. Retirement in v1 is proposed in the spec, pending settlement. | `subscriptionSecret` (shown once), `payloadContract`, `delivery` |
 
 Every tool declares `destructiveHint: false` and `openWorldHint: false`; the read-only tools also declare `readOnlyHint: true`. `create_order` is safe to retry after a network failure with the same idempotency key; a retry never re-sends an order email that already went out.
 
@@ -124,7 +123,7 @@ There are no keys. No user-facing step in this server requires or offers a key, 
 ## Human gates
 
 - Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.
-- Payment stays human: This server moves no money itself, and payment happens on the hosted invoice. When an order is placed, Tap.Giving emails the invoice and the design proof; a person pays the invoice when it arrives.
+- Payment stays human: This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice.
 - Production release and the supplier handoff stay human: no tool releases an order to production or touches fulfillment state.
 
 Do not tell a person their design is approved, their payment was taken by the server, or their order has shipped unless `get_order_status` says so.
@@ -136,7 +135,7 @@ Every tool error returns MCP's standard error content plus a structured object `
 | Code | Meaning | Retryable | Next action |
 | --- | --- | --- | --- |
 | `unauthorized` | Retired 2026-11-09: no credential exists in this server, and no tool returns this code. | no | Nothing to fix: connect with the endpoint URL alone. |
-| `forbidden` | Retired 2026-11-09: no credential exists in this server, and no tool returns this code. Records bound to another order read as `not_found`. | no | Nothing to fix: use the reference the flow issued. |
+| `forbidden` | The record is bound to a different flow: artwork already claimed by an order under a different contact email. Records bound to another order otherwise read as `not_found`. | no | Submit the artwork again for the new order, under the order's own contact email. |
 | `invalid_input` | An input failed validation; the message names it. Includes quantities under the 100-disc minimum. | no | Correct the named input and resend. Do not retry a smaller quantity. |
 | `manual_exception` | The request needs a person, for example a size other than the two built-ins. | no | Take the human route the message names: Ryan at ryan@tap.giving. |
 | `not_found` | The named record does not exist for the reference presented. Another order's records read as not_found. | no | Check the reference. |

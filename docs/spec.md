@@ -123,9 +123,9 @@ The settled rulings, which are the live contract from this note on:
   omitted, with the gap named in the landing record at the end of
   this document.
 
-PROPOSALS, recorded here and in the sections named, NOT settled
-contract, each marked PROPOSED (PENDING CEO SETTLEMENT) where it
-stands: the identity-based test lane (a placement is test-lane when
+PROPOSALS, recorded here and in the sections named (each settled
+by the CEO 2026-11-09, about 15:29 CT; the settlement record is in
+the landing note at the end of this document): the identity-based test lane (a placement is test-lane when
 the contact email's domain is on a hardcoded operator list,
 initially mcptest.org, or the organization name carries the standing
 TEST / DO NOT CONTACT markers; test-lane placements write DEV_ORDERS
@@ -315,7 +315,7 @@ tool, a worked example, and the error catalog).
 | `create_order` | [2.5 Tool: create_order](#25-tool-create_order-v1-write-no-credential-the-final-step) |
 | `request_invoice` (RETIRED 2026-11-08, P-16; see the Persona Loop Round 1 landing record) | [2.7 Tool: request_invoice](#27-tool-request_invoice-v1-write-key-required) |
 | `get_order_status` | [2.8 Tool: get_order_status](#28-tool-get_order_status-v1-read-capability-reference-no-credential) |
-| `register_webhook` | [2.9.1 Webhooks](#291-webhooks-proof_ready-and-shipped-contracts-in-v1-delivery-v11) |
+| `register_webhook` (retired in v1, settled 2026-11-09) | [2.9.1 Webhooks](#291-webhooks-proof_ready-and-shipped-contracts-in-v1-delivery-v11) |
 | All tools | [2.1 No credentials](#21-no-credentials-retired-2026-11-09-the-auth-header-shape), [2.9 Error shape](#29-error-shape-all-tools) |
 
 ## 1. Assumption test: where an MCP is actually required
@@ -1229,7 +1229,7 @@ stack trace, or a secret.
 
 ### 2.9.1 Webhooks: proof_ready and shipped (PROPOSAL, PENDING CEO SETTLEMENT: retire in v1)
 
-(Amended 2026-11-09, PROPOSED, not settled: register_webhook leaves the published tool set in v1. The facts: registration stored one subscription per organization with a secret shown once; delivery was never built, so no push has ever fired; and a live prefix list on 2026-11-09 returned zero WEBHOOK records, so retiring the tool orphans nothing. The recorded v1.1 revival path is capability-bound registration: the statusRef of section 2.8 authorizes one webhook per order, if delivery is ever built. Until settlement, the text below is the historical registration contract, not a live offer.)
+(Amended 2026-11-09, SETTLED by the CEO 2026-11-09: register_webhook leaves the published tool set in v1. The facts: registration stored one subscription per organization with a secret shown once; delivery was never built, so no push has ever fired; and a live prefix list on 2026-11-09 returned zero WEBHOOK records, so retiring the tool orphans nothing. The recorded v1.1 revival path is capability-bound registration: the statusRef of section 2.8 authorizes one webhook per order, if delivery is ever built. The text below is the historical registration contract, not a live offer.)
 
 Agents learn state changes by subscription, not polling.
 - Events: `proof_ready` (the order's final proof has been sent to the
@@ -1628,17 +1628,16 @@ The MCP presents as a builder, in the vocabulary people actually use.
   directory rules require (below). (Amended 2026-11-09: the
   "issues no invoices" clause of the sentence settled 2026-11-08 is
   superseded by Ryan's 2026-11-09 ruling, because the final-step
-  chain now issues the invoice. A replacement is PROPOSED, not
-  settled, for CEO settlement: "This server moves no money itself:
+  chain now issues the invoice. A replacement was proposed and is
+  SETTLED by the CEO 2026-11-09: "This server moves no money itself:
   when an order is placed, Tap.Giving emails the invoice and the
   design proof, and a person pays the hosted invoice." A confirmation
-  text replacement is likewise PROPOSED: "Your order is placed, and
+  text replacement is likewise SETTLED: "Your order is placed, and
   your invoice and design proof are on their way to <contactEmail>.
   A person from Tap.Giving follows up from there; production waits
   for your proof approval, and the invoice is paid on its hosted
-  page." Until settlement, surfaces carry the no-money-movement
-  truth without the superseded clause, and no surface improvises a
-  variant of the protected string.) Anthropic's
+  page." Surfaces carry the settled string verbatim, and no surface
+  improvises a variant of the protected string.) Anthropic's
   connector rules bar connectors that transfer money; this server is
   compliant by design (it never takes payment), and the sentence is in
   the copy, in the server description and in the payment handoff tool's
@@ -1698,9 +1697,9 @@ the order the placement itself created); rotate or revoke its own key
 (issuance is ours, so a compromised agent cannot lock the organization
 out of its own account by rotating).
 
-### 3.3 Modes: how one server serves production and test (amended 2026-11-09: key modes superseded; test lane PROPOSED, pending settlement)
+### 3.3 Modes: how one server serves production and test (amended 2026-11-09: key modes superseded; test lane SETTLED 2026-11-09)
 
-(Amended 2026-11-09: mode is no longer a property of a key, because no key exists; the key-mode text below, including the in-place 2026-11-07 amendment scoping test isolation to order records and CRM adoption with the shared start_order_intent capture as the settled design, is banner-marked superseded by the following PROPOSAL, which is NOT settled contract. PROPOSED test lane, pending CEO settlement: an identity-based test lane, server-side, never offered to users in any copy. A placement is test-lane when the contact email's domain is on a hardcoded operator list (initially mcptest.org) OR the organization name carries the standing synthetic marker pattern (TEST / DO NOT CONTACT). Test-lane behavior reuses the existing test plumbing: the order record goes to DEV_ORDERS instead of the live INVREQ door, no CRM adoption, the order email to Ryan TEST-marked to team inboxes only, the invoice minted with the Stripe test key, and the customer email suppressed. This preserves every isolation property the test key provided, keyed off identity data the flow already collects. The runner-up (no test lane; every verification placement is real and cleaned up afterward) was rejected in the design brief: a finalized real invoice cannot be deleted, only voided, and a real placement needs the full gated cleanup. Until settlement, a placement is a real placement.)
+(Amended 2026-11-09: mode is no longer a property of a key, because no key exists; the key-mode text below, including the in-place 2026-11-07 amendment scoping test isolation to order records and CRM adoption with the shared start_order_intent capture as the settled design, is banner-marked superseded by the following, SETTLED by the CEO 2026-11-09: an identity-based test lane, server-side, never offered to users in any copy. A placement is test-lane when the contact email's domain is on a hardcoded operator list (initially mcptest.org) OR the organization name carries the standing synthetic marker pattern (TEST / DO NOT CONTACT). Test-lane behavior reuses the existing test plumbing: the order record goes to DEV_ORDERS instead of the live INVREQ door, no CRM adoption, the order email to Ryan TEST-marked to team inboxes only, the invoice minted with the Stripe test key, and the customer email suppressed. This preserves every isolation property the test key provided, keyed off identity data the flow already collects. The runner-up (no test lane; every verification placement is real and cleaned up afterward) was rejected in the design brief: a finalized real invoice cannot be deleted, only voided, and a real placement needs the full gated cleanup. The lane is in force from the 2026-11-09 build.)
 
 The acceptance criterion requires a test run that touches no real
 customer, and forbids a test-only server. Resolution: mode is a property
@@ -2932,13 +2931,13 @@ P-13 with data, the agent-produces-PDF output standard, the QR
 rules and glossary, designUrl); 2.7 (banner: the mint returns via
 the seat; the parity contract here is its spec source); 2.8
 (retitled; the capability reference); 2.9 (credential codes
-retired); 2.9.1 (webhook retirement PROPOSED); 2.10 (capability
+retired); 2.9.1 (webhook retirement, settled 2026-11-09); 2.10 (capability
 references); 2.11 (rewritten wholesale: Part 1 DESIGN, Part 2
 ORDER, the collection-order deltas called out one by one, the
 final step's exact label); 2.12 (zero-credential requirement);
 section 3 (rewritten as identity-without-credentials; 3.1.1 and
 3.5 retired; 3.3's test-isolation amendment banner-marked and the
-test lane recorded as a PROPOSAL; 3.4's key promise corrected);
+test lane recorded as settled 2026-11-09; 3.4's key promise corrected);
 section 4 (Gate 3 renamed to the production handoff; Gate 1
 updated for the final-step chain); 5.1, 5.3, 5.4 (the seat at five
 operations; the adoption-collision verification; invoice minting's
@@ -2955,23 +2954,35 @@ the final-step chain with P-16 superseded in its no-invoice clause;
 the capability-reference status read; the supplier never named in
 this repo.
 
-Recorded as PROPOSALS, pending CEO settlement, not contract: the
-identity-based test lane (landing note; section 3.3); the
-retirement of register_webhook in v1 with the capability-bound
+Recorded as PROPOSALS at the spec pass, and SETTLED by the CEO
+2026-11-09 (about 15:29 CT), all seven, now contract: the
+identity-based test lane as designed (landing note; section 3.3);
+the retirement of register_webhook in v1 with the capability-bound
 v1.1 path (section 2.9.1); the replacement protected string and
-confirmation text (section 3.1, quoted there as PROPOSED); shapes
-promotion beyond the two built-ins (the example set holds 25 round
-and 2 square, zero rectangles; per-example size is UNVERIFIED
-until curation reads it off the proof records); the explainer
-wordings for the QR-sticker value case and the reorder fact
-(partially sourced; the approval-workflow question has no sourced
-answer anywhere and the explainer omits it, the gap named here).
+confirmation text verbatim (section 3.1); shapes promotion in the
+design spec and example system (the marketed set: 100/75/50 mm
+round and square, the 85.5 x 54 mm credit-card rectangle, the
+140 x 104 mm rectangle sign; the order path stays at the two
+built-ins, and pick-list examples come only from real delivered
+artwork: the example set holds 25 round and 2 square, zero
+rectangles, because the Highlands credit-card proof's delivered
+leg did not verify firsthand, so no rectangle example ships);
+the finalized-at-placement risk accepted at Ryan's direction;
+the explainer wordings settled as: the reorder fact stated plainly
+with no replacement implication, and the QR-sticker value case
+HELD OUT of the explainer entirely until a sourced wording exists
+(the approval-workflow question has no sourced answer anywhere
+and the explainer omits it, the gap named here). Per-example size
+in the curated example data rests on the production proof
+geometry (the 106 mm artboard is the 100 mm plate). The settled
+protected string, verbatim, on one line for the guards: "This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice." The settled confirmation text, verbatim: "Your order is placed, and your invoice and design proof are on their way to <contactEmail>. A person from Tap.Giving follows up from there; production waits for your proof approval, and the invoice is paid on its hosted page." 
 
-Open question, carried not resolved: the phase-one design QR and
-production encoding (landing note). Recommendation A (a labeled
-mock built from the entered URL, with production encoding the
-Redirect Dashboard link to that destination) is the design brief's
-recommendation, not a settled ruling, and no surface asserts it.
+Resolved 2026-11-09: the phase-one design QR and production
+encoding question is settled by CEO approval of recommendation A
+(a labeled mock built from the entered URL, with production
+encoding the Redirect Dashboard link to that destination,
+changeable anytime); surfaces assert it as written in section 2.11
+and the artwork spec.
 
 Contradictions with the design brief found while landing this
 amendment: none in the brief's facts. Two notes for the record:

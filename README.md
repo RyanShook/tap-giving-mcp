@@ -34,7 +34,7 @@ Any MCP client connects with this block alone:
 }
 ```
 
-No key, login, or account exists anywhere in this server, for any
+No account, key, or login exists anywhere in this server, for any
 tool, order status included. Order status is read with the order's
 status reference, issued at placement and carried in the order's
 email; keep it, it cannot be recovered if lost.
@@ -64,12 +64,7 @@ designs, and submit artwork for validation before any contact exists.
 Part 1 (design) carries no pricing at all; exact pricing is quoted only
 at the quote step, in Part 2.
 
-This server moves no money itself, and payment happens on the hosted
-invoice: when an order is placed, the invoice and the design proof are
-emailed to the customer (the final step's exact label is "Email me my
-invoice and design proof."). Payment, design approval, and production
-release stay human gates: no tool takes payment, approves a design, or
-releases an order to production.
+This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice. (The final step's exact label is "Email me my invoice and design proof.") Payment, design approval, and production release stay human gates: no tool takes payment, approves a design, or releases an order to production.
 
 ## Tools
 
@@ -85,7 +80,6 @@ releases an order to production.
 | `submit_artwork` | Submits the agent's finished artwork file for the on-disc proof; returns the export block (the submitted file byte-identical, a PNG render, the on-disc preview). | readOnlyHint: false, idempotentHint: true | artwork reference, validation, export block with images |
 | `create_order` | The final step, "Email me my invoice and design proof.": places the order (recorded in the CRM, the full order emailed to the Tap.Giving team), a Stripe invoice is created and finalized at the quoted total, and the invoice plus the design proof are emailed to the customer. | readOnlyHint: false, idempotentHint: true | order reference, `statusRef`, step outcomes |
 | `get_order_status` | Where an order stands, read with the order's `statusRef` (a capability issued at placement; only its hash is stored): stage, invoice state, fulfillment and tracking, quantity, and the order's own artwork preview. | readOnlyHint: true, idempotentHint: true | status block with image |
-| `register_webhook` | One callback per organization for proof_ready and shipped. Registration exists in v1; delivery is v1.1. Retirement in v1 is proposed in the spec, pending settlement. | readOnlyHint: false, idempotentHint: true | subscription block |
 
 ## Worked example
 
@@ -376,7 +370,7 @@ trace, or a secret.
 | Code | Meaning | Retryable | Next action |
 |---|---|---|---|
 | `unauthorized` | Retired 2026-11-09: no credential exists in this server, and no tool returns this code. | no | Nothing to fix: connect with the endpoint URL alone. |
-| `forbidden` | Retired 2026-11-09: no credential exists in this server, and no tool returns this code. Records bound to another order read as `not_found`. | no | Nothing to fix: use the reference the flow issued. |
+| `forbidden` | The record is bound to a different flow: artwork already claimed by an order under a different contact email. Records bound to another order otherwise read as `not_found`. | no | Submit the artwork again for the new order, under the order's own contact email. |
 | `invalid_input` | An input failed validation: missing, malformed, or out of range. The message names the input. | no | Correct the named input and resend. One case to know: `get_quote` and `create_order` refuse quantities under the 100-disc minimum and state it; do not retry with a smaller quantity. |
 | `manual_exception` | The request needs a person, for example a size other than the two built-ins (100 mm round, 100 mm square). | no | Take the human route the message names: Ryan at ryan@tap.giving. |
 | `not_found` | The named record does not exist for the reference presented: an unknown status reference, orderRef, or invoiceId. Another order's records read as not_found, never as their data. | no | Check the reference. Do not retry expecting another order's record to appear. |
