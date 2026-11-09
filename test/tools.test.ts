@@ -152,8 +152,8 @@ test("cold leg: discovery, quote, product, artwork spec need no key", async () =
   assert.ok(JSON.stringify(p.structured).includes("30-day money-back guarantee"), "guarantee named in product facts");
   assert.ok(JSON.stringify(p.structured).includes("in seconds"), "dashboard changes-in-seconds claim present");
   assert.ok(JSON.stringify(d.structured).includes("30-day money-back guarantee"), "guarantee named in discovery");
-  assert.ok(JSON.stringify(d.structured).includes("WELCOME10"), "discount code named in discovery");
-  assert.ok(JSON.stringify(d.structured).includes("7-day renewing window"), "discount window named in discovery");
+  assert.ok(!JSON.stringify(d.structured).includes("WELCOME10"), "discount code absent from discovery (pricing rule 2026-11-08)");
+  assert.ok(!(d.structured.pricing as Record<string, unknown>).discount, "no discount field in discovery pricing");
   const a = await runTool(env, req(), "get_artwork_spec", { shape: "round" }, fetchFn);
   assert.equal((a.structured.examples as unknown[]).length, 3);
   assert.ok(JSON.stringify(a.structured).includes("5 MB"), "artwork spec states the 5 MB intake cap");
@@ -487,9 +487,11 @@ test("get_discovery: sectioned first presentation with the no-fees lead line", a
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
-  // Headed sections, in order.
+  // Headed sections, in order. The design path ("How it works")
+  // now walks before the Why and Pricing sections (flow rule,
+  // Ryan 2026-11-08): tool first, selling last and light.
   let lastIdx = -1;
-  for (const h of ["What it is", "Why Tap.Giving", "Pricing", "How it works", "Gates"]) {
+  for (const h of ["What it is", "How it works: the design path first", "Why Tap.Giving", "Pricing", "Gates"]) {
     const idx = d.text.indexOf(`\n${h}\n`);
     assert.ok(idx > lastIdx, `section heading present and in order: ${h}`);
     lastIdx = idx;
@@ -504,16 +506,17 @@ test("get_discovery: sectioned first presentation with the no-fees lead line", a
     assert.ok(bi > leadIdx, `benefit bullet present after the lead line: ${b}`);
   }
   assert.deepEqual(d.structured.capabilities && (d.structured.capabilities as { benefits: string[] }).benefits, BENEFITS, "structured benefits unchanged");
-  // Pricing leads with the range line only (Amendment A, refined,
-  // Ryan 2026-11-07): the tier breakdown and the minimum are out of
-  // the discovery text entirely, while the structured pricing data
-  // keeps both intact.
+  // Pricing is the range line only, in text AND structured
+  // content (Ryan 2026-11-07 for the text; extended to structured
+  // content 2026-11-08): no tiers, no minimum, no discount, no
+  // worked totals on this opening surface. The full guard is
+  // test/pricing-presentation.test.ts.
   assert.ok(d.text.includes("Price range of $3.50 - $5.00 per disc depending on quantity."), "range line verbatim in discovery text");
   assert.ok(!d.text.includes("100-199 discs at $5.00 each"), "tier list absent from discovery text");
   assert.ok(!/minimum/i.test(d.text), "minimum not named anywhere in discovery text");
-  const pricing = d.structured.pricing as { minimumQuantity: number; tiers: Array<{ quantity: number; unitCents: number }> };
-  assert.equal(pricing.minimumQuantity, 100, "structured minimumQuantity intact");
-  assert.deepEqual(pricing.tiers.map((t) => [t.quantity, t.unitCents]), [[100, 500], [200, 400], [400, 350]], "structured tiers intact");
+  const pricing = d.structured.pricing as Record<string, unknown>;
+  assert.equal(pricing.range, "Price range of $3.50 - $5.00 per disc depending on quantity.", "structured pricing carries the range line");
+  assert.ok(!("tiers" in pricing) && !("minimumQuantity" in pricing) && !("discount" in pricing), "no tiers, minimum, or discount in structured pricing");
   // Pricing still carries the guarantee and the new tax note.
   assert.ok(d.text.includes("30-day money-back guarantee"));
   assert.equal(TAX_NOTE, "Tax, where it applies, is calculated on the invoice.");
@@ -522,8 +525,13 @@ test("get_discovery: sectioned first presentation with the no-fees lead line", a
   assert.ok(!/checkout/i.test(d.text), "no checkout claim in discovery text");
   // The payment gate sentence stands verbatim.
   assert.ok(d.text.includes("This server moves no money itself: it returns a hosted invoice link for a person to pay."), "gate sentence verbatim");
-  // How it works names the build-from and submit path.
-  assert.ok(d.text.includes("Build artwork from the example directions in get_artwork_spec, and submit it with submit_artwork."));
+  // How it works walks the design path first, ordering last and
+  // framed as optional (flow rule, Ryan 2026-11-08).
+  assert.ok(d.text.includes("Get the artwork spec and the design directions for that shape from get_artwork_spec."));
+  assert.ok(d.text.includes("Submit the finished file with submit_artwork and see it on the disc as a proof."));
+  const proofIdx = d.text.indexOf("see it on the disc as a proof");
+  const orderIdx = d.text.indexOf("Optional, only if you want the discs made");
+  assert.ok(orderIdx > proofIdx, "ordering step presented after the proof step, framed optional");
 });
 
 // ─── first-user round 1 fixes ─────────────────────────────────────
@@ -700,9 +708,11 @@ test("R2 F27: discovery answers an intent with a disc count and never echoes '?.
   const d = await runTool(env, req(), "get_discovery", {
     intent: "I am a pastor of a 220-person church. We want about 150 discs. What will it cost, and what does it look like?",
   }, fetchFn);
-  assert.ok(d.text.includes("For 150 discs: $750.00 total, or $675.00 with the first-order discount."), "headline in text");
+  assert.ok(d.text.includes("For 150 discs: the binding total comes from get_quote at that exact count"), "text points at get_quote for the total, no total quoted in discovery");
+  assert.ok(!d.text.includes("$750.00") && !d.text.includes("$675.00"), "no worked totals in discovery text");
   const guidance = (d.structured as { guidance?: string }).guidance ?? "";
-  assert.ok(guidance.startsWith("About 150 discs: $750.00"), "guidance leads with the quote headline");
+  assert.ok(guidance.startsWith("About 150 discs: start with the shape choice"), "guidance leads with the design path");
+  assert.ok(guidance.includes("call get_quote with 150 for the binding total"), "guidance names the quote step for the total");
   assert.ok(!d.text.includes("?."), "no stray punctuation in text");
   assert.ok(!guidance.includes("?."), "no stray punctuation in guidance");
   const echo = await runTool(env, req(), "get_discovery", { intent: "Tell me about stands?" }, fetchFn);

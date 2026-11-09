@@ -9,7 +9,7 @@ import {
   LINK_DESTINATION_NOTE, MOUNTING_OPTIONS, PRODUCT, PRODUCT_TOPICS, RECAP_NOTES,
   DESTINATION_MODEL, DISCOUNT_WINDOW_MEANING, TEST_KEY_LINE, TURNAROUND,
   NO_FEES_LINE, TEAM_EMAIL,
-  SERVER_DESCRIPTION, SERVER_NAME, PRESENTATION_SYNONYMS, TAX_NOTE, PRICE_RANGE_LINE } from "./facts.ts";
+  SERVER_DESCRIPTION, SERVER_NAME, POSITIONING_LINE, PRESENTATION_SYNONYMS, TAX_NOTE, PRICE_RANGE_LINE } from "./facts.ts";
 import { PRICING_TIERS } from "./pricing.ts";
 import { renderArtworkOnDisc, bytesToBase64, SCREW_HOLES } from "./preview.ts";
 import phoneTapPhoto from "./product-assets/phone-tap.webp.ts";
@@ -269,10 +269,11 @@ function artworkSpecObject(shape?: string): Record<string, unknown> {
 }
 
 async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
-  // F27: an intent naming a disc count gets that count's quote
-  // headline, in the guidance and the text, not just an echo of the
-  // question; the echo itself drops trailing punctuation so it never
-  // reads "?." after the added period.
+  // F27, re-ruled 2026-11-08: an intent naming a disc count gets
+  // guidance for that count, but totals live at the quote step
+  // only, so the headline points at get_quote instead of quoting
+  // one here; the echo itself drops trailing punctuation so it
+  // never reads "?." after the added period.
   const intentRaw = typeof args.intent === "string" ? args.intent : "";
   const intentEcho = intentRaw ? intentRaw.slice(0, 200).replace(/[\s.?!,;:\u2026]+$/, "") : "";
   let intentHeadline: string | null = null;
@@ -281,29 +282,29 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
   if (countMatch) {
     const n = parseInt(countMatch[1].replace(/,/g, ""), 10);
     if (n >= MIN_QTY && n <= MAX_QTY) {
-      const q = quoteFor({ qty: n, redirect: false });
-      intentHeadline = `About ${n} discs: ${dollars(q.grandTotalCents)} total, or ${dollars(q.discountedTotalCents)} with the first-order discount, free shipping. Start with the shape choice, then get_artwork_spec.`;
-      intentTextLine = `For ${n} discs: ${dollars(q.grandTotalCents)} total, or ${dollars(q.discountedTotalCents)} with the first-order discount. Free shipping.`;
+      intentHeadline = `About ${n} discs: start with the shape choice, then get_artwork_spec to build the proof; call get_quote with ${n} for the binding total at that count.`;
+      intentTextLine = `For ${n} discs: the binding total comes from get_quote at that exact count; the design path starts with the shape choice and get_artwork_spec.`;
     }
   }
-  const boundaries = [100, 200, 400].map((qty) => {
-    const tier = tierForQuantity(qty);
-    return { quantity: qty, tier: tier.label, unitCents: tier.unitCents, unitPrice: dollars(tier.unitCents) };
-  });
   const structured: Record<string, unknown> = {
     server: { name: SERVER_NAME, endpoint: ENDPOINT, synonyms: PRESENTATION_SYNONYMS },
     introduction: {
       builder: SERVER_NAME,
+      positioning: POSITIONING_LINE,
       product:
         "A tap disc is a small physical disc a phone taps to open your page instantly. " +
         "It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, " +
         "and it is durable waterproof PVC.",
       firstChoice: { field: "shape", options: ["round", "square"] },
     },
+    journey: [
+      { step: "artwork spec", tool: "get_artwork_spec", detail: "The production geometry and the house design directions for the chosen shape." },
+      { step: "build the artwork", tool: "get_artwork_spec", detail: "Compose the artwork from a design direction with your own tools." },
+      { step: "submit and proof", tool: "submit_artwork", detail: "Submit the finished file and see it on the disc as a proof. The artwork is yours to take to any printer." },
+      { step: "order, optional", tool: "get_quote", detail: "Only if you want discs from Tap.Giving: the binding quote at an exact quantity, then the order questions, order setup, and the hosted invoice." },
+    ],
     pricing: {
-      tiers: boundaries,
-      minimumQuantity: MIN_QTY,
-      discount: "10 percent off the first order with code WELCOME10, inside a 7-day renewing window; a conditional first-order line, never a price gate. Quotes headline list totals.",
+      range: PRICE_RANGE_LINE,
       shipping: "Free on every order.",
       note: "Call get_quote for the binding quote at an exact quantity.",
     },
@@ -322,32 +323,34 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       gates: [GATES.designApproval, GATES.payment, GATES.production],
       howToGetAKey: KEY_REQUEST_LINE,
       keyWait: "Completing an order needs the key, and the key takes up to one business day by email (hello@tap.giving). Everything before it is keyless: discovery, quotes, product facts, the artwork spec, the order questions, artwork submission, and the contact capture.",
-      kickoff: "start_order_intent",
+      kickoff: "get_artwork_spec",
       benefits: BENEFITS,
       guarantee: "Covered by our 30-day money-back guarantee.",
     },
     ...(intentEcho ? { guidance: intentHeadline ?? `Noted intent: ${intentEcho}. Start with the shape choice, then get_artwork_spec.` } : {}),
   };
   const text = [
-    `${SERVER_NAME}: ${SERVER_DESCRIPTION}`,
+    `${SERVER_NAME}`,
+    POSITIONING_LINE,
     ``,
     `What it is`,
     `A tap disc is a small physical disc a phone taps to open your page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.`,
-    `First choice: the shape, round or square.`,
+    `The discs themselves are for organizations of every kind, designed by your own agent.`,
     DESTINATION_MODEL,
+    ``,
+    `How it works: the design path first`,
+    `1. Start with the shape, round or square.`,
+    `2. Get the artwork spec and the design directions for that shape from get_artwork_spec.`,
+    `3. Build the artwork from a direction with your own tools, adding the organization's logo or name.`,
+    `4. Submit the finished file with submit_artwork and see it on the disc as a proof. The artwork is yours from here: take it to any printer, or order the discs from Tap.Giving.`,
+    `5. Optional, only if you want the discs made: get the binding quote from get_quote, answer the order questions, and set the order up. The final proof is emailed for a person's approval before anything is printed, and a person pays the hosted invoice.`,
     ``,
     `Why Tap.Giving`,
     NO_FEES_LINE,
     ...BENEFITS.map((b) => `- ${b}`),
     ``,
     `Pricing`,
-    `${PRICE_RANGE_LINE} Free shipping. First orders take 10 percent off with code WELCOME10 inside a 7-day renewing window; quotes headline list totals. ${TAX_NOTE} Every order is covered by our 30-day money-back guarantee. Production and delivery run 2 to 3 weeks from artwork approval.`,
-    ``,
-    `How it works`,
-    `1. Start with the shape, round or square.`,
-    `2. Build artwork from the example directions in get_artwork_spec, and submit it with submit_artwork.`,
-    `3. Order setup: quantity, mounting, an optional link destination, and the shipping address, through start_order_intent and create_order.`,
-    `4. A person approves the final proof by email, and a person pays the hosted invoice.`,
+    `${PRICE_RANGE_LINE} Free shipping. ${TAX_NOTE} Every order is covered by our 30-day money-back guarantee. Production and delivery run 2 to 3 weeks from artwork approval.`,
     ``,
     `Gates`,
     `Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.`,
@@ -396,6 +399,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       destination: DESTINATION_MODEL,
       worksWith: p.worksWith,
       guarantee: p.guarantee,
+      priceRange: PRICE_RANGE_LINE,
     },
     photos: productPhotoStructured(),
     stands: { products: p.stands, ordering: "Stands come from the Tap.Giving team, not through this server: email hello@tap.giving to add them to an order. Discs are the orderable product here." },
@@ -414,6 +418,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
     ? JSON.stringify(structured[topic as string], null, 2)
     : [
       `Tap discs: ${p.chipPlain}. ${p.material}.`,
+      PRICE_RANGE_LINE,
       p.sizePolicy,
       p.mountingDetail,
       p.metalCaveat,
@@ -494,11 +499,13 @@ async function toolGetArtworkSpec(_ctx: Ctx, args: Record<string, unknown>): Pro
       ? [
           `You picked: ${chosen.pickLabel}: ${chosen.direction}. It is shown in the image that follows.`,
           `Compose your own artwork from that direction, adding the logo or name of the organization it is for, and submit it with submit_artwork. The example is a starting template only: an example is never ordered or shipped as-is.`,
+          `The artwork you compose is yours: print-ready and vendor-neutral, yours to take to any printer. Nothing in this spec or the proof obliges an order from Tap.Giving.`,
         ]
       : [
           `Example design directions (starting templates to build from, shown in the images that follow):`,
           ...pickList,
           `Tell me the number of the direction you want to build from. Then compose your own artwork from that direction, adding the logo or name of the organization it is for, and submit it with submit_artwork. The examples are starting templates only: an example is never ordered or shipped as-is.`,
+          `The artwork you compose is yours: print-ready and vendor-neutral, yours to take to any printer. Nothing in this spec or the proof obliges an order from Tap.Giving.`,
         ]),
   ].join("\n");
   void shapeWord;
@@ -732,7 +739,9 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
         : previewKind === "submitted-file"
           ? "The submitted file is shown with this answer as-is; this server could not render it on the disc in this call, so do not describe it as an on-disc preview. "
           : "No preview image could be rendered in this call, so do not tell the person a preview is shown; the file is on record under the artworkRef. ") +
-      "Then capture the contact email (start_order_intent; no key needed) and ask the order questions (get_order_questions; no key needed). " +
+      "The design is the person's to keep from here: the submitted file is theirs, print-ready and vendor-neutral, to take to any printer. " +
+      "Nothing is emailed at this stage: the emailed final proof belongs to the order stage, after order setup. " +
+      "If they want the discs made by Tap.Giving (optional), the order path is: capture the contact email (start_order_intent; no key needed) and ask the order questions (get_order_questions; no key needed). " +
       "Everything after that needs the organization's API key: the recap (get_recap) and order setup (create_order). If the organization has no key yet, ask for one now: " +
       "email hello@tap.giving, say which organization the key is for, and the team replies with the key within one business day; the captured contact and this artwork wait safely meanwhile.",
   };
@@ -1824,18 +1833,18 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_discovery",
     description:
-      "Start here. One call orients a cold agent: the builder's introduction (NFC Tap Builder by Tap.Giving), the product in plain words, " +
-      "the first choice (shape: round or square), the pricing tiers, the artwork spec summary, and the full capability list with the human gates. " +
+      "Start here, with the design tool. One call orients a cold agent: the builder's introduction (NFC Tap Builder by Tap.Giving), what the tool does (print-ready NFC tap artwork proofs from the published spec and design directions, yours to take to any printer), the product in plain words, " +
+      "the first choice (shape: round or square), the artwork spec summary, the per-disc price range, and the full capability list with the human gates. Ordering is the optional step after the design path. " +
       "and get_order_questions when the questions are next (it needs no key). Discovery states the key wait up front: completing an order needs the organization's key, which takes up to one business day by email. " +
-      "The optional intent argument is echoed back as guidance with a quantity headline when it names a disc count. " + GATES.payment,
-    inputSchema: { type: "object", properties: { intent: { type: "string", description: "Optional free-text description of what the person wants (for example an organization type and a rough disc count). It is echoed back as guidance, and a disc count in it produces a price headline for that quantity." } } },
+      "The optional intent argument is echoed back as guidance; a disc count in it points at get_quote for the binding total at that count. " + GATES.payment,
+    inputSchema: { type: "object", properties: { intent: { type: "string", description: "Optional free-text description of what the person wants (for example an organization type and a rough disc count). It is echoed back as guidance; a disc count in it points at get_quote for the binding total at that count." } } },
     annotations: READ,
     run: toolGetDiscovery,
   },
   {
     name: "get_quote",
     description:
-      "The binding quote for a prospective order (also known as get_pricing): quantity, tier, list totals as the headline, and one payable total for a first order (the list total less 10 percent off the discs with code WELCOME10; add-ons are never discounted), with the 7-day renewing window explained in plain words (a first order placed within 7 days of the quote; a fresh quote renews it), " +
+      "The binding quote for a prospective order (also known as get_pricing): quantity, tier, list totals as the headline, and one payable first-order total with the first-order discount scope and its 7-day renewing window explained in plain words. " +
       "add-ons, free shipping as its own line, the exact grand total, and the turnaround (2 to 3 weeks from artwork approval). No tax line: " + TAX_NOTE + " " +
       "Quantities below the 100-disc minimum are refused by this tool itself. No key needed. Call this when the person names a quantity and wants the exact price; for product facts without a quantity, call get_product instead. The next step after a quote is get_artwork_spec for the artwork, then start_order_intent.",
     inputSchema: {
@@ -1852,7 +1861,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_product",
     description:
-      "The full product facts, with no key needed. Returns one block per topic: discs (the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, the 100 mm (4 inch) round and square built-ins; every other size is a manual exception), mounting (options and the metal caveat), stands and badges (table stands and lanyard badges, from the team by email, not ordered through this server), and shipping (free; 2 to 3 weeks from artwork approval), plus the free Redirect Dashboard and the destination model: per-disc pointing, two destinations, dashboard sign-in timing, and phone compatibility with the printed-code fallback. " +
+      "The full product facts, with no key needed. Disc pricing here is the per-disc range only; exact totals live in get_quote. Returns one block per topic: discs (the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, the 100 mm (4 inch) round and square built-ins; every other size is a manual exception), mounting (options and the metal caveat), stands and badges (table stands and lanyard badges, from the team by email, not ordered through this server), and shipping (free; 2 to 3 weeks from artwork approval), plus the free Redirect Dashboard and the destination model: per-disc pointing, two destinations, dashboard sign-in timing, and phone compatibility with the printed-code fallback. " +
       "Pass the optional topic argument to return only one block. Call this for product facts alone; for a first orientation call get_discovery, and for the price at a quantity call get_quote.",
     inputSchema: {
       type: "object",
@@ -1866,7 +1875,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "The production artwork spec for the chosen shape: 106 mm artboard, cut, bleed, and safe-zone geometry as structured millimetre data plus plain guidelines, " +
       "the format wanted back (vector, SVG preferred), house template examples to react to, and the optional logo ask. The agent builds the artwork with its own tools; " +
-      "this server has no design-generation tool. No key needed. Choose the shape first (the discovery call names it the first choice), then call this for that shape; call get_discovery instead when the person has not chosen yet, and submit_artwork once the artwork file exists. " +
+      "this server has no design-generation tool. The artwork composed from this spec is the organization's own, vendor-neutral and print-ready to take to any printer. No key needed. Choose the shape first (the discovery call names it the first choice), then call this for that shape; call get_discovery instead when the person has not chosen yet, and submit_artwork once the artwork file exists. " +
       "The shape argument selects round or square geometry; chosenExampleRef carries the house example direction the person picked, from the examples this tool returns.",
     inputSchema: {
       type: "object",
@@ -1881,7 +1890,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "submit_artwork",
     description:
-      "Send the finished artwork back. Intake is permissive by ruling: a real image is accepted in any format and rejected only on three sanity grounds " +
+      "Send the finished artwork back and see it on the disc as a proof. The artwork stays the organization's own: print-ready and vendor-neutral, theirs to take to any printer; submitting it obliges no order. Intake is permissive by ruling: a real image is accepted in any format and rejected only on three sanity grounds " +
       "(malicious or masquerading content, over 5 MB decoded, or not decodable as the type it claims). Production fitness is judged later in the normal proof flow, never here. " +
       "No key and no email are needed on the cold path; a keyed submission binds to the key's organization. The file argument carries the artwork file (filename, mediaType, contentBase64); sha256 is the hex SHA-256 of those file bytes; shape optionally names the shape the artwork was designed for; orderRef optionally attaches the submission to an existing order; logo optionally carries the source logo the artwork was built from; note is free text for the team. Each call creates a separate submission: resubmitting the same file mints a new artworkRef rather than replacing the earlier one. Returns the artworkRef every later step carries, a displayUrl, and a preview of the person's own design composited on the disc (cut shape applied) for the renderable formats (SVG, PNG, JPEG, WebP, GIF); for a format this server cannot render here (for example PDF), the answer says so plainly and never promises a preview or an email at this stage. " +
       GATES.designApproval,
@@ -1910,7 +1919,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "start_order_intent",
     description:
-      "The kickoff and the journey's first ask: capture a contact email through the same public capture endpoint the website's email-first door uses, " +
+      "An optional step on the order path, not the start of the journey: capture a contact email through the same public capture endpoint the website's email-first door uses, " +
       "so follow-up rides the existing lead machinery. No key needed. An intent is a lead, not an order: it creates no invoice and reserves nothing. " +
       "Returns an intentRef, links an artworkRef when given, and says plainly what follow-up to expect. The email must be a real, reachable address: reserved domain endings (.example, .test, .invalid) and the example domains are refused, because no follow-up could ever reach them. " +
       "Completing an order needs an organization API key (issued by the Tap.Giving team; get_discovery says how to ask). One intent per email: a repeat call with the same email returns the existing intentRef and creates no second lead. This call captures the contact only; create_order is the later, keyed call that sets up the order itself.",

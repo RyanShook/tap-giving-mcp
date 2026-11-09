@@ -7,6 +7,23 @@
 
 export const SERVER_NAME = "NFC Tap Builder by Tap.Giving";
 export const SERVER_TITLE = "NFC Tap Builder by Tap.Giving";
+
+// The positioning lead (Ryan, 2026-11-08): this server is a tool
+// first. It creates print-ready NFC tap artwork proofs from the
+// published spec and the house design directions; the artwork is
+// the organization's own, vendor-neutral, to print anywhere.
+// Ordering discs through Tap.Giving is the optional second step.
+// The sentence states only what the tools do today: the server
+// publishes the spec and directions, the calling agent composes
+// the artwork with its own tools, submit_artwork takes the
+// finished file in, the on-disc preview shows it back, and the
+// emailed final proof belongs to the order stage.
+export const POSITIONING_LINE =
+  "A design tool first: this server helps you create print-ready NFC tap artwork proofs. " +
+  "Work from its published spec and design directions, compose the artwork with your own tools, " +
+  "and submit the finished file to see it on the disc as a proof. The artwork is yours: print-ready, " +
+  "vendor-neutral, yours to take to any printer. Ordering discs through Tap.Giving is an optional " +
+  "next step, only if you want it.";
 // The no-fees lead line: stated once here, used in the server
 // description and as the lead line of get_discovery's Why section.
 // Facts: no subscription fees (BENEFITS), and the Redirect Dashboard
@@ -16,9 +33,10 @@ export const NO_FEES_LINE =
 
 export const APPLICATIONS_LIST = "churches, nonprofits, restaurants, coffee shops, and local businesses";
 export const SERVER_DESCRIPTION =
-  "Build and order custom NFC tap discs and tap tags for organizations of every kind: " +
-  "built for " + APPLICATIONS_LIST + ", designed by your own agent, priced from the published tiers, ordered up to the " +
-  "human payment and proof gates. " + NO_FEES_LINE + " This server moves no money itself: it returns a hosted invoice " +
+  POSITIONING_LINE + " " +
+  "The discs themselves are custom NFC tap discs and tap tags for organizations of every kind: " +
+  "built for " + APPLICATIONS_LIST + ", designed by your own agent. " + NO_FEES_LINE + " " +
+  "Ordering is optional and stays behind the human payment and proof gates. This server moves no money itself: it returns a hosted invoice " +
   "link for a person to pay.";
 export const PRESENTATION_SYNONYMS = ["tap discs", "tap plates", "tap tags", "NFC tap discs"];
 export const ENDPOINT = "https://tap.giving/mcp";
@@ -50,7 +68,7 @@ export const BENEFITS: string[] = [
   "Works with any platform",
   "No subscription fees",
   "Durable waterproof PVC with a locked tap chip",
-  "Custom branding from 100 discs",
+  "Custom branding on every design",
   "Free shipping",
   "Covered by our 30-day money-back guarantee",
 ];
@@ -77,11 +95,11 @@ export const PRODUCT = {
   guarantee: "Covered by our 30-day money-back guarantee.",
   worksWith: "Works with any platform. No subscription fees.",
   stands: [
-    { name: "Table stand, small", size: "70 x 100 mm", priceCents: 700, minimum: 100 },
-    { name: "Table stand, large", size: "120 x 140 mm", priceCents: 900, minimum: 100 },
+    { name: "Table stand, small", size: "70 x 100 mm", priceCents: 700 },
+    { name: "Table stand, large", size: "120 x 140 mm", priceCents: 900 },
   ],
   badges: [
-    { name: "Lanyard badge", size: "90 x 130 mm", priceCents: 500, minimum: 100 },
+    { name: "Lanyard badge", size: "90 x 130 mm", priceCents: 500 },
   ],
   shipping: {
     cost: "Free shipping on every order.",
@@ -218,9 +236,12 @@ export const DISCOUNT_WINDOW_MEANING =
   "within 7 days of this quote. If the 7 days pass unused, ask for a fresh quote and the window " +
   "starts again; the discount is never lost for good, and it never applies to a second order.";
 
-// The discovery text's pricing lead (Ryan, 2026-11-07): the range
-// line only. The tier breakdown and the minimum live in get_quote
-// and in the structured pricing data, not in discovery's text.
+// The opening surfaces' pricing lead (Ryan, 2026-11-07, extended
+// 2026-11-08): the range line only, in discovery text AND
+// structured content, the GET self-description, and the
+// initialize instructions. The tier breakdown, the minimum, and
+// the first-order discount live at the quote step and after it,
+// never on an opening surface.
 export const PRICE_RANGE_LINE = "Price range of $3.50 - $5.00 per disc depending on quantity.";
 
 export const GATES = {

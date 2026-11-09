@@ -12,7 +12,7 @@
 // business repo; the published copy is docs/spec.md in this repo.
 
 import type { Env } from "./env.ts";
-import { ENDPOINT, GATES, KEY_REQUEST_LINE, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME } from "./facts.ts";
+import { ENDPOINT, GATES, KEY_REQUEST_LINE, POSITIONING_LINE, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME } from "./facts.ts";
 import { PRODUCT_PHOTOS, TOOLS, artworkBytesKey, readArtworkRecord, runTool } from "./tools.ts";
 import { buildTemplateSvg } from "./preview.ts";
 import { ToolError, isRecord } from "./errors.ts";
@@ -55,6 +55,8 @@ function selfDescription(): string {
   return [
     `# ${SERVER_NAME}`,
     ``,
+    POSITIONING_LINE,
+    ``,
     SERVER_DESCRIPTION,
     ``,
     `Endpoint: POST ${ENDPOINT} (MCP over Streamable HTTP, JSON-RPC 2.0, stateless).`,
@@ -74,7 +76,7 @@ function selfDescription(): string {
     ``,
     `For the write tools, add the organization's key to the same block: "headers": { "Authorization": "Bearer <key>" }.`,
     `Claude Code: claude mcp add --transport http tap-giving ${ENDPOINT}`,
-    `Discovery, pricing, product facts, the artwork spec, and the order questions need no key. The recap and order status are reads that use the key. Completing an order needs the key, and the key takes up to one business day by email, so ask for it before the order steps.`,
+    `Discovery, product facts, the artwork spec, and the order questions need no key; exact totals come from get_quote at the end. The recap and order status are reads that use the key. Completing an order needs the key, and the key takes up to one business day by email, so ask for it before the order steps.`,
     ``,
     `## Tools`,
     toolLines,
