@@ -11,6 +11,8 @@ Also searched as: tap discs, tap plates, tap tags, NFC tap discs.
 
 ## Connect
 
+Website: https://tap.giving
+
 Endpoint: `POST https://tap.giving/mcp` (MCP over Streamable HTTP, JSON-RPC 2.0, stateless). `GET https://tap.giving/mcp` returns a short self-description.
 
 Paste-ready client config. The keyless read side works exactly as shown:
