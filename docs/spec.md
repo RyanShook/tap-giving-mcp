@@ -1233,7 +1233,7 @@ The MCP presents as a builder, in the vocabulary people actually use.
   still match: tap discs, tap plates, tap tags, NFC tap discs.
   The description also carries, verbatim, the no-money sentence the
   directory rules require (below): "This server moves no money itself:
-  it returns a hosted invoice link for a person to pay." Anthropic's
+  a person from Tap.Giving follows up with the invoice." (Sentence as settled 2026-11-08: "This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.") Anthropic's
   connector rules bar connectors that transfer money; this server is
   compliant by design (it never takes payment), and the sentence is in
   the copy, in the server description and in the payment handoff tool's
@@ -2166,3 +2166,31 @@ facts. No tool behavior, enforcement, key classification, or
 payload contract changed beyond presentation order and nextStep
 guidance; the protected verbatim strings (the range line, the
 no-money line, the no-fees line) are byte-identical.
+
+P-15 and P-16 addendum (Ryan rulings via the Cold-User Test chat,
+2026-11-08, about 23:52 and 23:53 CT; CEO reword settled about
+23:54 CT): placing an order never requires a key, and this server
+does not mint invoices as part of placing an order. Placing an
+order records it in the CRM and emails the full order to Ryan; he
+personally follows up with the actual invoice. Consequences
+landed in this pass: every key statement on the opening and
+journey surfaces is scoped to what keys still govern (order
+status, webhook registration, and the order questions' optional
+organization block), discovery's published capabilities present
+get_recap among the keyless reads with get_order_status as the one
+keyed read (enforcement follows in the persona pass, which owns
+the keyless placement build and the KEYED_WRITE_TOOLS
+reclassification; the copy leads enforcement by that accepted
+sequence), the placement path everywhere reads questions, recap,
+place the order, then a person from Tap.Giving follows up with
+the invoice, and the protected no-money sentence is replaced on
+every surface with the settled wording: "This server moves no
+money itself and issues no invoices: a person from Tap.Giving
+follows up with the invoice." The other two protected strings are
+unchanged. The visual standard (Ryan, 2026-11-08, about 23:52 CT)
+also lands here: the server is visually driven and shows images at
+every step where an honest image exists; get_quote now carries the
+product photo, and the get_product mounting topic carries the
+mounting photos alongside the product photo. No generated renders:
+only existing verified assets or renders of the organization's own
+submitted artwork.

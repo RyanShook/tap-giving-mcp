@@ -117,6 +117,6 @@ test("examples are a house set of six, round and square across it", () => {
 
 test("server description carries the no-fees line and the verbatim gate sentence", () => {
   assert.ok(SERVER_DESCRIPTION.includes(NO_FEES_LINE), "no-fees statement in the server description");
-  assert.ok(SERVER_DESCRIPTION.includes("This server moves no money itself: it returns a hosted invoice link for a person to pay."), "gate sentence verbatim in the server description");
+  assert.ok(SERVER_DESCRIPTION.includes("This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice."), "gate sentence verbatim in the server description");
   assert.equal(TAX_NOTE, "Tax, where it applies, is calculated on the invoice.");
 });

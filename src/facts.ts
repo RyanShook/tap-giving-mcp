@@ -36,8 +36,7 @@ export const SERVER_DESCRIPTION =
   POSITIONING_LINE + " " +
   "The discs themselves are custom NFC tap discs and tap tags for organizations of every kind: " +
   "built for " + APPLICATIONS_LIST + ", designed by your own agent. " + NO_FEES_LINE + " " +
-  "Ordering is optional and stays behind the human payment and proof gates. This server moves no money itself: it returns a hosted invoice " +
-  "link for a person to pay.";
+  "Ordering is optional and stays behind the human payment and proof gates. This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.";
 export const PRESENTATION_SYNONYMS = ["tap discs", "tap plates", "tap tags", "NFC tap discs"];
 export const ENDPOINT = "https://tap.giving/mcp";
 export const REPO_URL = "https://github.com/RyanShook/tap-giving-mcp";
@@ -51,15 +50,17 @@ export const TEAM_EMAIL = "hello@tap.giving";
 // with no real order and no charge. There is no self-serve issuance;
 // asking the team by email is the route.
 export const TEST_KEY_LINE =
-  "Evaluating the server? A test key runs the full keyed journey with no real order and no charge. " +
+  "Evaluating the server? A test key runs the full journey, including placing a test order, with no real order and no charge. " +
   "There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies " +
   "with one (a tg_test_<orgslug>_<secret> key) within one business day.";
 export const KEY_REQUEST_LINE =
-  "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address " +
-  "you want on the order, say which organization the key is for, and the team replies with the key " +
-  "within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like " +
-  "tg_test_<orgslug>_<secret>. Discovery, pricing, product facts, the artwork spec, and the order questions " +
-  "need no key; recaps, order setup, invoice requests, and order status use the organization's key.";
+  "Placing an order never requires a key: discovery, product facts, the artwork spec, the order questions, " +
+  "the recap, order setup, and the invoice link all run keyless. An organization API key is optional: " +
+  "it enriches the order questions with the key's own organization block, and it governs order status and " +
+  "webhook registration. Keys are issued by the Tap.Giving team: email hello@tap.giving from the address " +
+  "you want associated with the organization, say which organization the key is for, and the team replies " +
+  "with the key within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like " +
+  "tg_test_<orgslug>_<secret>.";
 
 // The standing differentiators (llms.txt and for-agents fact set),
 // carried in submit_artwork's output and in get_discovery so the
@@ -248,7 +249,7 @@ export const GATES = {
   designApproval:
     "Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.",
   payment:
-    "Payment stays human: this server moves no money itself. It returns a hosted invoice link and a person pays on Stripe's hosted page.",
+    "Payment stays human: This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice. A person pays the invoice when it arrives.",
   production:
     "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state.",
 };

@@ -524,7 +524,7 @@ test("get_discovery: sectioned first presentation with the no-fees lead line", a
   // No affirmative checkout claim anywhere in the discovery text.
   assert.ok(!/checkout/i.test(d.text), "no checkout claim in discovery text");
   // The payment gate sentence stands verbatim.
-  assert.ok(d.text.includes("This server moves no money itself: it returns a hosted invoice link for a person to pay."), "gate sentence verbatim");
+  assert.ok(d.text.includes("This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice."), "gate sentence verbatim");
   // How it works walks the design path first, ordering last and
   // framed as optional (flow rule, Ryan 2026-11-08).
   assert.ok(d.text.includes("Get the artwork spec and the design directions for that shape from get_artwork_spec."));
@@ -550,10 +550,14 @@ test("F3 + F1: discovery classifies reads honestly and carries the product photo
   const fetchFn = stubFetch([]) as typeof fetch;
   const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
   const caps = d.structured.capabilities as { readTools: string[]; keyedReadTools: string[] };
-  assert.deepEqual(caps.readTools, ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions"]);
-  assert.deepEqual(caps.keyedReadTools, ["get_recap", "get_order_status"]);
+  // P-15 (2026-11-08): the published classification presents
+  // placement as keyless ahead of the persona pass's enforcement
+  // change; the empirical split itself is asserted in
+  // test/discovery-key-honesty.test.ts, which that pass updates.
+  assert.deepEqual(caps.readTools, ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap"]);
+  assert.deepEqual(caps.keyedReadTools, ["get_order_status"]);
   assert.ok(d.images && d.images.length === 1, "discovery returns the product photo inline");
-  assert.ok(d.text.includes("Recaps and order status are reads that use your organization key"));
+  assert.ok(d.text.includes("Placing an order needs no key"));
   assert.ok(!/ask Ryan/.test(d.text), "no first-name key ask in discovery text");
   const p = await runTool(env, req(), "get_product", {}, fetchFn);
   assert.ok(p.images && p.images.length === 1, "product returns the product photo inline");
@@ -656,7 +660,7 @@ test("F14: intent with a key skips the get-a-key line, returns intentRef, links 
   assert.ok(!/ask Ryan|get a key|needs an organization API key/.test(keyed.text), "no get-a-key line when a key is present");
   assert.ok(/within one business day/.test(keyed.text), "follow-up expectation stated");
   const keyless = await runTool(env, req(), "start_order_intent", { email: "new@mcptest.org" }, fetchFn);
-  assert.ok(/hello@tap\.giving/.test(keyless.text), "keyless intent points at the team address");
+  assert.ok(/follows up with the invoice/.test(keyless.text), "keyless intent states the placement path ends at human follow-up, no key");
   assert.ok(!/ask Ryan/.test(keyless.text));
 });
 
@@ -1031,14 +1035,15 @@ test("item 6: get_quote states one payable first-order total, the add-on rule, t
   assert.match(q.text, /2 to 3 weeks from artwork approval/);
 });
 
-test("items 1, 4, 8: discovery carries the key wait up front, the destination model, and the turnaround", async () => {
+test("items 1, 4, 8, re-ruled P-15: discovery states the key scope up front, the destination model, and the turnaround", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
   const caps = d.structured.capabilities as Record<string, unknown>;
   assert.match(String(caps.howToGetAKey), /within one business day/);
   assert.match(String(caps.howToGetAKey), /tg_test_<orgslug>_<secret>/);
-  assert.match(String(caps.keyWait), /up to one business day/);
+  assert.match(String(caps.keyWait), /Placing an order needs no key/);
+  assert.match(String(caps.keyWait), /follows up with the invoice/);
   assert.match(String(d.structured.destination), /per disc/);
   assert.match(String(d.structured.destination), /review profile/);
   assert.match(String(d.structured.testKey), /no self-serve signup/);
@@ -1068,7 +1073,21 @@ test("items 4, 7b, 9: get_product topic answers mirror the all-topics structure;
   assert.match(String(stands.ordering), /email hello@tap.giving/);
 });
 
-test("items 1, 2: submit_artwork nextStep sequences the key after the capture; no artwork-stage proof email is promised", async () => {
+test("visual standard: get_quote carries the product photo; the mounting topic carries the mounting photos", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  const q = await runTool(env, req(), "get_quote", { quantity: 250 }, fetchFn);
+  assert.ok(q.images && q.images.length === 1, "quote returns the product photo inline");
+  assert.equal((q.structured.photos as Array<{ id: string }>)[0].id, "phone-tap");
+  assert.match(q.text, /The photo with this answer shows the disc in use/);
+  const m = await runTool(env, req(), "get_product", { topic: "mounting" }, fetchFn);
+  assert.equal(m.images?.length, 3, "mounting topic: the product photo plus both mounting photos inline");
+  assert.equal((m.structured.mountingPhotos as Array<{ id: string }>).map((x) => x.id).join(","), "mount-adhesive,mount-screws");
+  const discTopic = await runTool(env, req(), "get_product", { topic: "discs" }, fetchFn);
+  assert.equal(discTopic.images?.length, 1, "other topics keep the product photo only");
+});
+
+test("items 1, 2, re-ruled P-15: submit_artwork nextStep runs the keyless placement path after the capture; no artwork-stage proof email is promised", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const sha = await pngSha();
@@ -1078,7 +1097,8 @@ test("items 1, 2: submit_artwork nextStep sequences the key after the capture; n
   const ns = String(r.structured.nextStep);
   assert.match(ns, /start_order_intent/);
   assert.match(ns, /get_recap/);
-  assert.match(ns, /one business day/);
+  assert.match(ns, /No key is needed at any step of placing the order/);
+  assert.match(ns, /follows up with the invoice/);
   const note = String((r.structured.preview as Record<string, unknown>).note);
   assert.match(note, /Nothing is emailed at the artwork stage/);
   assert.doesNotMatch(r.text + " " + note, /proof we email|emailed proof shows|final proof comes by email/);

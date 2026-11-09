@@ -1,6 +1,6 @@
 ---
 name: nfc-tap-builder
-description: Create print-ready NFC artwork proofs with correct vector art for an organization through the Tap.Giving MCP server (NFC Tap Builder by Tap.Giving) at https://tap.giving/mcp, free to take to any vendor, with no lock-in. Built for churches, nonprofits, restaurants, coffee shops, and local businesses. Use when someone wants print-ready NFC tap artwork, a design proof, the artwork spec, a pricing quote, or help with Tap.Giving discs. Keyless reads cover discovery, quotes, product facts, and the artwork spec. Ordering custom discs through Tap.Giving is an optional next step; order setup uses an organization API key.
+description: Create print-ready NFC artwork proofs with correct vector art for an organization through the Tap.Giving MCP server (NFC Tap Builder by Tap.Giving) at https://tap.giving/mcp, free to take to any vendor, with no lock-in. Built for churches, nonprofits, restaurants, coffee shops, and local businesses. Use when someone wants print-ready NFC tap artwork, a design proof, the artwork spec, a pricing quote, or help with Tap.Giving discs. Keyless reads cover discovery, quotes, product facts, and the artwork spec. Ordering custom discs through Tap.Giving is an optional next step, and placing an order uses no key.
 ---
 
 # NFC Tap Builder by Tap.Giving
@@ -34,7 +34,7 @@ Claude Code, one line:
 claude mcp add --transport http tap-giving https://tap.giving/mcp
 ```
 
-For the keyed tools, add the organization's key to the same block: `"headers": { "Authorization": "Bearer <key>" }`. Discovery, pricing, product facts, the artwork spec, and the order questions need no key; a key is added only when the organization is ready to order.
+Placing an order needs no key and no header. For the organization-bound surfaces (order status, webhook registration, and the order questions' organization block), add the organization's key to the same block: `"headers": { "Authorization": "Bearer <key>" }`. Discovery, pricing, product facts, the artwork spec, and the order questions need no key.
 
 ## The journey
 
@@ -42,8 +42,8 @@ For the keyed tools, add the organization's key to the same block: `"headers": {
 2. Call `get_quote` for the binding quote at an exact quantity, and `get_product` for full product facts.
 3. Call `get_artwork_spec` for the production geometry of the chosen shape, build the artwork from its house example directions, and send it back with `submit_artwork`.
 4. To register interest before any key exists, call `start_order_intent` with a contact email. It captures the email through the same public capture endpoint the website uses.
-5. Call `get_order_questions` (no key needed) and ask its questions in the order given, then, with the organization's key, call `get_recap` to show the person the full order (artwork, quantity, shipping address, exact cost) before anything is locked in.
-6. Call `create_order` with the recap reference, then `request_invoice` and hand the person the hosted invoice link. A person pays on Stripe's hosted page.
+5. Call `get_order_questions` (no key needed) and ask its questions in the order given, then call `get_recap` (no key needed) to show the person the full order (artwork, quantity, shipping address, exact cost) before anything is locked in.
+6. Call `create_order` with the recap reference to place the order. A person from Tap.Giving follows up with the invoice; the person pays it when it arrives.
 7. Call `get_order_status` for where an order stands. `register_webhook` registers one callback per organization for proof_ready and shipped events.
 
 ## Tools
@@ -63,17 +63,22 @@ Keyless or optional-key writes:
 | Tool | Key | What it does | Returns |
 | --- | --- | --- | --- |
 | `submit_artwork` | optional | Sends finished artwork back under a permissive intake (see Artwork). Acceptance is not a production-fitness verdict. | `artworkRef`, `displayUrl`, `sha256`, `validation` |
-| `start_order_intent` | no | Captures a contact email so a person at Tap.Giving has it, and names the key step for ordering. | `captured`, `source`, `nextStep` |
+| `start_order_intent` | no | Captures a contact email so a person at Tap.Giving has it. | `captured`, `source`, `nextStep` |
 
-Keyed tools (organization API key required):
+Placing an order (no key needed):
 
 | Tool | What it does | Returns |
 | --- | --- | --- |
 | `get_recap` | The full recap, the last thing before the exits: submitted artwork, quantity, shipping address as entered, the exact cost from `get_quote`, and both required notes. | `recapRef`, `cost`, `shipTo`, `notes`, `exits` |
 | `create_order` | Sets up an order through the same front door a website order takes. Idempotent on the caller's idempotency key. Exits: pay now, or lock in this price. | `orderRef`, `quote`, `exit`, `nextStep` |
-| `request_invoice` | Returns the payment handoff: a real, finalized Stripe hosted invoice and its link. If the organization already has an open invoice, that link is returned flagged `existing` instead of stacking a second one. | `invoiceId`, `invoiceNumber`, `hostedInvoiceUrl`, `handoffLine`, `totalCents` |
+
+Keyed tools (organization API key required):
+
+| Tool | What it does | Returns |
+| --- | --- | --- |
 | `get_order_status` | Where an order stands: CRM stage, fulfillment state with tracking when present, and invoice state with its hosted link. | `stage`, `invoice`, fulfillment |
 | `register_webhook` | Registers (or replaces) the organization's one webhook subscription for proof_ready and shipped events. | `subscriptionSecret` (shown once), `payloadContract`, `delivery` |
+| `request_invoice` | For orders already placed through this server: returns the order's invoice link. Placing an order does not use this tool. | `invoiceId`, `invoiceNumber`, `hostedInvoiceUrl`, `handoffLine`, `totalCents` |
 
 Every tool declares `destructiveHint: false` and `openWorldHint: false`; the read-only tools also declare `readOnlyHint: true`. `create_order` and `request_invoice` are safe to retry after a network failure with the same idempotency key.
 
@@ -117,12 +122,12 @@ Add-on to settle before printing: discs that go on metal surfaces need a shieldi
 
 An organization API key looks like `tg_live_<orgslug>_<secret>`; a test key looks like `tg_test_<orgslug>_<secret>`. Keys are sent as `Authorization: Bearer <key>`. Only the SHA-256 hash of a key is stored.
 
-To get a key: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Evaluating the server? A test key runs the full keyed journey with no real order and no charge. There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies with one within one business day. If a request needs a person outside the tools, the human route is Ryan, the founder, at ryan@tap.giving.
+To get a key: email hello@tap.giving from the address you want associated with the organization, say which organization the key is for, and the team replies with the key within one business day. Evaluating the server? A test key runs the full journey, including placing a test order, with no real order and no charge. There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies with one within one business day. If a request needs a person outside the tools, the human route is Ryan, the founder, at ryan@tap.giving.
 
 ## Human gates
 
 - Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.
-- Payment stays human: this server moves no money itself. It returns a hosted invoice link and a person pays on Stripe's hosted page.
+- Payment stays human: This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice. A person pays the invoice when it arrives.
 - Production release and the supplier handoff stay human: no tool releases an order to production or touches fulfillment state.
 
 Do not tell a person their design is approved, their payment was taken by the server, or their order has shipped unless `get_order_status` says so.

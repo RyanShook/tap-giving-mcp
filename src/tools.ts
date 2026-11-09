@@ -165,6 +165,13 @@ export function mountingPhotoImages(): Array<{ data: string; mimeType: string }>
   return MOUNTING_PHOTOS.map((p) => ({ data: p.data, mimeType: p.mimeType }));
 }
 
+export function mountingPhotoStructured(): Array<Record<string, unknown>> {
+  return MOUNTING_PHOTOS.map((p) => ({
+    id: p.id, alt: p.alt, mimeType: p.mimeType,
+    displayUrl: `https://tap.giving/mcp/photos/${p.id}.webp`,
+  }));
+}
+
 // The tier-cliff window (F7): a quote whose quantity sits within this
 // many discs below the next tier boundary names that boundary, so a
 // organization can see when a slightly larger order costs about the same.
@@ -301,7 +308,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       { step: "artwork spec", tool: "get_artwork_spec", detail: "The production geometry and the house design directions for the chosen shape." },
       { step: "build the artwork", tool: "get_artwork_spec", detail: "Compose the artwork from a design direction with your own tools." },
       { step: "submit and proof", tool: "submit_artwork", detail: "Submit the finished file and see it on the disc as a proof. The artwork is yours to take to any printer." },
-      { step: "order, optional", tool: "get_quote", detail: "Only if you want discs from Tap.Giving: the binding quote at an exact quantity, then the order questions, order setup, and the hosted invoice." },
+      { step: "order, optional", tool: "get_quote", detail: "Only if you want discs from Tap.Giving: the binding quote at an exact quantity, then the order questions, the recap, and placing the order. A person from Tap.Giving follows up with the invoice." },
     ],
     pricing: {
       range: PRICE_RANGE_LINE,
@@ -317,12 +324,12 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     testKey: TEST_KEY_LINE,
     photos: productPhotoStructured(),
     capabilities: {
-      readTools: ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions"],
-      keyedReadTools: ["get_recap", "get_order_status"],
+      readTools: ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap"],
+      keyedReadTools: ["get_order_status"],
       writeTools: ["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"],
       gates: [GATES.designApproval, GATES.payment, GATES.production],
       howToGetAKey: KEY_REQUEST_LINE,
-      keyWait: "Completing an order needs the key, and the key takes up to one business day by email (hello@tap.giving). Everything before it is keyless: discovery, quotes, product facts, the artwork spec, the order questions, artwork submission, and the contact capture.",
+      keyWait: "Placing an order needs no key: the whole placement run is keyless (the order questions, the recap, and placing the order), and a person from Tap.Giving follows up with the invoice. A key is optional and organization-bound: it enriches the order questions with the key's own organization block, and it governs order status (get_order_status) and webhook registration (register_webhook).",
       kickoff: "get_artwork_spec",
       benefits: BENEFITS,
       guarantee: "Covered by our 30-day money-back guarantee.",
@@ -343,7 +350,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `2. Get the artwork spec and the design directions for that shape from get_artwork_spec.`,
     `3. Build the artwork from a direction with your own tools, adding the organization's logo or name.`,
     `4. Submit the finished file with submit_artwork and see it on the disc as a proof. The artwork is yours from here: take it to any printer, or order the discs from Tap.Giving.`,
-    `5. Optional, only if you want the discs made: get the binding quote from get_quote, answer the order questions, and set the order up. The final proof is emailed for a person's approval before anything is printed, and a person pays the hosted invoice.`,
+    `5. Optional, only if you want the discs made: get the binding quote from get_quote, answer the order questions, check the recap, and place the order. A person from Tap.Giving follows up with the invoice, and the final proof is emailed for a person's approval before anything is printed.`,
     ``,
     `Why Tap.Giving`,
     NO_FEES_LINE,
@@ -353,8 +360,8 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `${PRICE_RANGE_LINE} Free shipping. ${TAX_NOTE} Every order is covered by our 30-day money-back guarantee. Production and delivery run 2 to 3 weeks from artwork approval.`,
     ``,
     `Gates`,
-    `Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.`,
-    `Discovery, quotes, product facts, the artwork spec, and the order questions need no key. Recaps and order status are reads that use your organization key, like the writes, so plan for the key wait before the order steps: ${KEY_REQUEST_LINE} ${TEST_KEY_LINE}`,
+    `Design approval, payment, and production release stay human: a person approves the final proof by email. This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.`,
+    `Placing an order needs no key: the whole placement run is keyless (the order questions, the recap, and placing the order), and a person from Tap.Giving follows up with the invoice. Order status is the one read that uses the organization key. ${KEY_REQUEST_LINE} ${TEST_KEY_LINE}`,
     ...(intentTextLine ? [intentTextLine] : []),
     `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back.`,
   ].join("\n");
@@ -377,8 +384,9 @@ async function toolGetQuote(_ctx: Ctx, args: Record<string, unknown>): Promise<T
     throw invalidInput("antiMetalCount must be 0 or more; omit it entirely when the count is unknown.");
   }
   const quote = quoteFor({ qty: quantity, antiMetal: antiMetalCount, redirect: false });
-  const structured = quoteOutput(quote);
-  return { structured, text: quoteText(structured) };
+  const structured = { ...quoteOutput(quote), photos: productPhotoStructured() };
+  const text = quoteText(structured) + "\nThe photo with this answer shows the disc in use: a phone tapping a disc on a chair back.";
+  return { structured, text, images: productPhotoImages() };
 }
 
 async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
@@ -412,7 +420,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
   // the server's photos and the destination model, not flattened
   // bare fields with the context blocks dropped.
   const structured = topic
-    ? { topic, [topic]: full[topic], photos: productPhotoStructured(), destination: DESTINATION_MODEL }
+    ? { topic, [topic]: full[topic], photos: productPhotoStructured(), ...(topic === "mounting" ? { mountingPhotos: mountingPhotoStructured() } : {}), destination: DESTINATION_MODEL }
     : full;
   const text = topic
     ? JSON.stringify(structured[topic as string], null, 2)
@@ -430,7 +438,10 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       `${p.shipping.cost} ${p.shipping.terms}`,
       `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back.`,
     ].join("\n");
-  return { structured, text, images: productPhotoImages() };
+  const images = topic === "mounting"
+    ? [...productPhotoImages(), ...mountingPhotoImages()]
+    : productPhotoImages();
+  return { structured, text, images };
 }
 
 // Resolve the caller's direction choice (F12): a pick-list number
@@ -741,9 +752,7 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
           : "No preview image could be rendered in this call, so do not tell the person a preview is shown; the file is on record under the artworkRef. ") +
       "The design is the person's to keep from here: the submitted file is theirs, print-ready and vendor-neutral, to take to any printer. " +
       "Nothing is emailed at this stage: the emailed final proof belongs to the order stage, after order setup. " +
-      "If they want the discs made by Tap.Giving (optional), the order path is: capture the contact email (start_order_intent; no key needed) and ask the order questions (get_order_questions; no key needed). " +
-      "Everything after that needs the organization's API key: the recap (get_recap) and order setup (create_order). If the organization has no key yet, ask for one now: " +
-      "email hello@tap.giving, say which organization the key is for, and the team replies with the key within one business day; the captured contact and this artwork wait safely meanwhile.",
+      "If they want the discs made by Tap.Giving (optional), the order path runs keyless end to end: capture the contact email (start_order_intent), ask the order questions (get_order_questions), show the recap (get_recap), and place the order (create_order). A person from Tap.Giving then follows up with the invoice. No key is needed at any step of placing the order.",
   };
   const text = [
     `Artwork received: ${artworkRef} (${filename}, ${detectedType}, ${bytes.length} bytes).`,
@@ -845,9 +854,9 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
             "This email was already captured, so no second lead was created. The Tap.Giving team follows up by email, usually within one business day. " +
             "The contact was recorded through the same capture the website uses, so the follow-up is the ordinary first email, not a sales list.",
           nextStep: keyedExisting
-            ? "This call carries the organization's key, so order setup can continue right now: get_order_questions, then get_recap, then create_order."
-            : "The order questions (get_order_questions) need no key. Everything after them that completes an order does: the recap (get_recap) and order setup (create_order) need the organization's API key, and the key takes up to one business day. " +
-              KEY_REQUEST_LINE +
+            ? "Placing the order needs no key: get_order_questions, then get_recap, then create_order; a person from Tap.Giving follows up with the invoice. " +
+              " An intent is a lead, not an order: it creates no invoice and reserves nothing."
+            : "Placing the order needs no key: get_order_questions, then get_recap, then create_order; a person from Tap.Giving follows up with the invoice. " +
               " An intent is a lead, not an order: it creates no invoice and reserves nothing.",
         },
         text:
@@ -926,14 +935,14 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
       "The Tap.Giving team follows up by email, usually within one business day. The contact was recorded through " +
       "the same capture the website uses, so the follow-up is the ordinary first email, not a sales list.",
     nextStep: keyed
-      ? "This call carries the organization's key, so order setup can continue right now: get_order_questions, then get_recap, then create_order. The captured contact also gets the team's follow-up email."
-      : "The order questions (get_order_questions) need no key. Everything after them that completes an order does: the recap (get_recap) and order setup (create_order) need the organization's API key, and the key takes up to one business day. " +
-        KEY_REQUEST_LINE +
-        " The captured contact and any submitted artwork wait safely while the key is on its way. An intent is a lead, not an order: it creates no invoice and reserves nothing.",
+      ? "Placing the order needs no key: get_order_questions, then get_recap, then create_order; a person from Tap.Giving follows up with the invoice. " +
+              " An intent is a lead, not an order: it creates no invoice and reserves nothing."
+      : "Placing the order needs no key: get_order_questions, then get_recap, then create_order; a person from Tap.Giving follows up with the invoice. " +
+              " An intent is a lead, not an order: it creates no invoice and reserves nothing.",
   };
   const baseText = keyed
-    ? `Captured as ${intentRef}. The Tap.Giving team will also follow up with ${email} by email, usually within one business day. Your key is on this call, so order setup can continue now: order questions, recap, then create_order.${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`
-    : `Captured as ${intentRef}. The Tap.Giving team will follow up with ${email} by email, usually within one business day. Completing an order needs an organization API key: ${KEY_REQUEST_LINE}${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`;
+    ? `Captured as ${intentRef}. The Tap.Giving team will also follow up with ${email} by email, usually within one business day. Placing the order needs no key: order questions, recap, then create_order.${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`
+    : `Captured as ${intentRef}. The Tap.Giving team will follow up with ${email} by email, usually within one business day. Placing the order needs no key: order questions, recap, then create_order, and a person from Tap.Giving follows up with the invoice.${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`;
   return {
     structured,
     // Test isolation, stated plainly (round 2 operational note): the
@@ -967,7 +976,7 @@ async function toolGetOrderQuestions(ctx: Ctx, _args: Record<string, unknown>): 
         }
       : {
           keylessNote:
-            "You are asking without an organization key, so no organization is bound yet. When the order is placed, its contact email must be the contact email of the organization whose key places it.",
+            "You are asking without an organization key, so no organization is bound yet. Placing the order needs no key; the order is bound by its contact email, so the contact email on the order must be one the organization owns.",
         }),
     questions: [
       {
@@ -1202,13 +1211,13 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
         "placed within 7 days of your quote; if you miss it, a fresh quote restarts it.",
     },
     sequence:
-      "You can pay the invoice now; production waits until the final proof is approved by email. " +
+      "A person from Tap.Giving follows up with the invoice after the order is placed; production waits until the final proof is approved by email. " +
       "Nothing is printed before that approval.",
     tapGivingContact: { email: TEAM_EMAIL },
     notes: RECAP_NOTES,
     exits: [
-      { value: "pay_now", label: "Pay now", presented: "first, the default path", meaning: "create_order then request_invoice, and the hosted invoice link is presented to the person immediately so they pay on Stripe's hosted page." },
-      { value: "lock_in", label: "I want to lock in this price", presented: "second", meaning: "the same create_order and request_invoice; the hosted invoice link is returned as the payment handoff for the person to pay when they choose. The finalized invoice's total is the price protection." },
+      { value: "pay_now", label: "Pay now", presented: "first, the default path", meaning: "create_order places the order now, and a person from Tap.Giving follows up with the invoice so the person can pay right away." },
+      { value: "lock_in", label: "I want to lock in this price", presented: "second", meaning: "the same create_order; a person from Tap.Giving follows up with the invoice for the person to pay when they choose. The quoted total is the price protection." },
     ],
     gates: [GATES.designApproval, GATES.payment],
   };
@@ -1538,8 +1547,8 @@ function createOrderResult(order: OrderRecord, replayed: boolean): ToolResult {
       : "The business record appears within about an hour under the organization's name, at stage \"ready\", " +
         "through the same process that handles website invoice requests. Source is distinguishable as the MCP; nothing else differs.",
     nextStep: order.exit === "pay_now"
-      ? "Call request_invoice for this orderRef now and present the hosted invoice link to the person immediately; a person pays it on Stripe's hosted page."
-      : "Call request_invoice for this orderRef; the hosted invoice link is the payment handoff for the person to pay when they choose. A person approves the final proof by email before anything is printed.",
+      ? "The order is placed. A person from Tap.Giving follows up with the invoice for this order; the person pays it when it arrives."
+      : "The order is placed. A person from Tap.Giving follows up with the invoice for this order, for the person to pay when they choose. A person approves the final proof by email before anything is printed.",
   };
   const text = [
     `Order set up: ${order.orderRef}.`,
@@ -1835,7 +1844,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "Start here, with the design tool. One call orients a cold agent: the builder's introduction (NFC Tap Builder by Tap.Giving), what the tool does (print-ready NFC tap artwork proofs from the published spec and design directions, yours to take to any printer), the product in plain words, " +
       "the first choice (shape: round or square), the artwork spec summary, the per-disc price range, and the full capability list with the human gates. Ordering is the optional step after the design path. " +
-      "and get_order_questions when the questions are next (it needs no key). Discovery states the key wait up front: completing an order needs the organization's key, which takes up to one business day by email. " +
+      "and get_order_questions when the questions are next (it needs no key). Discovery states the key scope up front: placing an order never requires a key; a key is optional and organization-bound, for order status and webhook registration. " +
       "The optional intent argument is echoed back as guidance; a disc count in it points at get_quote for the binding total at that count. " + GATES.payment,
     inputSchema: { type: "object", properties: { intent: { type: "string", description: "Optional free-text description of what the person wants (for example an organization type and a rough disc count). It is echoed back as guidance; a disc count in it points at get_quote for the binding total at that count." } } },
     annotations: READ,
@@ -1922,7 +1931,7 @@ export const TOOLS: ToolDef[] = [
       "An optional step on the order path, not the start of the journey: capture a contact email through the same public capture endpoint the website's email-first door uses, " +
       "so follow-up rides the existing lead machinery. No key needed. An intent is a lead, not an order: it creates no invoice and reserves nothing. " +
       "Returns an intentRef, links an artworkRef when given, and says plainly what follow-up to expect. The email must be a real, reachable address: reserved domain endings (.example, .test, .invalid) and the example domains are refused, because no follow-up could ever reach them. " +
-      "Completing an order needs an organization API key (issued by the Tap.Giving team; get_discovery says how to ask). One intent per email: a repeat call with the same email returns the existing intentRef and creates no second lead. This call captures the contact only; create_order is the later, keyed call that sets up the order itself.",
+      "Placing an order needs no key. One intent per email: a repeat call with the same email returns the existing intentRef and creates no second lead. This call captures the contact only; create_order is the later call that sets up the order itself, and it needs no key either.",
     inputSchema: {
       type: "object",
       required: ["email"],
@@ -1950,7 +1959,7 @@ export const TOOLS: ToolDef[] = [
     name: "get_recap",
     description:
       "The full recap, the last thing before the exits: it validates the same order inputs create_order will carry (quantity from 100 to 7000, one of the two built-in sizes, adhesive or screws mounting, a complete shipping address) and returns the submitted artwork (displayUrl plus image content where renderable), the quantity, the shipping address as entered, " +
-      "the exact cost from get_quote, and both required notes. Returns a recapRef; create_order carries it, and an order whose inputs differ from the recap is refused as a conflict. Key required.",
+      "the exact cost from get_quote, and both required notes. Returns a recapRef; create_order carries it, and an order whose inputs differ from the recap is refused as a conflict. No key needed.",
     inputSchema: {
       type: "object",
       required: ["quantity", "size", "mounting", "shipTo"],
@@ -1968,7 +1977,7 @@ export const TOOLS: ToolDef[] = [
         },
         artworkRef: { type: "string", description: "Optional: the artwork reference submit_artwork returned, shown on the disc in the recap." },
         linkDestination: { type: "string", description: "Optional: the page a tap opens. Any http or https URL, changeable anytime; the Redirect Dashboard is the default." },
-        contactEmail: { type: "string", description: "The order contact email; it must be the key organization's contact email, and the final proof is emailed there." },
+        contactEmail: { type: "string", description: "The order contact email; the final proof is emailed there, so it must be an address the organization owns." },
         contactName: { type: "string", description: "Optional display only: the contact person's name, echoed in the recap." },
         contactPhone: { type: "string", description: "Optional display only: the contact phone, echoed in the recap." },
       },
@@ -1979,19 +1988,19 @@ export const TOOLS: ToolDef[] = [
   {
     name: "create_order",
     description:
-      "Set up an order for the key's organization through the same front door a website order takes (an INVREQ record the hourly adoption resolves into the CRM, indistinguishable downstream). " +
+      "Set up an order through the same front door a website order takes (an INVREQ record the hourly adoption resolves into the CRM, indistinguishable downstream). No key needed. " +
       "This is the lock-in write behind both recap exits; it carries the recapRef and a required idempotencyKey (a retry with the same key and payload returns the original orderRef; the same key with a different payload is a conflict naming the differing fields). " +
       "The 100-disc minimum is enforced here. Sizes other than the two built-ins return manual_exception. Returns the orderRef (the reference every later call uses), the exact quote, the chosen exit, and the next step. " +
-      "Failure modes: a recap whose inputs differ from the order is refused as a conflict naming the differing fields; a reused idempotencyKey with a different payload is a conflict naming the original order; a missing or mismatched contact email for the key is refused. " +
+      "Failure modes: a recap whose inputs differ from the order is refused as a conflict naming the differing fields; a reused idempotencyKey with a different payload is a conflict naming the original order. " +
       "Routing: start_order_intent is the earlier keyless contact capture, get_recap must run immediately before this call over the same inputs, and request_invoice follows it. " + GATES.designApproval + " " + GATES.payment,
     inputSchema: {
       type: "object",
       required: ["contactName", "contactEmail", "contactPhone", "quantity", "size", "mounting", "shipTo", "recapRef", "idempotencyKey"],
       properties: {
         contactName: { type: "string", description: "The contact person's name for the order." },
-        contactEmail: { type: "string", description: "Must belong to the key's organization." },
+        contactEmail: { type: "string", description: "The order contact email; the final proof is emailed there, so it must be an address the organization owns." },
         contactPhone: { type: "string", description: "A phone number that reaches the contact." },
-        organizationName: { type: "string", description: "Organization name; defaults to the key's organization name." },
+        organizationName: { type: "string", description: "Organization name for the order." },
         quantity: { type: "integer", description: "Discs in the order, 100 to 7000." },
         size: { type: "string", description: "100mm-round or 100mm-square; anything else is a manual exception handled by hand through the Tap.Giving team." },
         mounting: { type: "string", enum: ["adhesive", "screws"], description: "How the discs mount: adhesive backing, or pre-drilled screw holes plus adhesive." },
@@ -2017,11 +2026,11 @@ export const TOOLS: ToolDef[] = [
   {
     name: "request_invoice",
     description:
-      "Return the payment handoff for an order this key's organization created: call create_order first, because this tool needs that call's orderRef (the mcp: reference in its result). It returns a real, finalized Stripe hosted invoice and its link, minted under the invoice playbook " +
+      "For orders already placed through this server: call create_order first, because this tool needs that call's orderRef (the mcp: reference in its result). No key needed. It returns that order's finalized Stripe hosted invoice and its link, minted under the invoice playbook " +
       "(send_invoice collection, 7 days to due, first-order coupon when eligible, the free shipping line, finalized with auto_advance=false so Stripe emails nothing). " +
       "If the customer already has an open or draft invoice, that invoice's link is returned flagged existing. " +
-      "Both test-mode and live-mode keys mint here; the minted invoice shape passed the field-for-field parity check against Stripe test mode on 2026-11-07. " +
-      "This server moves no money itself: it returns a hosted invoice link for a person to pay.",
+      "The minted invoice shape passed the field-for-field parity check against Stripe test mode on 2026-11-07. " +
+      "This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.",
     inputSchema: {
       type: "object",
       required: ["orderRef", "idempotencyKey"],
