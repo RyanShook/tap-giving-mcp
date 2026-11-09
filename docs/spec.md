@@ -2991,3 +2991,27 @@ spec, inside the P-16 landing record; it also stands in section
 3.1's settled-sentence parenthetical, amended above, and the
 brief's nine-live-key-records count and the server code remain the
 build's concern, not this spec pass's.
+
+
+Landing note (2026-11-09, Goal 1 cold-run fix pass): the cold run
+against the deployed build scored 7 of 9, with two FAILs, both
+fixed here. (1) The pick list printed global index positions while
+the resolver read per-shape positions, so printed numbers 14 and
+above selected a different example than the label promised. One
+numbering now: per shape, sequential from 1, printed in the list,
+carried as the structured pick field, and read by the resolver; a
+guard test picks every printed number and verifies the labeled
+example returns. (2) Picks by description text returned
+invalid_input; the resolver now accepts an exact normalized
+description match or a unique prefix or substring match, and an
+ambiguous fragment refuses naming the candidates. (3) The ferrite
+per-disc charge sentence and the zero-price claims (at the same
+price, at no extra cost, Free shipping, No subscription fees, free
+Redirect Dashboard, the 30-day money-back guarantee) are out of
+every phase-one surface (CEO ruling, Ryan's spec: phase 1 carries
+ZERO pricing references, full stop); each stays available at the
+phase-two order questions, and the pricing guard fails on the
+whole pattern class in phase one. Section 2.6's benefits-block
+contract element moves with them: the phase-one block is the
+three functional differentiators, and the full set rides the
+order questions.

@@ -114,7 +114,7 @@ test("P-1/P-11: discovery carries the samples fact and the plain-language block"
   const d = await runTool(env, req(), "get_discovery", {}, dispatchFetch([]));
   const s = d.structured as unknown as { samples: string; plainLanguage: { nfc: string; status: string }; taxExempt: string };
   assert.ok(s.samples.includes("we do not offer physical samples"), "structured samples fact");
-  assert.ok(s.samples.includes("30-day money-back guarantee"), "samples fact points at the guarantee");
+  assert.ok(!s.samples.includes("30-day money-back guarantee"), "samples fact carries no guarantee in phase one (CEO ruling 2026-11-09)");
   assert.ok(d.text.includes("Samples: we do not offer physical samples"), "samples fact in the discovery text");
   assert.ok(s.plainLanguage.nfc.includes("No app is needed"), "plain NFC line");
   assert.ok(s.plainLanguage.status.includes("status reference"), "plain status-reference line (the keys entry retired with the keys)");
@@ -132,7 +132,7 @@ test("P-4: guidance answers the recognizable questions in the intent", async () 
     ["We are tax-exempt, does that change anything?", "Tax-exempt: say so when you order"],
     ["Our tables are metal, will these work?", "Metal surfaces: discs that go on metal need the anti-metal shielding layer"],
     ["Do visitors need an app to use these?", "No app is needed: a visitor taps a phone"],
-    ["Can we change the link destination later?", "You can change where a disc points anytime in the free Redirect Dashboard"],
+    ["Can we change the link destination later?", "You can change where a disc points anytime in the Redirect Dashboard"],
     ["How do we reorder more later?", "Reordering: your design stays on file"],
     ["We don't have a logo, can you design it for us?", "Design help: send a logo if you have one"],
     ["How do we pay for these?", "Payment: this server takes no payment"],

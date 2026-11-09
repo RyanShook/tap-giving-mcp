@@ -153,9 +153,9 @@ test("cold leg: discovery, quote, product, artwork spec need no key", async () =
   assert.equal(q.structured.shippingLine, "Shipping: Free");
   const p = await runTool(env, req(), "get_product", {}, fetchFn);
   assert.ok(JSON.stringify(p.structured).includes("NTAG213"));
-  assert.ok(JSON.stringify(p.structured).includes("30-day money-back guarantee"), "guarantee named in product facts");
+  assert.ok(!JSON.stringify(p.structured).includes("30-day money-back guarantee"), "guarantee absent from phase-one product facts (CEO ruling 2026-11-09)");
   assert.ok(JSON.stringify(p.structured).includes("in seconds"), "dashboard changes-in-seconds claim present");
-  assert.ok(JSON.stringify(d.structured).includes("30-day money-back guarantee"), "guarantee named in discovery");
+  assert.ok(!JSON.stringify(d.structured).includes("30-day money-back guarantee"), "guarantee absent from phase-one discovery (CEO ruling 2026-11-09)");
   assert.ok(!JSON.stringify(d.structured).includes("WELCOME10"), "discount code absent from discovery (pricing rule 2026-11-08)");
   assert.ok(!("pricing" in d.structured), "discovery carries no pricing block in the design phase");
   const a = await runTool(env, req(), "get_artwork_spec", { shape: "round" }, fetchFn);
@@ -173,7 +173,7 @@ test("submit_artwork: keyless PNG accepted, hash echoed, benefits present", asyn
   }, stubFetch([]) as typeof fetch);
   assert.equal(r.structured.received, true);
   assert.equal(r.structured.sha256, sha);
-  assert.ok(Array.isArray(r.structured.benefits) && (r.structured.benefits as string[]).length === 6);
+  assert.ok(Array.isArray(r.structured.benefits) && (r.structured.benefits as string[]).length === 3);
   assert.ok(!r.text.includes("Why Tap.Giving"), "the repeated benefits block is out of the submit text (F13)");
   assert.ok(Array.isArray(r.images) && r.images.length >= 1, "submission returns a preview image");
   assert.ok(!r.text.startsWith("TEST MODE"), "a keyless submission carries no TEST MODE line");
@@ -415,14 +415,15 @@ test("get_artwork_spec: full delivered set in the structured index, bounded inli
       assert.equal(img.mimeType, "image/png");
       assert.equal(Buffer.from(img.data, "base64").subarray(0, 8).toString("hex"), "89504e470d0a1a0a", "real PNG magic");
     }
-    // Numbered pick list covers the inline subset, in order, one line
-    // per shown image.
-    // Pick list: full-set numbering across the whole set, the
-    // brief's line format with the curated description and size.
-    const fullSet = EXAMPLES_INDEX;
+    // Pick list: per-shape numbering from 1 in index order (the
+    // cold-run fix, 2026-11-09), one printed number per example in
+    // the FULL set, with the curated description and size in the
+    // brief's format; each structured entry's pick field carries
+    // the same number its printed line shows.
     let lastIdx = -1;
-    for (const e of expected.slice(0, 6)) {
-      const n = fullSet.findIndex((x) => x.id === e.id) + 1;
+    for (const [pi, e] of expected.entries()) {
+      const n = pi + 1;
+      assert.equal((exs[pi] as unknown as { pick: number }).pick, n, "structured pick field equals the printed number");
       const line = `${n}. ${e.description}, ${e.shape}, ${e.size}: the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`;
       const idx = r.text.indexOf(line);
       assert.ok(idx > lastIdx, `pick list entry ${n} present and in order`);
@@ -501,14 +502,14 @@ test("get_discovery: sectioned first presentation, design first, no pricing anyw
   assert.ok(!d.text.includes(PRICE_RANGE_LINE) && !d.text.includes(NO_FEES_LINE), "neither pricing line appears in phase one");
   assert.ok(!/\$\d/.test(d.text), "no dollar figure anywhere in discovery text");
   assert.ok(!/minimum/i.test(d.text), "minimum not named anywhere in discovery text");
-  // All six benefits appear as bullets in the Why section.
+  // All phase-one benefits appear as bullets in the Why section.
   const whyIdx = d.text.indexOf("Why Tap.Giving");
   for (const b of BENEFITS) {
     const bi = d.text.indexOf(`- ${b}`);
     assert.ok(bi > whyIdx, `benefit bullet present in the Why section: ${b}`);
   }
   assert.deepEqual(d.structured.capabilities && (d.structured.capabilities as { benefits: string[] }).benefits, BENEFITS, "structured benefits unchanged");
-  assert.ok(d.text.includes("30-day money-back guarantee"));
+  assert.ok(!d.text.includes("30-day money-back guarantee"), "no guarantee claim in phase-one discovery text (CEO ruling 2026-11-09)");
   assert.equal(TAX_NOTE, "Tax, where it applies, is calculated on the invoice.");
   assert.ok(d.text.includes(TAX_NOTE), "tax sentence present in discovery text");
   assert.ok(!/checkout/i.test(d.text), "no checkout claim in discovery text");
@@ -566,7 +567,7 @@ test("F7 + F9 + F6: quote cliff line, helpful minimum, no source paths in text",
     /smallest order is 100 discs for \$500\.00 list/);
 });
 
-test("F12: chosenExampleRef resolves by subset number and by any set id, confirms by organization, refuses unknown", async () => {
+test("F12: chosenExampleRef resolves by pick-list number and by any set id, confirms by organization, refuses unknown", async () => {
   const { env, artwork } = await makeEnv();
   await seedExamples(artwork);
   const fetchFn = stubFetch([]) as typeof fetch;
@@ -586,6 +587,57 @@ test("F12: chosenExampleRef resolves by subset number and by any set id, confirm
   assert.ok(JSON.stringify(spec.structured).includes("disc-template-round.svg"), "template linked from the spec");
   assert.ok(JSON.stringify(spec.structured).includes("43.25"), "screw-hole positions stated in the spec");
   assert.ok(spec.text.includes("Screw holes"), "screw holes named in the spec text");
+});
+
+test("F12b: every printed pick number resolves to the example its line names (exhaustive sweep, CEO guard 2026-11-09)", async () => {
+  const { env, artwork } = await makeEnv();
+  await seedExamples(artwork);
+  const ff = stubFetch([]) as typeof fetch;
+  for (const shape of ["round", "square"] as const) {
+    const set = EXAMPLES_INDEX.filter((e) => e.shape === shape);
+    const list = await runTool(env, req(), "get_artwork_spec", { shape }, ff);
+    for (const [i, e] of set.entries()) {
+      const n = i + 1;
+      const line = `${n}. ${e.description}, ${e.shape}, ${e.size}: the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`;
+      assert.ok(list.text.includes(line), `${shape} pick ${n}: the printed line names ${e.id}`);
+      const picked = await runTool(env, req(), "get_artwork_spec", { shape, chosenExampleRef: String(n) }, ff);
+      assert.equal((picked.structured.chosenExample as { id: string }).id, e.id, `${shape} pick ${n} resolves to the example its line names`);
+      assert.ok(picked.text.includes(`You picked the design delivered to ${e.organization}`), `${shape} pick ${n} confirms by organization`);
+    }
+    // Out-of-range numbers refuse, naming the valid range.
+    await assert.rejects(() => runTool(env, req(), "get_artwork_spec", { shape, chosenExampleRef: String(set.length + 1) }, ff),
+      new RegExp(`1 to ${set.length}`), `${shape}: an out-of-range number refuses naming the valid range`);
+    await assert.rejects(() => runTool(env, req(), "get_artwork_spec", { shape, chosenExampleRef: "0" }, ff),
+      /not one of the delivered examples/, `${shape}: zero refuses`);
+  }
+});
+
+test("F12c: picks by description words resolve; ambiguous fragments refuse naming candidates", async () => {
+  const { env, artwork } = await makeEnv();
+  await seedExamples(artwork);
+  const ff = stubFetch([]) as typeof fetch;
+  const round = EXAMPLES_INDEX.filter((e) => e.shape === "round");
+  const centerPoint = round.find((e) => e.id === "center-point-church")!;
+  // The full printed description resolves (the cold run's failing probe).
+  const byDesc = await runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: centerPoint.description }, ff);
+  assert.equal((byDesc.structured.chosenExample as { id: string }).id, centerPoint.id, "full printed description resolves");
+  // A distinctive fragment resolves.
+  const byFrag = await runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: "Bright red round" }, ff);
+  assert.equal((byFrag.structured.chosenExample as { id: string }).id, centerPoint.id, "distinctive fragment resolves");
+  // An ambiguous fragment refuses and names the candidates.
+  await assert.rejects(() => runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: "Navy round" }, ff),
+    /matches more than one delivered example/, "an ambiguous fragment refuses naming candidates");
+  // A non-matching string still refuses as before.
+  await assert.rejects(() => runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: "polka dot unicorn" }, ff),
+    /not one of the delivered examples/, "a non-matching string refuses");
+  // submit_artwork accepts a description pick too (its seat resolves
+  // through the same resolver).
+  const sha = await pngSha();
+  const sub = await runTool(env, req(), "submit_artwork", {
+    file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
+    shape: "round", chosenExampleRef: "Bright red round",
+  }, ff);
+  assert.equal((sub.structured.chosenExample as { id: string }).id, centerPoint.id, "submit_artwork resolves a description pick");
 });
 
 test("F13/F16: an SVG submission returns its design on the disc; the recap embeds the same render", async () => {
