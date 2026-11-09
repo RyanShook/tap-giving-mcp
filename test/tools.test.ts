@@ -290,18 +290,18 @@ test("test-lane journey: recap, create_order (idempotent, record plus order emai
   const emailState = order.structured.orderEmail as { sent: boolean; messageRef?: string };
   assert.equal(emailState.sent, true, "the order email is confirmed sent");
   assert.equal(emailState.messageRef, "msg_stub_order_email");
-  const notifyCalls = calls.filter((c) => (c.body ?? "").includes("notifyOrderPlaced"));
+  const notifyCalls = calls.filter((c) => (c.body ?? "").includes('"op":"notifyOrderPlaced"'));
   assert.equal(notifyCalls.length, 1, "exactly one order email for the placement");
   const notifyBody = JSON.parse(notifyCalls[0].body ?? "{}") as { input: Record<string, unknown> };
   assert.equal(notifyBody.input.organizationName, "MCP Acceptance Test Church");
   assert.equal(notifyBody.input.contactEmail, "mcp-acceptance@mcptest.org");
   assert.equal(notifyBody.input.quantity, 250);
   assert.equal(notifyBody.input.testMode, true);
-  assert.equal(calls.filter((c) => (c.body ?? "").includes("notifyOrderPlaced")).length, 1, "replay does not re-send a sent email");
+  assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"notifyOrderPlaced"')).length, 1, "replay does not re-send a sent email");
 
   // The final-step chain: the invoice minted through the seat, and
   // the customer email suppressed by the test lane.
-  const mintCalls = calls.filter((c) => (c.body ?? "").includes("mintOrderInvoice"));
+  const mintCalls = calls.filter((c) => (c.body ?? "").includes('"op":"mintOrderInvoice"'));
   assert.equal(mintCalls.length, 1, "exactly one mint for the placement");
   const mintBody = JSON.parse(mintCalls[0].body ?? "{}") as { input: Record<string, unknown> };
   assert.equal(mintBody.input.testLane, true);
@@ -311,7 +311,7 @@ test("test-lane journey: recap, create_order (idempotent, record plus order emai
   const custEmail = order.structured.customerEmail as { sent: boolean; suppressed?: string };
   assert.equal(custEmail.sent, false);
   assert.ok((custEmail.suppressed ?? "").includes("test lane"), "test lane suppresses the customer email");
-  assert.equal(calls.filter((c) => (c.body ?? "").includes("sendOrderInvoiceProof")).length, 0, "no customer email seat call in the test lane");
+  assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"sendOrderInvoiceProof"')).length, 0, "no customer email seat call in the test lane");
 
   // Status by capability: the statusRef from placement reads the
   // order; only its hash is stored; a fabricated reference and a
@@ -1123,7 +1123,7 @@ test("final-step chain: a failed mint still records the test-lane suppression on
   const base = stubFetch([]);
   const fetchFn = (async (input: unknown, init?: { body?: string }) => {
     const url = String(input);
-    if (url.includes("/api/mcp-invoke") && (init?.body ?? "").includes("mintOrderInvoice")) {
+    if (url.includes("/api/mcp-invoke") && (init?.body ?? "").includes('"op":"mintOrderInvoice"')) {
       return new Response(JSON.stringify({ ok: false, error: "stripe key not configured for the test lane" }), { status: 502 });
     }
     return (base as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init);
@@ -1142,4 +1142,128 @@ test("final-step chain: a failed mint still records the test-lane suppression on
   const stored = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as { invoiceAttempt?: { error: string }; customerEmail?: { suppressed?: string } };
   assert.equal(stored.invoiceAttempt?.error, "stripe key not configured for the test lane", "the seat error is recorded on the order");
   assert.ok(stored.customerEmail?.suppressed, "the test-lane suppression is recorded on the order even though the mint failed");
+});
+
+// ─── invoice_held recognition (the seat's typed hold) ───────────────
+// The mint seat answers a hold as ok:false with invoice_held and a
+// hold block (a foreign live invoice, or this order's own invoice
+// content diverged). tap-mcp records it as a first-class review
+// state, not a mint failure, notifies the team through the seat, and
+// never attempts the customer email; a replay re-attempts only a
+// failed notification.
+
+function heldFetch(calls: Array<{ url: string; body?: string }>, opts?: { notifyFailures?: number }) {
+  const base = stubFetch(calls);
+  let notifyAttempts = 0;
+  return (async (input: unknown, init?: { body?: string }) => {
+    const url = String((input as { url?: string })?.url ?? input);
+    const body = init?.body ?? "";
+    calls.push({ url, body });
+    if (url.includes("/api/mcp-invoke") && (JSON.parse(body || "{}").op === "mintOrderInvoice")) {
+      return new Response(JSON.stringify({
+        ok: false, invoice_held: true,
+        hold: {
+          reason: "content_divergence",
+          differingFields: ["destinationLine", "totalCents"],
+          existingInvoiceId: "in_held", existingStatus: "open",
+          existingOrderRef: null, existingTotalCents: 99999,
+        },
+      }), { status: 200 });
+    }
+    if (url.includes("/api/mcp-invoke") && (JSON.parse(body || "{}").op === "notifyInvoiceHeld")) {
+      notifyAttempts += 1;
+      if ((opts?.notifyFailures ?? 0) >= notifyAttempts) {
+        return new Response(JSON.stringify({ ok: false, error: "held notify seat down" }), { status: 502 });
+      }
+      return new Response(JSON.stringify({ ok: true, messageId: "msg_stub_held" }), { status: 200 });
+    }
+    return (base as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init);
+  }) as typeof fetch;
+}
+
+async function heldOrderArgs(env: Env, fetchFn: typeof fetch, email: string, idem: string) {
+  const flowArgs = {
+    quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
+    contactEmail: email, organizationName: "Held Invoice Test Church",
+  };
+  const recap = await runTool(env, req(), "get_recap", flowArgs, fetchFn);
+  return {
+    ...flowArgs, contactName: "Test Pastor", contactPhone: "+17135550199",
+    recapRef: recap.structured.recapRef as string, exit: "pay_now" as const, idempotencyKey: idem,
+  };
+}
+
+test("invoice_held: the seat hold is a first-class state, the team is notified, and no customer email is attempted", async () => {
+  const { env, keys } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  const fetchFn = heldFetch(calls);
+  const orderArgs = await heldOrderArgs(env, fetchFn, "held@mcptest.org", "held-order-0001");
+  const order = await runTool(env, req(), "create_order", orderArgs, fetchFn);
+  assert.equal(order.structured.invoice, null, "no invoice on a hold");
+  assert.equal(order.structured.invoiceAttempt, undefined, "no invoice field carries the hold");
+  const heldOut = order.structured.invoiceHeld as { reason: string; differingFields?: string[]; notified: boolean };
+  assert.equal(heldOut.reason, "content_divergence");
+  assert.deepEqual(heldOut.differingFields, ["destinationLine", "totalCents"]);
+  assert.equal(heldOut.notified, true);
+  const states = order.structured.partialStates as string[];
+  assert.ok(states.some((p) => p.startsWith("invoice_held:")), "the response states the hold");
+  assert.ok(!states.some((p) => p.startsWith("invoice_pending")), "the hold is never stated as a pending mint");
+  assert.ok(order.text.includes("held for review"), "the response text states the hold in plain words");
+  const stored = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as {
+    invoiceAttempt?: unknown;
+    invoiceHeld?: { reason: string; differingFields?: string[]; existingInvoiceId?: string; existingOrderRef?: string | null; existingTotalCents?: number; notify?: { sent: boolean; messageRef?: string } };
+    customerEmail?: { sent: boolean; suppressed?: string };
+  };
+  assert.equal(stored.invoiceAttempt, undefined, "the hold is not recorded as a mint attempt error");
+  assert.equal(stored.invoiceHeld?.reason, "content_divergence");
+  assert.deepEqual(stored.invoiceHeld?.differingFields, ["destinationLine", "totalCents"]);
+  assert.equal(stored.invoiceHeld?.existingInvoiceId, "in_held");
+  assert.equal(stored.invoiceHeld?.existingOrderRef, null);
+  assert.equal(stored.invoiceHeld?.existingTotalCents, 99999);
+  assert.equal(stored.invoiceHeld?.notify?.sent, true);
+  assert.equal(stored.invoiceHeld?.notify?.messageRef, "msg_stub_held");
+  // The test identity records only the lane's standing suppression
+  // outcome; no send is attempted on a hold in either lane.
+  assert.equal(stored.customerEmail?.sent, false, "no customer email is sent on a hold");
+  assert.ok(stored.customerEmail?.suppressed, "the only customer-email outcome in the test lane is its standing suppression record");
+  assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"notifyInvoiceHeld"')).length, 1, "exactly one held notification");
+  assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"sendOrderInvoiceProof"')).length, 0, "no customer email seat call on a hold");
+  const status = await runTool(env, req(), "get_order_status", { statusRef: order.structured.statusRef as string }, fetchFn);
+  const statusHeld = status.structured.invoiceHeld as { reason: string } | undefined;
+  assert.equal(statusHeld?.reason, "content_divergence", "status surfaces the held state for the order's own reference");
+  assert.ok(status.text.includes("held for review"), "status text states the hold");
+});
+
+test("invoice_held: a replay never re-mints and re-attempts only a failed notification", async () => {
+  const { env, keys } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  // The notification leg fails on its first two attempts: the
+  // create_order chain itself retries a failed notification once
+  // inside the same call (the order-email step does the same), so the
+  // failure state surfaces only after both attempts are spent.
+  const fetchFn = heldFetch(calls, { notifyFailures: 2 });
+  const orderArgs = await heldOrderArgs(env, fetchFn, "heldreplay@mcptest.org", "held-order-0002");
+  const order = await runTool(env, req(), "create_order", orderArgs, fetchFn);
+  const states = order.structured.partialStates as string[];
+  assert.ok(states.some((p) => p.startsWith("invoice_held:")), "the response states the hold");
+  assert.ok(states.some((p) => p.startsWith("invoice_held_notify_failed:")), "the failed notification is its own partial state");
+  const storedAfterFirst = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as {
+    invoiceHeld?: { notify?: { sent: boolean; error?: string } };
+  };
+  assert.equal(storedAfterFirst.invoiceHeld?.notify?.sent, false);
+  assert.equal(storedAfterFirst.invoiceHeld?.notify?.error, "held notify seat down");
+  const replay = await runTool(env, req(), "create_order", orderArgs, fetchFn);
+  assert.equal(replay.structured.orderRef, order.structured.orderRef);
+  assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"mintOrderInvoice"')).length, 1, "the replay never re-mints");
+  assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"notifyInvoiceHeld"')).length, 3, "the replay re-attempts the failed notification (two spent attempts, then the replay's)");
+  const replayHeld = replay.structured.invoiceHeld as { notified: boolean };
+  assert.equal(replayHeld.notified, true);
+  const stored = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as {
+    invoiceHeld?: { notify?: { sent: boolean } };
+  };
+  assert.equal(stored.invoiceHeld?.notify?.sent, true);
+  const replay2 = await runTool(env, req(), "create_order", orderArgs, fetchFn);
+  assert.equal(replay2.structured.orderRef, order.structured.orderRef);
+  assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"notifyInvoiceHeld"')).length, 3, "a sent notification is never duplicated");
+  assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"sendOrderInvoiceProof"')).length, 0, "still no customer email after replays");
 });

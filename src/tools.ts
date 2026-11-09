@@ -1600,6 +1600,22 @@ export interface OrderRecord {
   // when it failed, and the customer email outcome. A replay of
   // create_order re-attempts only the missing steps.
   invoiceAttempt?: { ok: boolean; error?: string; at: string };
+  // The seat's typed hold (F22 shape): the mint answered
+  // invoice_held because a foreign live invoice exists for the
+  // customer, or this order's own invoice content diverged from the
+  // order. A hold is a review state, not a mint failure: nothing was
+  // minted, the customer email cannot fire, and the team is told
+  // through notifyInvoiceHeld (its outcome recorded here too).
+  invoiceHeld?: {
+    reason: string;
+    differingFields?: string[];
+    existingInvoiceId?: string;
+    existingStatus?: string;
+    existingOrderRef?: string | null;
+    existingTotalCents?: number;
+    at: string;
+    notify?: { sent: boolean; messageRef?: string; error?: string; at: string };
+  };
   customerEmail?: { sent: boolean; messageRef?: string; error?: string; suppressed?: string; proofPending?: boolean; at: string };
   // The status capability (step 8): only the SHA-256 hash of the
   // status reference is stored; the plaintext is shown once, in the
@@ -1971,6 +1987,7 @@ async function attemptOrderEmail(ctx: Ctx, order: OrderRecord): Promise<void> {
 
 const INVOICE_SEAT = "tap-mail /api/mcp-invoke (mintOrderInvoice)";
 const CUSTOMER_EMAIL_SEAT = "tap-mail /api/mcp-invoke (sendOrderInvoiceProof)";
+const INVOICE_HELD_SEAT = "tap-mail /api/mcp-invoke (notifyInvoiceHeld)";
 
 function orderTotals(order: OrderRecord): Record<string, unknown> {
   return {
@@ -1984,9 +2001,15 @@ function orderTotals(order: OrderRecord): Record<string, unknown> {
 }
 
 // Final-step chain, step 2: the invoice, minted and finalized inside
-// the seat at exactly the quoted total. A failure is recorded on the
-// order and stated as a partial state; a replay re-attempts only
-// this step and never re-mints a minted invoice.
+// the seat at exactly the quoted total. Three answers are possible.
+// A minted invoice is recorded as before. A typed hold
+// (invoice_held: a foreign live invoice exists for the customer, or
+// this order's own invoice content diverged from the order) is
+// recorded as a first-class review state, never as a mint failure,
+// and the team notification is attempted right behind it. Any other
+// non-invoice answer is a failure, recorded as before. A replay
+// re-attempts only the missing steps and never re-mints a minted
+// invoice.
 async function attemptInvoiceMint(ctx: Ctx, order: OrderRecord): Promise<void> {
   const seat = await callSeat(ctx.env, "mintOrderInvoice", {
     orderRef: order.orderRef,
@@ -2019,10 +2042,75 @@ async function attemptInvoiceMint(ctx: Ctx, order: OrderRecord): Promise<void> {
       ...(inv.existing === true ? { existing: true } : {}),
     };
     order.invoiceAttempt = { ok: true, at: new Date().toISOString() };
+  } else if (seat.body.invoice_held === true && isRecord(seat.body.hold)) {
+    // The typed hold: nothing was minted, so order.invoice stays
+    // unset and the customer email cannot fire. The hold is its own
+    // recorded outcome; the team notification follows immediately.
+    const hold = seat.body.hold;
+    console.error(`[create_order] INVOICE HELD for ${order.orderRef} (reason ${String(hold.reason ?? "unknown")}); the team notification follows`);
+    order.invoiceHeld = {
+      reason: String(hold.reason ?? "unknown"),
+      ...(Array.isArray(hold.differingFields) ? { differingFields: hold.differingFields.map((f) => String(f)) } : {}),
+      ...(typeof hold.existingInvoiceId === "string" ? { existingInvoiceId: hold.existingInvoiceId } : {}),
+      ...(typeof hold.existingStatus === "string" ? { existingStatus: hold.existingStatus } : {}),
+      ...(typeof hold.existingOrderRef === "string" || hold.existingOrderRef === null ? { existingOrderRef: (hold.existingOrderRef as string | null) ?? null } : {}),
+      ...(typeof hold.existingTotalCents === "number" ? { existingTotalCents: hold.existingTotalCents } : {}),
+      at: new Date().toISOString(),
+    };
+    await saveOrderRecord(ctx.env, order);
+    await attemptInvoiceHeldNotify(ctx, order);
+    return;
   } else {
     const error = String(seat.body.error ?? `seat answered HTTP ${seat.status}`).slice(0, 200);
     console.error(`[create_order] INVOICE MINT FAILED for ${order.orderRef} (record and team email stand): ${error}`);
     order.invoiceAttempt = { ok: false, error, at: new Date().toISOString() };
+  }
+  await saveOrderRecord(ctx.env, order);
+}
+
+// The team notification for a held invoice: the seat's
+// notifyInvoiceHeld op emails the team inboxes with the hold and the
+// differing fields. Its outcome is recorded on the order's held
+// record, like every other chain step: a failure is its own partial
+// state, and an idempotent replay re-attempts a failed notification
+// without duplicating a sent one.
+async function attemptInvoiceHeldNotify(ctx: Ctx, order: OrderRecord): Promise<void> {
+  if (!order.invoiceHeld || order.invoiceHeld.notify?.sent) return;
+  const held = order.invoiceHeld;
+  const seat = await callSeat(ctx.env, "notifyInvoiceHeld", {
+    orderRef: order.orderRef,
+    mode: order.mode,
+    testLane: order.mode === "test",
+    organizationName: order.organizationName,
+    contactName: order.contactName,
+    contactEmail: order.contactEmail,
+    contactPhone: order.contactPhone,
+    quantity: order.quantity,
+    size: order.size,
+    mounting: order.mounting,
+    antiMetalCount: order.antiMetalCount ?? null,
+    linkDestination: order.linkDestination ?? null,
+    artworkRef: order.artworkRef ?? null,
+    shipTo: order.shipTo,
+    exit: order.exit,
+    totals: orderTotals(order),
+    hold: {
+      reason: held.reason,
+      ...(held.differingFields ? { differingFields: held.differingFields } : {}),
+      ...(held.existingInvoiceId ? { existingInvoiceId: held.existingInvoiceId } : {}),
+      ...(held.existingStatus ? { existingStatus: held.existingStatus } : {}),
+      ...("existingOrderRef" in held ? { existingOrderRef: held.existingOrderRef ?? null } : {}),
+      ...(held.existingTotalCents !== undefined ? { existingTotalCents: held.existingTotalCents } : {}),
+    },
+  }, ctx.fetchFn);
+  if (seat.ok) {
+    const ref = typeof seat.body.messageId === "string" ? seat.body.messageId
+      : typeof seat.body.messageRef === "string" ? seat.body.messageRef : undefined;
+    held.notify = { sent: true, ...(ref ? { messageRef: ref } : {}), at: new Date().toISOString() };
+  } else {
+    const error = String(seat.body.error ?? `seat answered HTTP ${seat.status}`).slice(0, 200);
+    console.error(`[create_order] INVOICE HELD NOTIFICATION FAILED for ${order.orderRef} (the hold stands on the record): ${error}`);
+    held.notify = { sent: false, error, at: new Date().toISOString() };
   }
   await saveOrderRecord(ctx.env, order);
 }
@@ -2081,10 +2169,15 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
   if (!order.orderEmail?.sent) {
     await attemptOrderEmail(ctx, order);
   }
-  if (!order.invoice) {
+  if (!order.invoice && !order.invoiceHeld) {
     await attemptInvoiceMint(ctx, order);
   }
-  if (!order.customerEmail && (order.invoice || order.mode === "test" || !order.artworkRef)) {
+  if (order.invoiceHeld && !order.invoiceHeld.notify?.sent) {
+    // A replay after a hold never re-mints; it re-attempts only a
+    // notification that has not gone out.
+    await attemptInvoiceHeldNotify(ctx, order);
+  }
+  if (!order.customerEmail && (order.invoice || order.invoiceHeld || order.mode === "test" || !order.artworkRef)) {
     // The terminal non-send states (test-lane suppression, and
     // proof_pending on a no-artwork order) are recorded even when
     // the mint failed, so the record always states why no customer
@@ -2111,7 +2204,11 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     : "The order record stands, but the email carrying the full order to the Tap.Giving team failed to send; the failure is logged on the order, and the team can still follow up from the durable record.";
   const partialStates: string[] = [];
   if (!order.orderEmail?.sent) partialStates.push("team_email_failed: the order record stands and the failure is recorded on it; a replay with the same idempotencyKey re-attempts only this email");
-  if (!order.invoice) partialStates.push("invoice_pending: the invoice was not minted (the seat error is recorded on the order); a replay with the same idempotencyKey re-attempts only the mint");
+  if (order.invoiceHeld) {
+    const held = order.invoiceHeld;
+    partialStates.push(`invoice_held: the order is placed, and its invoice is held for review by the Tap.Giving team (${held.reason === "content_divergence" ? "the existing invoice for this order no longer matches the order" : "another open invoice already exists for this customer"}${held.differingFields?.length ? `; differing fields: ${held.differingFields.join(", ")}` : ""}); nothing was minted, the team has been notified, and a person resolves the hold before any invoice or proof email goes out`);
+    if (!held.notify?.sent) partialStates.push("invoice_held_notify_failed: the hold stands on the order record, but the team notification did not send; a replay with the same idempotencyKey re-attempts only the notification");
+  } else if (!order.invoice) partialStates.push("invoice_pending: the invoice was not minted (the seat error is recorded on the order); a replay with the same idempotencyKey re-attempts only the mint");
   if (order.invoice && !order.customerEmail?.sent) {
     if (order.customerEmail?.proofPending) partialStates.push("proof_pending: no artwork is attached to this order, so the customer email has not fired; it fires from the business side once the proof is published");
     else if (order.customerEmail?.suppressed) partialStates.push("customer_email_suppressed: test lane placements never email the customer");
@@ -2131,6 +2228,9 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     invoice: order.invoice
       ? { id: order.invoice.invoiceId, number: order.invoice.invoiceNumber, status: order.invoice.status, hostedInvoiceUrl: order.invoice.hostedInvoiceUrl, totalCents: order.invoice.totalCents, ...(order.invoice.finalizedAt ? { finalizedAt: order.invoice.finalizedAt } : {}) }
       : null,
+    ...(order.invoiceHeld
+      ? { invoiceHeld: { reason: order.invoiceHeld.reason, ...(order.invoiceHeld.differingFields ? { differingFields: order.invoiceHeld.differingFields } : {}), ...(order.invoiceHeld.existingTotalCents !== undefined ? { existingTotalCents: order.invoiceHeld.existingTotalCents } : {}), notified: order.invoiceHeld.notify?.sent === true } }
+      : {}),
     customerEmail: order.customerEmail ?? { sent: false },
     ...(partialStates.length ? { partialStates } : {}),
     crmExpectation: order.mode === "test"
@@ -2148,7 +2248,9 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     emailLine,
     order.invoice
       ? `Invoice ${order.invoice.invoiceNumber ?? order.invoice.invoiceId}: ${dollars(order.invoice.totalCents)}, payable on its hosted page: ${order.invoice.hostedInvoiceUrl}`
-      : "Invoice: not minted yet; the failure is recorded on the order and a replay re-attempts only the mint.",
+      : order.invoiceHeld
+        ? "Invoice: held for review. The order is placed, but its invoice is held until a person from Tap.Giving reviews it; nothing was minted, and the team has been notified of the hold."
+        : "Invoice: not minted yet; the failure is recorded on the order and a replay re-attempts only the mint.",
     ...(statusRefPlain ? [`Status reference (shown once; it cannot be recovered): ${statusRefPlain}`] : []),
     ...(partialStates.length ? partialStates.map((p) => `Partial state: ${p}.`) : []),
     structured.nextStep as string,
@@ -2229,6 +2331,9 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
   const structured: Record<string, unknown> = {
     orderRef: order.orderRef,
     stage,
+    ...(order.invoiceHeld
+      ? { invoiceHeld: { reason: order.invoiceHeld.reason, ...(order.invoiceHeld.differingFields ? { differingFields: order.invoiceHeld.differingFields } : {}), note: "Your order is placed, and its invoice is held for review by the Tap.Giving team; a person resolves the hold before any invoice or proof email goes out." } }
+      : {}),
     ...(stage === "received" ? { stageNote: "Your order is in and being prepared. The business records catch up within about an hour; that wait is normal, not a problem with your order." } : {}),
     dashboard: {
       tapAddress: `https://go.tap.giving/${order.orgSlug}`,
@@ -2262,7 +2367,7 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
   if (!image) image = productPhotoImages()[0];
   const text = [
     `Order ${order.orderRef}: stage ${stage}.`,
-    invoiceState ? `Invoice ${invoiceState.invoiceNumber ?? invoiceState.invoiceId}: ${invoiceState.status}. Pay it on its hosted page: ${invoiceState.hostedInvoiceUrl}` : "Invoice: not minted yet; the order record carries the mint state, and the team follows up from the record.",
+    invoiceState ? `Invoice ${invoiceState.invoiceNumber ?? invoiceState.invoiceId}: ${invoiceState.status}. Pay it on its hosted page: ${invoiceState.hostedInvoiceUrl}` : order.invoiceHeld ? "Invoice: held for review. Your order is placed; a person from Tap.Giving resolves the hold before any invoice or proof email goes out." : "Invoice: not minted yet; the order record carries the mint state, and the team follows up from the record.",
     ...((structured.design as Record<string, unknown>).imageLabel ? ["The image with this answer is your submitted artwork on the disc (a preview render, not the proof). The final proof arrives by email for approval."] : ["The photo with this answer shows the disc in use: a phone tapping a disc on a chair back."]),
     fulfillment ? `Fulfillment: ${fulfillment.status}${fulfillment.tracking ? `, tracking ${fulfillment.tracking} (${fulfillment.carrier})` : ""}.` : "Fulfillment has not begun (it starts after payment and proof approval).",
     `Your discs open https://go.tap.giving/${order.orgSlug}. Redirect Dashboard: sign in at https://tap.giving/login with username ${order.orgSlug}; your password arrives by email with your shipping notice.`,
