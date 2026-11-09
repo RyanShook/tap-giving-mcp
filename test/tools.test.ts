@@ -201,6 +201,40 @@ test("start_order_intent posts to /api/lead with the mcp:intent source", async (
   assert.ok(!("hp" in body) && !("formStartedAt" in body), "no honeypot or timing fields are fabricated");
 });
 
+test("dedupe: a repeat start_order_intent with the same email returns the existing intent and creates no second lead", async () => {
+  const { env } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  const fetchFn = stubFetch(calls) as typeof fetch;
+  const first = await runTool(env, req(), "start_order_intent", { email: "owner@sunrise-coffee.org", organizationName: "TEST Sunrise Coffee" }, fetchFn);
+  const second = await runTool(env, req(), "start_order_intent", { email: "Owner@Sunrise-Coffee.org", organizationName: "TEST Sunrise Coffee" }, fetchFn);
+  assert.equal(second.structured.intentRef, first.structured.intentRef, "the repeat returns the existing intentRef");
+  assert.equal(second.structured.existing, true);
+  assert.match(second.text, /Already captured/);
+  assert.match(second.text, /no second lead was created/);
+  assert.equal(calls.filter((c) => c.url.includes("/api/lead")).length, 1, "the lead door was called exactly once");
+  const other = await runTool(env, req(), "start_order_intent", { email: "other@sunrise-coffee.org" }, fetchFn);
+  assert.notEqual(other.structured.intentRef, first.structured.intentRef, "a different email gets its own intent");
+  assert.equal(calls.filter((c) => c.url.includes("/api/lead")).length, 2);
+});
+
+test("dedupe: a repeat call links a new artworkRef to the existing intent", async () => {
+  const { env } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  const fetchFn = stubFetch(calls) as typeof fetch;
+  const sha = await pngSha();
+  const art = await runTool(env, req(), "submit_artwork", {
+    file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
+  }, fetchFn);
+  const artworkRef = art.structured.artworkRef as string;
+  const first = await runTool(env, req(), "start_order_intent", { email: "owner@sunrise-coffee.org" }, fetchFn);
+  const second = await runTool(env, req(), "start_order_intent", { email: "owner@sunrise-coffee.org", artworkRef }, fetchFn);
+  assert.equal(second.structured.intentRef, first.structured.intentRef);
+  assert.equal(second.structured.existing, true);
+  assert.equal(second.structured.artworkRef, artworkRef);
+  assert.equal(second.structured.artworkLinked, true);
+  assert.equal(calls.filter((c) => c.url.includes("/api/lead")).length, 1, "still exactly one lead");
+});
+
 test("keyed journey: recap, create_order (idempotent), request_invoice, status", async () => {
   const { env } = await makeEnv();
   const calls: Array<{ url: string; body?: string }> = [];

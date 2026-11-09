@@ -804,6 +804,55 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
     }
   }
 
+  // Dedupe (2026-11-08 cold-test fix): one intent per email. The
+  // email index in MCP_KEYS is checked BEFORE the lead door is
+  // called, so a repeat capture returns the existing intentRef and
+  // never creates a second lead. (Best effort under concurrency:
+  // two simultaneous first captures for the same email can still
+  // race; sequential repeats, the reported failure, cannot.)
+  const emailIndexKey = `INTENTBYEMAIL:${await sha256Hex(email)}`;
+  const indexedRef = await ctx.env.MCP_KEYS.get(emailIndexKey);
+  if (indexedRef) {
+    const existingRaw = await ctx.env.MCP_KEYS.get(`INTENT:${indexedRef}`);
+    if (existingRaw) {
+      const existing = JSON.parse(existingRaw) as Record<string, unknown>;
+      // Link a newly supplied artwork to the existing intent.
+      if (artworkRec && artworkRef && existing.artworkRef !== artworkRef) {
+        artworkRec.intentRef = indexedRef;
+        if (ctx.auth && !artworkRec.orgSlug) artworkRec.orgSlug = ctx.auth.record.orgSlug;
+        await ctx.env.MCP_ARTWORK.put(artworkJsonKey(artworkRef), JSON.stringify(artworkRec), { expirationTtl: ARTWORK_TTL });
+        existing.artworkRef = artworkRef;
+        await ctx.env.MCP_KEYS.put(`INTENT:${indexedRef}`, JSON.stringify(existing), { expirationTtl: 30 * DAY });
+      }
+      const keyedExisting = !!ctx.auth;
+      return {
+        structured: {
+          captured: true,
+          existing: true,
+          intentRef: indexedRef,
+          source: INTENT_SOURCE,
+          ...(existing.artworkRef ? { artworkRef: existing.artworkRef as string, artworkLinked: true } : {}),
+          followUp:
+            "This email was already captured, so no second lead was created. The Tap.Giving team follows up by email, usually within one business day. " +
+            "The contact was recorded through the same capture the website uses, so the follow-up is the ordinary first email, not a sales list.",
+          nextStep: keyedExisting
+            ? "This call carries the organization's key, so order setup can continue right now: get_order_questions, then get_recap, then create_order."
+            : "The order questions (get_order_questions) need no key. Everything after them that completes an order does: the recap (get_recap) and order setup (create_order) need the organization's API key, and the key takes up to one business day. " +
+              KEY_REQUEST_LINE +
+              " An intent is a lead, not an order: it creates no invoice and reserves nothing.",
+        },
+        text:
+          `Already captured as ${indexedRef}: this email already has an intent, so no second lead was created and the Tap.Giving team will follow up with ${email} by email, usually within one business day.` +
+          (existing.artworkRef ? ` Your artwork (${existing.artworkRef as string}) is linked to this intent.` : "") +
+          (ctx.auth?.record.mode === "test"
+            ? "\nTest-key note: this contact capture is real. The email was recorded in Tap.Giving's lead list through the same capture the website uses, and the team may follow up. Test mode covers orders and invoices, not this capture."
+            : ""),
+      };
+    }
+    // Index pointed at an expired intent record: fall through and
+    // capture fresh; the index is rewritten below.
+  }
+
   // The website's own public capture endpoint, with no honeypot and
   // no form timing: the endpoint's bot check passes a caller that
   // sends neither, by its design, and judges it on rate limits alone.
@@ -843,6 +892,7 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
   // The intent record (F14): the reference every later step can cite,
   // and the artwork link, kept on this server's own records.
   const intentRef = `intent_${(await sha256Hex(`${email}:${Date.now()}:${Math.random()}`)).slice(0, 24)}`;
+  await ctx.env.MCP_KEYS.put(emailIndexKey, intentRef, { expirationTtl: 30 * DAY });
   await ctx.env.MCP_KEYS.put(`INTENT:${intentRef}`, JSON.stringify({
     intentRef, email,
     ...(organizationName ? { organizationName } : {}),
@@ -1863,7 +1913,7 @@ export const TOOLS: ToolDef[] = [
       "The kickoff and the journey's first ask: capture a contact email through the same public capture endpoint the website's email-first door uses, " +
       "so follow-up rides the existing lead machinery. No key needed. An intent is a lead, not an order: it creates no invoice and reserves nothing. " +
       "Returns an intentRef, links an artworkRef when given, and says plainly what follow-up to expect. The email must be a real, reachable address: reserved domain endings (.example, .test, .invalid) and the example domains are refused, because no follow-up could ever reach them. " +
-      "Completing an order needs an organization API key (issued by the Tap.Giving team; get_discovery says how to ask). Call this once per contact: a repeat call with the same email creates a second lead record rather than updating the first. This call captures the contact only; create_order is the later, keyed call that sets up the order itself.",
+      "Completing an order needs an organization API key (issued by the Tap.Giving team; get_discovery says how to ask). One intent per email: a repeat call with the same email returns the existing intentRef and creates no second lead. This call captures the contact only; create_order is the later, keyed call that sets up the order itself.",
     inputSchema: {
       type: "object",
       required: ["email"],
