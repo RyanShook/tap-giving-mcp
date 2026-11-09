@@ -83,11 +83,13 @@ This server moves no money itself: when an order is placed, Tap.Giving emails th
 
 ## Worked example
 
-One full pass through the journey, captured from the live server on
-2026-11-07 with test organizations, in test mode throughout (the
-orders and invoice below are test records). Every field name and
-value shown is exactly what the server returned; long values are
-shortened only where marked. Each result returns both the
+One full pass through the journey, captured from the live server
+with test organizations (the orders and invoice below are test
+records). Section 1 was re-captured on 2026-11-09 from the rebuilt
+no-keys server; the remaining sections are the 2026-11-07 capture,
+amended where the 2026-11-09 model retired fields. Every field name
+and value shown is exactly what the server returned; long values
+are shortened only where marked. Each result returns both the
 structured content and a plain-text rendering, and both are shown.
 
 ### 1. get_discovery (no key)
@@ -98,7 +100,7 @@ Request:
 {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_discovery", "arguments": {}}}
 ```
 
-Response, structured content (abbreviated):
+Response, structured content (image data shortened):
 
 ```json
 {
@@ -143,19 +145,250 @@ Response, structured content (abbreviated):
     {
       "step": "order, optional",
       "tool": "get_quote",
-      "detail": "Only if you want discs from Tap.Giving: the binding quote at an exact quantity, then the order questions, order setup, and the hosted invoice."
+      "detail": "Only if you want discs from Tap.Giving: the binding quote at an exact quantity, the first step of the optional order path."
+    },
+    {
+      "step": "order questions",
+      "tool": "get_order_questions",
+      "detail": "The optional order path: capture the contact email first (start_order_intent), then answer the order questions. Prices are first stated here, in the order phase."
+    },
+    {
+      "step": "recap",
+      "tool": "get_recap",
+      "detail": "The optional order path: the whole order, the artwork on the disc, and the exact total, checked before anything is placed."
+    },
+    {
+      "step": "Email me my invoice and design proof.",
+      "tool": "create_order",
+      "detail": "The final step of the optional order path: the order is recorded, the invoice is created at the quoted total, and the invoice and the design proof are emailed to the contact. The final proof is approved by email before anything is printed."
     }
   ],
   "artworkSpec": {
     "summary": "106 mm (about 4.2 inch) square artboard; 100 mm (4 inch) cut (round or square); 3 mm (about 0.12 inch) bleed; vector artwork back (SVG preferred).",
     "tool": "get_artwork_spec"
   },
+  "destination": "Every disc carries its own Tap.Giving address, so where a tap lands is set per disc. An order starts with one destination for the whole set, the page you give at order setup. To run two destinations, for example counter discs opening your menu and door discs opening your review profile, split the set afterwards in the free Redirect Dashboard: re-point any single disc, or any group of discs, in seconds, and re-point them again anytime. Your dashboard sign-in works from order setup: the address is go.tap.giving/<your-organization-slug>, the username is that slug, and the password arrives by email with the shipping notice, before your discs arrive. Tapping needs no app: iPhone XS (2018) and later and most Android phones from about 2015 read the disc automatically in the background. Where a design carries a printed QR code (your artwork includes one, or the Tap.Giving address line on the design), a phone without NFC, or with NFC off, scans that code and lands on the same destination; a design with no printed code has the tap as its only door, and the design choice is yours at artwork time.",
+  "turnaround": "Production and delivery run 2 to 3 weeks from artwork approval.",
+  "samples": "Samples: we do not offer physical samples, free or paid. Instead, see the finished examples and photos in this server, and when you order, a proof of your own design is emailed for approval before anything is printed. The order itself is covered by the 30-day money-back guarantee.",
+  "taxExempt": "Tax-exempt organizations: say so when you order. Your tax-exempt state is recorded on the order, and tax is calculated on the invoice where it applies.",
+  "plainLanguage": {
+    "nfc": "NFC is the tap itself: a visitor holds a phone near the disc and the page opens. No app is needed, and nothing has to be installed.",
+    "status": "There is no account, key, or login at any point. Order status is read with the one-time status reference create_order returns at placement; it is shown once and cannot be recovered, so keep it with the order confirmation."
+  },
+  "explainer": {
+    "note": "Stuck, or explaining this to someone else? The explainer resources walk through how it works, step by step.",
+    "resources": [
+      {
+        "uri": "tapgiving://explainer/how-it-works",
+        "title": "How it works"
+      },
+      {
+        "uri": "tapgiving://explainer/what-a-tap-disc-does",
+        "title": "What a tap disc does"
+      },
+      {
+        "uri": "tapgiving://explainer/nfc-vs-qr",
+        "title": "NFC tap versus a printed QR code"
+      },
+      {
+        "uri": "tapgiving://explainer/the-two-phases",
+        "title": "The two phases: design, then order"
+      },
+      {
+        "uri": "tapgiving://explainer/after-you-order",
+        "title": "After you order"
+      },
+      {
+        "uri": "tapgiving://explainer/materials-and-care",
+        "title": "Materials and care"
+      }
+    ],
+    "prompt": "explain_where_i_am"
+  },
   "photos": [
     {
       "id": "phone-tap",
-      "alt": "A phone tapping a Tap.Giving disc on a chair back, opening the organization's page",
-      "mimeType": "image/webp",
+      "category": "in-use tap moment",
+      "title": "A phone tapping a disc mounted on a chair back",
+      "alt": "A hand holding a phone against a navy tap disc fixed to the back of a chair",
+      "use": "The basic explainer: this is the tap itself, phone to disc, no app and no camera needed.",
       "displayUrl": "https://tap.giving/mcp/photos/phone-tap.webp"
+    },
+    {
+      "id": "pews-discs-on-pews",
+      "category": "church setting",
+      "title": "Real installation photo: discs mounted on wooden pew backs in a sanctuary (customer not named)",
+      "alt": "Rows of wooden pews in an empty sanctuary, each pew back carrying a small dark tap disc",
+      "use": "Shows what a full pew installation looks like when someone asks how discs read at room scale.",
+      "displayUrl": "https://tap.giving/mcp/photos/pews-discs-on-pews.webp"
+    },
+    {
+      "id": "pews-sanctuary-wide",
+      "category": "church setting",
+      "title": "Real installation photo: pew rows with discs, viewed from the side aisle (customer not named)",
+      "alt": "Side view down rows of wooden pews with tap discs on the pew backs in a bright sanctuary",
+      "use": "Shows pew-back placement from the aisle when someone is picturing their own sanctuary.",
+      "displayUrl": "https://tap.giving/mcp/photos/pews-sanctuary-wide.webp"
+    },
+    {
+      "id": "auditorium-chairs-service",
+      "category": "church setting",
+      "title": "Real installation photo: discs on auditorium chair backs during a service (customer not named)",
+      "alt": "Auditorium chairs with white tap discs on the seat backs, congregation standing near the stage",
+      "use": "Shows discs in place on stacking chairs while a service is running.",
+      "displayUrl": "https://tap.giving/mcp/photos/auditorium-chairs-service.webp"
+    },
+    {
+      "id": "auditorium-service-view",
+      "category": "church setting",
+      "title": "Real installation photo: rows of auditorium chairs with discs, facing the stage (customer not named)",
+      "alt": "Rows of auditorium chairs with tap discs on the backs, people gathered near a stage with screens",
+      "use": "Shows the chair-back layout across a whole seating section.",
+      "displayUrl": "https://tap.giving/mcp/photos/auditorium-service-view.webp"
+    },
+    {
+      "id": "chair-back-disc-closeup",
+      "category": "church setting",
+      "title": "Close-up of a delivered disc on a chair back at Woodlands Church (the design names Woodlands Church)",
+      "alt": "Close-up of a white oval disc screwed to an auditorium chair back; the design reads TAP YOUR PHONE HERE with a QR code and Woodlands Church printed on it",
+      "use": "The clearest shot of how a finished disc looks mounted on a chair back, including the two screws.",
+      "displayUrl": "https://tap.giving/mcp/photos/chair-back-disc-closeup.webp"
+    },
+    {
+      "id": "cafe-table-disc",
+      "category": "cafe-restaurant setting",
+      "title": "Setting image (stock photo): a Tap.Giving sample design disc on a cafe table",
+      "alt": "A cafe table with a coffee mug; a small navy sample disc with a QR code is stuck to the table edge",
+      "use": "Shows table placement for a cafe or restaurant: the disc sits flat on the table where a guest can tap it.",
+      "displayUrl": "https://tap.giving/mcp/photos/cafe-table-disc.webp"
+    },
+    {
+      "id": "cafe-counter-disc",
+      "category": "cafe-restaurant setting",
+      "title": "Setting image (stock photo): a Tap.Giving sample design disc on a wooden cafe table",
+      "alt": "A wooden cafe table with a latte; a small navy sample disc is stuck to the table corner",
+      "use": "Shows a disc on a cafe table at drink height, for counter and table service conversations.",
+      "displayUrl": "https://tap.giving/mcp/photos/cafe-counter-disc.webp"
+    },
+    {
+      "id": "tap-chair-service",
+      "category": "in-use tap moment",
+      "title": "Tap.Giving product photography: tapping a chair-back disc during a service, giving page open on the phone",
+      "alt": "From a seated position, a hand holds a phone showing a giving page against a white disc on the chair back ahead, congregation and stage beyond",
+      "use": "Shows the full moment: disc, phone, and the giving page it opens. Staged product photography, not a customer photo.",
+      "displayUrl": "https://tap.giving/mcp/photos/tap-chair-service.webp"
+    },
+    {
+      "id": "tap-pew-service",
+      "category": "in-use tap moment",
+      "title": "Tap.Giving product photography: tapping a pew-back disc mid-service",
+      "alt": "A woman seated in a pew holds her phone, showing a giving page, against a black disc on the pew back in front of her",
+      "use": "Shows the pew version of the tap, from the giver's point of view. Staged product photography, not a customer photo.",
+      "displayUrl": "https://tap.giving/mcp/photos/tap-pew-service.webp"
+    },
+    {
+      "id": "tap-chairback-service",
+      "category": "in-use tap moment",
+      "title": "Tap.Giving product photography: phone held to a chair-back disc, congregation facing the stage",
+      "alt": "Over a seated man's shoulder, a hand holds a phone against a blue disc on the chair back ahead during a service",
+      "use": "Shows the disc at reading distance on a chair back in a filled room. Staged product photography, not a customer photo.",
+      "displayUrl": "https://tap.giving/mcp/photos/tap-chairback-service.webp"
+    },
+    {
+      "id": "tap-chair-rows-wide",
+      "category": "in-use tap moment",
+      "title": "Wide shot: rows of auditorium chairs with a disc on every seat back, one being tapped",
+      "alt": "Wide view across rows of auditorium chairs, each carrying a disc; a hand holds a phone to the nearest disc",
+      "use": "Shows density: what one disc per seat looks like across a room, with a tap in progress.",
+      "displayUrl": "https://tap.giving/mcp/photos/tap-chair-rows-wide.webp"
+    },
+    {
+      "id": "tap-auditorium-wide",
+      "category": "in-use tap moment",
+      "title": "Tap.Giving product photography: wide auditorium, discs on seat backs, a congregant tapping",
+      "alt": "Wide auditorium shot with discs on the seat backs and one person tapping a disc with a phone",
+      "use": "Shows a large-room installation in use. Staged product photography, not a customer photo.",
+      "displayUrl": "https://tap.giving/mcp/photos/tap-auditorium-wide.webp"
+    },
+    {
+      "id": "tap-during-worship",
+      "category": "in-use tap moment",
+      "title": "Tap.Giving product photography: a seated congregant taps during standing worship",
+      "alt": "A congregation standing in worship while one seated person taps a chair-back disc with a phone",
+      "use": "Shows that a tap takes a second and happens without leaving the seat. Staged product photography, not a customer photo.",
+      "displayUrl": "https://tap.giving/mcp/photos/tap-during-worship.webp"
+    },
+    {
+      "id": "tap-pew-during-service",
+      "category": "in-use tap moment",
+      "title": "Tap.Giving product photography: a pew disc with occupied pews and a speaker ahead",
+      "alt": "Looking along occupied pews toward a speaker; a tap disc is fixed to the pew back in the foreground",
+      "use": "Shows a pew disc in context during a service. Staged product photography, not a customer photo.",
+      "displayUrl": "https://tap.giving/mcp/photos/tap-pew-during-service.webp"
+    },
+    {
+      "id": "disc-front-and-back",
+      "category": "product detail",
+      "title": "Photo of a sample disc front and its 3M adhesive back",
+      "alt": "Two blue sample discs on a dark surface: one face up reading TAP TO CONNECT and TAP TO GIVE, one showing the white 3M adhesive backing",
+      "use": "Shows both sides of the physical product: printed face and peel-and-stick back.",
+      "displayUrl": "https://tap.giving/mcp/photos/disc-front-and-back.webp"
+    },
+    {
+      "id": "sample-disc-spec",
+      "category": "product detail",
+      "title": "The Tap.Giving supplier sample disc with its spec card",
+      "alt": "A navy sample disc reading TAP YOUR PHONE HERE with an NFC wave and QR code above a printed spec card listing size, mounting, chip and destination",
+      "use": "Shows the standard sample design and the physical spec (4 in round, 3M adhesive, NTAG213) in one frame.",
+      "displayUrl": "https://tap.giving/mcp/photos/sample-disc-spec.webp"
+    },
+    {
+      "id": "visible-church-disc",
+      "category": "product detail",
+      "title": "The real disc design delivered to Visible Church, shown as delivered",
+      "alt": "A dark navy disc made for Visible Church: TAP YOUR PHONE HERE, an NFC wave, a QR code and the Visible Church wordmark",
+      "use": "A named customer's finished disc, for showing the print quality and layout of a real order.",
+      "displayUrl": "https://tap.giving/mcp/photos/visible-church-disc.webp"
+    },
+    {
+      "id": "disc-on-wood",
+      "category": "product detail",
+      "title": "Photo of a black disc with screw holes lying on a wood surface",
+      "alt": "A small black disc reading TAP HERE with two visible screw holes, lying on light wood",
+      "use": "Shows the screw-mount variant at rest: the holes are part of the disc, nothing else to attach.",
+      "displayUrl": "https://tap.giving/mcp/photos/disc-on-wood.webp"
+    },
+    {
+      "id": "discs-stacked-production",
+      "category": "product detail",
+      "title": "Production photo: a hand holding a stack of finished sample discs",
+      "alt": "A hand holding a thick stack of blue sample discs reading TAP TO CONNECT and TAP TO GIVE",
+      "use": "Shows the discs are thin, light and stackable, straight from production.",
+      "displayUrl": "https://tap.giving/mcp/photos/discs-stacked-production.webp"
+    },
+    {
+      "id": "mount-adhesive-photo",
+      "category": "mounting explainer",
+      "title": "Mounting explainer: the 3M adhesive backing, close up",
+      "alt": "Close-up of the white 3M 9448A adhesive backing covering the back of a disc",
+      "use": "Answers how the no-screw mount works: peel the backing and press the disc onto a clean, smooth surface.",
+      "displayUrl": "https://tap.giving/mcp/photos/mount-adhesive-photo.webp"
+    },
+    {
+      "id": "mount-screws-photo",
+      "category": "mounting explainer",
+      "title": "Mounting explainer: a disc face showing the two screw holes",
+      "alt": "Close-up of a black disc reading TAP PHONE HERE with a small screw hole at each side",
+      "use": "Answers where the screws go on the screw-mount variant: one hole at each side of the disc.",
+      "displayUrl": "https://tap.giving/mcp/photos/mount-screws-photo.webp"
+    },
+    {
+      "id": "plate-with-holes",
+      "category": "mounting explainer",
+      "title": "Mounting explainer: a screw-mount disc on wood, both holes visible",
+      "alt": "A black disc reading TAP PHONE HERE lying on wood, a pre-drilled hole at each side",
+      "use": "Shows the screw-mount disc flat against a wooden surface, the way it sits once fixed.",
+      "displayUrl": "https://tap.giving/mcp/photos/plate-with-holes.webp"
     }
   ],
   "capabilities": {
@@ -165,20 +398,20 @@ Response, structured content (abbreviated):
       "get_product",
       "get_artwork_spec",
       "get_order_questions",
-      "get_recap"
+      "get_recap",
+      "get_order_status"
     ],
     "writeTools": [
       "submit_artwork",
       "start_order_intent",
-      "create_order",
-      "register_webhook"
+      "create_order"
     ],
+    "artworkExport": "After submit_artwork, the submitted file stays fetchable at its displayUrl: the PRINT FILE, exactly the file the agent submitted (the agent produces the print-ready PDF from the spec; this server never builds or returns one). The same address with .png on the end returns a full-resolution PNG rendered from the submitted file. The fetch is a capability read: the artwork reference itself is the capability, within 30 days of submission. The on-disc preview is a mock composite, labeled a preview, never the print file.",
     "gates": [
       "Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.",
-      "Payment stays human: This server moves no money itself, and a person pays the hosted invoice when it arrives.",
+      "Payment stays human: This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice. A person pays the invoice when it arrives.",
       "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state."
     ],
-    "keys": "There are no keys. No user-facing step in this server requires or offers a key, login, or account, including placing an order and reading its status."",
     "kickoff": "get_artwork_spec",
     "benefits": [
       "Works with any platform",
@@ -202,29 +435,34 @@ A design tool first: this server helps you create print-ready NFC tap artwork pr
 What it is
 A tap disc is a small physical disc a phone taps to open your page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.
 The discs themselves are for organizations of every kind, designed by your own agent.
+NFC is the tap itself: a visitor holds a phone near the disc and the page opens. No app is needed, and nothing has to be installed.
 Every disc carries its own Tap.Giving address, so where a tap lands is set per disc. An order starts with one destination for the whole set, the page you give at order setup. To run two destinations, for example counter discs opening your menu and door discs opening your review profile, split the set afterwards in the free Redirect Dashboard: re-point any single disc, or any group of discs, in seconds, and re-point them again anytime. Your dashboard sign-in works from order setup: the address is go.tap.giving/<your-organization-slug>, the username is that slug, and the password arrives by email with the shipping notice, before your discs arrive. Tapping needs no app: iPhone XS (2018) and later and most Android phones from about 2015 read the disc automatically in the background. Where a design carries a printed QR code (your artwork includes one, or the Tap.Giving address line on the design), a phone without NFC, or with NFC off, scans that code and lands on the same destination; a design with no printed code has the tap as its only door, and the design choice is yours at artwork time.
+A scannable QR code appears on a disc only when the design carries a printed code; the tap works either way.
 
 How it works: the design path first
 1. Start with the shape, round or square.
 2. Get the artwork spec and the design directions for that shape from get_artwork_spec.
 3. Build the artwork from a direction with your own tools, adding the organization's logo or name.
 4. Submit the finished file with submit_artwork and see it on the disc as a proof. The artwork is yours from here: take it to any printer, or order the discs from Tap.Giving.
-5. Optional, only if you want the discs made: get the binding quote from get_quote, answer the order questions, and set the order up. The final proof is emailed for a person's approval before anything is printed, and a person pays the hosted invoice.
+5. Optional, only if you want the discs made: get the binding quote from get_quote.
+6. Capture the contact email first (start_order_intent), then answer the order questions (get_order_questions). Prices are first stated at the order questions, in the order phase.
+7. Check the recap (get_recap): the whole order, your artwork on the disc, and the exact total.
+8. Final step, Email me my invoice and design proof (create_order): the order is recorded, the invoice is created at the quoted total, and the invoice and the design proof are emailed to the contact. The final proof is approved by email before anything is printed.
 
 Why Tap.Giving
-No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently.
 - Works with any platform
 - No subscription fees
 - Durable waterproof PVC with a locked tap chip
 - Custom branding on every design
 - Free shipping
 - Covered by our 30-day money-back guarantee
+Every order is covered by our 30-day money-back guarantee. Tax, where it applies, is calculated on the invoice. Production and delivery run 2 to 3 weeks from artwork approval.
+Samples: we do not offer physical samples, free or paid. Instead, see the finished examples and photos in this server, and when you order, a proof of your own design is emailed for approval before anything is printed. The order itself is covered by the 30-day money-back guarantee.
 
 Gates
-Design approval, payment, and production release stay human: a person approves the final proof by email. This server moves no money itself, and a person pays the hosted invoice when it arrives.
-There are no keys: no user-facing step in this server requires or offers a key, login, or account, including placing an order and reading its status (status is read with the order's status reference, issued at placement). Part 1 (design) carries no pricing; pricing is stated only in Part 2, at the order questions, with totals at the quote step.
-(This worked example was captured 2026-11-07 and is amended here to the 2026-11-09 model: the retired key fields and the Part 1 pricing block are removed, and the invoice sentence carries the no-money-movement truth without the superseded clause. These surfaces await the CEO-settled replacement string.)
-The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library.
+Design approval, payment, and production release stay human: a person approves the final proof by email. This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice.
+There is no account, key, or login at any point in using this server. Order status is read with the status reference create_order returns at placement; it is shown once and cannot be recovered. Stuck? The explainer resources (tapgiving://explainer/how-it-works and its topics) walk through where you are.
+The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library (settings, tap moments, product details, mounting): show them whenever the person wants to see the disc in place.
 ```
 
 
