@@ -13,7 +13,8 @@
 // business repo; the published copy is docs/spec.md in this repo.
 
 import type { Env } from "./env.ts";
-import { ENDPOINT, GATES, KEY_REQUEST_LINE, POSITIONING_LINE, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME } from "./facts.ts";
+import { ENDPOINT, GATES, POSITIONING_LINE, PROTECTED_STRING, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME } from "./facts.ts";
+import { EXPLAINER_TOPICS, explainerResourceUri, findExplainerTopic } from "./explainer.ts";
 import { PRODUCT_PHOTOS, TOOLS, artworkBytesKey, readArtworkRecord, runTool } from "./tools.ts";
 import { buildTemplateSvg, renderArtworkFileToPng } from "./preview.ts";
 import { ToolError, isRecord } from "./errors.ts";
@@ -22,7 +23,7 @@ import { EXAMPLES_INDEX } from "./examples-data.ts";
 import { PHOTOS_INDEX } from "./photos-data.ts";
 
 const PROTOCOL_VERSION = "2025-03-26";
-const UNAUTH_LIMIT = 120; // per IP per 10 minutes on the keyless surface
+const UNAUTH_LIMIT = 120; // per IP per 10 minutes, universal: there are no credentials to bypass it
 const INTENT_LIMIT = 10; // per IP per hour, mirroring /api/lead's own cap
 
 function json(body: unknown, status = 200): Response {
@@ -45,9 +46,7 @@ async function rateLimit(env: Env, request: Request, toolName: string | null): P
     const raw = await env.MCP_KEYS.get(c.key);
     const count = raw ? parseInt(raw, 10) || 0 : 0;
     if (count >= c.limit) return false;
-    if (!request.headers.get("Authorization")) {
-      await env.MCP_KEYS.put(c.key, String(count + 1), { expirationTtl: Math.ceil(c.windowMs / 1000) + 60 });
-    }
+    await env.MCP_KEYS.put(c.key, String(count + 1), { expirationTtl: Math.ceil(c.windowMs / 1000) + 60 });
   }
   return true;
 }
@@ -65,7 +64,7 @@ function selfDescription(): string {
     `Repository: ${REPO_URL}`,
     ``,
     `## Connect`,
-    `Paste-ready client config (the keyless read side works as-is):`,
+    `Paste-ready client config:`,
     ``,
     `{`,
     `  "mcpServers": {`,
@@ -76,24 +75,22 @@ function selfDescription(): string {
     `  }`,
     `}`,
     ``,
-    `Placing an order needs no key and no header. To present a key for the organization-bound surfaces (order status, webhook registration, and the order questions' organization block), add it to the same block: "headers": { "Authorization": "Bearer <key>" }.`,
     `Claude Code: claude mcp add --transport http tap-giving ${ENDPOINT}`,
-    `Discovery, product facts, the artwork spec, and the order questions need no key; exact totals come from get_quote at the end. Placing an order needs no key: the whole placement run is keyless (the order questions, the recap, and placing the order), and a person from Tap.Giving follows up with the invoice. Order status is the one read that uses the organization's key.`,
+    `No account, key, or login at any point: connect and use every tool as-is. Nothing needs a header, and a header, if a client sends one anyway, is ignored. The design phase states no prices; prices are first stated at the order questions, and exact totals come from get_quote and the recap.`,
     ``,
     `## Tools`,
     toolLines,
     ``,
-    `## Auth`,
-    `Keyless reads (get_discovery, get_quote, get_product, get_artwork_spec, get_order_questions, get_recap) need no key. Submitted artwork is fetchable at its capability URL (/mcp/artwork/<ref>, and the same address with .png on the end for the print render): a keyless capability read, where the artwork reference itself is the capability.`,
-    `Placing an order needs no key: the recap and order setup run keyless, and a person from Tap.Giving follows up with the invoice. Order status is the read that needs the organization's key, and webhook registration is the write that needs it: Authorization: Bearer <redacted><orgslug>_<secret> Test keys look the same with tg_test_ in place of tg_live_: tg_test_<orgslug>_<secret>.`,
-    KEY_REQUEST_LINE,
-    `Evaluating this server? A test key runs the full journey, including placing a test order, with no real order and no charge. There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies with one within one business day.`,
-    `register_webhook is an optional developer tool; most organizations never need it. Order status is read with get_order_status.`,
+    `## Explainer`,
+    `Resources (tapgiving://explainer/<topic>) explain how it works and where you are: how-it-works, what-a-tap-disc-does, nfc-vs-qr, the-two-phases, after-you-order, materials-and-care. The prompt explain_where_i_am answers a stuck user with the step they are on.`,
+    ``,
+    `## Access`,
+    `There are no credentials on this server. Submitted artwork is fetchable at its capability URL (/mcp/artwork/<ref>, and the same address with .png on the end for the print render): the artwork reference itself is the capability, within 30 days of submission. Order status is read with get_order_status and the order's status reference, shown once at placement and carried in the customer email; it cannot be recovered if lost.`,
     ``,
     `## Human gates`,
     ...Object.values(GATES).map((g) => `- ${g}`),
     ``,
-    `This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.`,
+    PROTECTED_STRING,
   ].join("\n");
 }
 
@@ -144,9 +141,79 @@ async function handleRpc(env: Env, request: Request): Promise<Response> {
       id,
       result: {
         protocolVersion: clientVersion,
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: { name: SERVER_NAME, title: SERVER_NAME, version: "1.0.0" },
         instructions: SERVER_DESCRIPTION,
+      },
+    });
+  }
+
+  if (method === "resources/list") {
+    return json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        resources: EXPLAINER_TOPICS.map((t) => ({
+          uri: explainerResourceUri(t.slug),
+          name: t.title,
+          description: `Explainer: ${t.title}.`,
+          mimeType: "text/plain",
+        })),
+      },
+    });
+  }
+
+  if (method === "resources/read") {
+    const params = isRecord(body.params) ? body.params : {};
+    const uri = typeof params.uri === "string" ? params.uri : "";
+    const topic = findExplainerTopic(uri);
+    if (!topic) return rpcError(id, -32602, `Unknown resource: ${uri}. Resources live under tapgiving://explainer/<topic>.`);
+    return json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        contents: [{ uri, mimeType: "text/plain", text: `# ${topic.title}\n\n${topic.body}` }],
+      },
+    });
+  }
+
+  if (method === "prompts/list") {
+    return json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        prompts: [{
+          name: "explain_where_i_am",
+          description: "For a stuck user: name the step they are on in the two-phase journey (design, then the optional order), what this step needs, and the one next action. Point at the explainer resources for the fuller walk-through.",
+          arguments: [{ name: "step", required: false, description: "Optional: the tool or step the user is stuck on (for example get_artwork_spec, submit_artwork, get_recap, create_order, get_order_status)." }],
+        }],
+      },
+    });
+  }
+
+  if (method === "prompts/get") {
+    const params = isRecord(body.params) ? body.params : {};
+    const name = typeof params.name === "string" ? params.name : "";
+    if (name !== "explain_where_i_am") return rpcError(id, -32602, `Unknown prompt: ${name}.`);
+    const args = isRecord(params.arguments) ? params.arguments : {};
+    const step = typeof args.step === "string" ? args.step : "";
+    const where = step
+      ? `The user is stuck at: ${step}. Locate that step in the journey below, say what it needs, and give the one next action.`
+      : "The user is stuck and has not named a step. Ask which step they are on, or orient them from the journey below.";
+    const text = [
+      "You are explaining the NFC Tap Builder journey to a stuck user, in plain words, one step at a time.",
+      where,
+      "The journey has two phases. Phase one is design and collects nothing: get_discovery orients, get_artwork_spec returns the spec and the delivered examples, the user's own agent composes the artwork and produces the print-ready PDF, and submit_artwork returns the on-disc proof. Keeping the file is a complete outcome.",
+      "Phase two is the optional order: start_order_intent captures the contact email first, get_order_questions lists the order questions (prices are first stated here), get_quote gives the exact total, get_recap checks the whole order, and create_order is the final step, labeled \"Email me my invoice and design proof.\", which emails the invoice and the design proof to the contact.",
+      "After placement, get_order_status reads the order with the status reference shown once at placement.",
+      "For the fuller walk-through, read the explainer resources: " + EXPLAINER_TOPICS.map((t) => explainerResourceUri(t.slug)).join(", ") + ".",
+    ].join("\n");
+    return json({
+      jsonrpc: "2.0",
+      id,
+      result: {
+        description: "Where the user is in the two-phase journey, and the one next action.",
+        messages: [{ role: "user", content: { type: "text", text } }],
       },
     });
   }
@@ -198,7 +265,7 @@ async function handleRpc(env: Env, request: Request): Promise<Response> {
     }
   }
 
-  return rpcError(id, -32601, `Method not found: ${method}. This server implements initialize, tools/list, and tools/call.`);
+  return rpcError(id, -32601, `Method not found: ${method}. This server implements initialize, tools/list, tools/call, resources/list, resources/read, prompts/list, and prompts/get.`);
 }
 
 function bytesToBase64(bytes: Uint8Array): string {

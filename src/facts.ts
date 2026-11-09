@@ -32,11 +32,19 @@ export const NO_FEES_LINE =
   "No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently.";
 
 export const APPLICATIONS_LIST = "churches, nonprofits, restaurants, coffee shops, and local businesses";
+export const PROTECTED_STRING =
+  "This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice.";
+export function confirmationText(contactEmail: string): string {
+  return (
+    "Your order is placed, and your invoice and design proof are on their way to " + contactEmail + ". " +
+    "A person from Tap.Giving follows up from there; production waits for your proof approval, and the invoice is paid on its hosted page."
+  );
+}
 export const SERVER_DESCRIPTION =
   POSITIONING_LINE + " " +
   "The discs themselves are custom NFC tap discs and tap tags for organizations of every kind: " +
-  "built for " + APPLICATIONS_LIST + ", designed by your own agent. " + NO_FEES_LINE + " " +
-  "Ordering is optional and stays behind the human payment and proof gates. This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.";
+  "built for " + APPLICATIONS_LIST + ", designed by your own agent. " +
+  "Ordering is optional and stays behind the human payment and proof gates. " + PROTECTED_STRING;
 export const PRESENTATION_SYNONYMS = ["tap discs", "tap plates", "tap tags", "NFC tap discs"];
 export const ENDPOINT = "https://tap.giving/mcp";
 export const REPO_URL = "https://github.com/RyanShook/tap-giving-mcp";
@@ -44,23 +52,6 @@ export const REPO_URL = "https://github.com/RyanShook/tap-giving-mcp";
 // name, plus the turnaround and what to say. hello@tap.giving is the
 // published contact address (it is on the website's own emails).
 export const TEAM_EMAIL = "hello@tap.giving";
-
-// The test seat, stated plainly (item 3): a Registry evaluator or an
-// agent developer can hold a test key and run the whole keyed journey
-// with no real order and no charge. There is no self-serve issuance;
-// asking the team by email is the route.
-export const TEST_KEY_LINE =
-  "Evaluating the server? A test key runs the full journey, including placing a test order, with no real order and no charge. " +
-  "There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies " +
-  "with one (a tg_test_<orgslug>_<secret> key) within one business day.";
-export const KEY_REQUEST_LINE =
-  "Placing an order never requires a key: discovery, product facts, the artwork spec, the order questions, " +
-  "the recap, and order setup all run keyless. An organization API key is optional: " +
-  "it enriches the order questions with the key's own organization block, and it governs order status and " +
-  "webhook registration. Keys are issued by the Tap.Giving team: email hello@tap.giving from the address " +
-  "you want associated with the organization, say which organization the key is for, and the team replies " +
-  "with the key within one business day. Keys look like tg_live_<orgslug>_<secret>; test keys look like " +
-  "tg_test_<orgslug>_<secret>.";
 
 // The standing differentiators (llms.txt and for-agents fact set),
 // carried in submit_artwork's output and in get_discovery so the
@@ -90,17 +81,17 @@ export const PRODUCT = {
   mountingDetail:
     "Every disc carries 3M adhesive backing as standard. Pre-drilled screw holes (2 holes, 6 mm) are optional at no extra cost, and discs with holes keep the adhesive too.",
   metalCaveat:
-    "Discs do not work on metal surfaces without the anti-metal shielding layer: a ferrite layer at $1.00 per shielded disc, decided before printing because it cannot be added afterwards.",
+    "Discs do not work on metal surfaces without the anti-metal shielding layer: a ferrite shielding layer at a per-disc charge settled at the quote step, decided before printing because it cannot be added afterwards.",
   redirectDashboard:
     "The Redirect Dashboard is included free on every order, permanently: re-point where a tap lands anytime (change where any disc points in seconds), and see tap counts.",
   guarantee: "Covered by our 30-day money-back guarantee.",
   worksWith: "Works with any platform. No subscription fees.",
   stands: [
-    { name: "Table stand, small", size: "70 x 100 mm", priceCents: 700 },
-    { name: "Table stand, large", size: "120 x 140 mm", priceCents: 900 },
+    { name: "Table stand, small", size: "70 x 100 mm" },
+    { name: "Table stand, large", size: "120 x 140 mm" },
   ],
   badges: [
-    { name: "Lanyard badge", size: "90 x 130 mm", priceCents: 500 },
+    { name: "Lanyard badge", size: "90 x 130 mm" },
   ],
   shipping: {
     cost: "Free shipping on every order.",
@@ -135,9 +126,11 @@ export const ARTWORK_GEOMETRY = {
     safeHalfWidthMm: 47,
   },
   formatWanted:
-    "Artwork is created as vector where the agent can (SVG preferred; AI or vector PDF accepted), " +
-    "and intake accepts any real image up to 5 MB (5,242,880 bytes decoded): raster images are accepted at intake, " +
-    "and production fitness is judged later in the normal proof flow, never at intake.",
+    "The finished deliverable of the design phase is a print-ready PDF the user's own agent produces from this spec: " +
+    "page geometry equal to the 106 mm artboard with bleed, vector preserved, fonts outlined or embedded, one disc per page. " +
+    "This server never builds or returns a PDF. submit_artwork takes the agent's vector source (SVG preferred) for the on-disc " +
+    "proof, and intake accepts any real image up to 5 MB (5,242,880 bytes decoded); production fitness is judged later in the " +
+    "normal proof flow, never at intake.",
   background: "Flat solid colour background (a standing production rule).",
   minimumLogoMm: 18,
   encoding:
@@ -161,7 +154,7 @@ export const ARTWORK_GUIDELINES: string[] = [
   "Design edge to edge on the 106 mm square artboard; the cut is the inner 100 mm shape.",
   "Keep important elements inside the safe zone so nothing risks edge clipping.",
   "If you choose screws, keep the two 6 mm hole areas clear: the holes are drilled on the left and right midline, so frames and borders should not cross those spots.",
-  "Vector artwork is preferred back (SVG preferred, AI or vector PDF accepted), but intake accepts any real image up to 5 MB (5,242,880 bytes decoded); production fitness is judged later in the normal proof flow.",
+  "The design phase ends in a print-ready PDF your own agent produces from this spec (106 mm artboard with bleed, vector preserved, fonts outlined or embedded, one disc per page); this server never builds or returns a PDF. submit_artwork takes the vector source (SVG preferred) for the on-disc proof, and intake accepts any real image up to 5 MB (5,242,880 bytes decoded); production fitness is judged later in the normal proof flow.",
   "Use a flat solid colour background.",
   "A logo in a lockup should be at least 18 mm at final size (the smallest size with a shipped precedent).",
   "Production fitness is judged later in the normal proof flow; intake accepts any real image that passes the sanity checks.",
@@ -247,8 +240,7 @@ export const TAX_EXEMPT_GUIDANCE_LINE =
   "Tax-exempt: say so when you order and the tax-exempt state is recorded on your order; tax is calculated " +
   "on the invoice where it applies.";
 export const PAYMENT_GUIDANCE_LINE =
-  "Payment: this server takes no payment. A person from Tap.Giving follows up with the invoice after the " +
-  "order is placed, and invoices are paid by card or ACH bank transfer.";
+  "Payment: this server takes no payment. The order's final step emails the invoice and the design proof to the customer, and a person pays the hosted invoice by card or ACH bank transfer.";
 export const PLAIN_NFC_LINE =
   "NFC is the tap itself: a visitor holds a phone near the disc and the page opens. No app is needed, and " +
   "nothing has to be installed.";
@@ -298,7 +290,65 @@ export const GATES = {
   designApproval:
     "Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.",
   payment:
-    "Payment stays human: This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice. A person pays the invoice when it arrives.",
+    "Payment stays human: " + PROTECTED_STRING + " A person pays the invoice when it arrives.",
   production:
     "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state.",
+};
+
+// Design-phase shapes (settlement 4, 2026-11-09): the marketed set is
+// promoted in the DESIGN spec and example system at the same per-disc
+// pricing. Only the two built-ins are self-serve orderable; the design
+// surface must never imply another size is self-serve orderable.
+export const DESIGN_SHAPES = [
+  { shape: "round", sizeMm: "100 mm", orderable: true },
+  { shape: "round", sizeMm: "75 mm", orderable: false },
+  { shape: "round", sizeMm: "50 mm", orderable: false },
+  { shape: "square", sizeMm: "100 mm", orderable: true },
+  { shape: "square", sizeMm: "75 mm", orderable: false },
+  { shape: "square", sizeMm: "50 mm", orderable: false },
+  { shape: "rectangle", sizeMm: "85.5 x 54 mm (credit-card rectangle)", orderable: false },
+  { shape: "rectangle", sizeMm: "140 x 104 mm (rectangle sign)", orderable: false },
+] as const;
+export const DESIGN_SHAPES_NOTE =
+  "Design directions cover the full marketed set above. Only 100 mm round and 100 mm square are orderable through this server; " +
+  "every other size is arranged by hand through the Tap.Giving team (hello@tap.giving), never self-serve.";
+
+export const COLOR_SPACE_STATEMENT =
+  "Color space: compose in sRGB. Palette hexes in the example data are the sRGB values of the delivered artwork as rendered; " +
+  "compose in the same values. There is no CMYK-only build step on this server.";
+
+export const AGENT_PDF_CHECKLIST: string[] = [
+  "Page geometry equal to the 106 mm artboard with bleed, one disc per page.",
+  "Vector stays vector: shapes and type are not rasterized in the PDF.",
+  "Fonts outlined or embedded.",
+  "Flat solid background carried to the bleed edge.",
+  "Every important element inside the safe zone.",
+];
+
+export const QR_DESIGN_RULES = {
+  mockLabel:
+    "A QR code drawn in the design phase is a labeled mock built from the URL the user entered: it shows size, placement, and contrast truthfully and is marked as a mock.",
+  productionEncoding:
+    "Production encodes the disc's Redirect Dashboard link (its go.tap.giving address) to that same destination, and the destination can be changed anytime in the Redirect Dashboard.",
+  whiteBackground: "A printed QR code always sits on white, never on a color.",
+  roundedCorners: "Rounded corners up to 2 mm on the code's white field are allowed.",
+  referenceSizes: "Reference sizes: 44 x 44 mm for a QR-forward design, 30 mm for a split tap-and-scan design.",
+  errorCorrection: "Error correction level M minimum.",
+  quietZone: "Quiet zone of 4 modules on every side.",
+};
+
+export const LOGO_RULES = {
+  placement:
+    "The logo sits directly on the disc background, never on a white chip, badge, or panel.",
+  minimumMm: 18,
+  clearSpace: "Clear space around the logo of at least the height of its tallest letter or mark element.",
+  source:
+    "The calling agent pulls the logo from the website the user provides or confirms: published logo and icon assets first, then the site's own social links, best valid file at any size. The user can also supply the logo file directly at submit_artwork.",
+};
+
+export const GEOMETRY_GLOSSARY = {
+  artboard: "The full page the artwork is built on (here, 106 mm square).",
+  bleed: "The margin of background color extending past the cut line so no white edge can show after cutting.",
+  safeZone: "The inner area every important element must stay inside so nothing risks edge clipping.",
+  cutLine: "The line the disc is cut along (the inner 100 mm shape).",
 };

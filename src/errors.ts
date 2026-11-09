@@ -4,7 +4,6 @@
 // secret.
 
 export type McpErrorCode =
-  | "unauthorized"
   | "forbidden"
   | "invalid_input"
   | "manual_exception"

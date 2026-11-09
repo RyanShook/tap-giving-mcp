@@ -18,9 +18,9 @@
 		{ "pattern": "tap.giving/mcp/*", "zone_name": "tap.giving" }
 	],
 
-	// No module rules are needed: the example assets ship as
-	// generated TypeScript string modules under src/example-assets/
-	// (tools/build-examples.py), portable in every bundler.
+	// No module rules are needed: the photo assets ship as generated
+	// TypeScript string modules under src/product-assets/, portable
+	// in every bundler. Delivered-example bytes live in KV.
 
 	"kv_namespaces": [
 		{

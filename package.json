@@ -2,7 +2,7 @@
   "name": "tap-mcp",
   "version": "1.0.0",
   "private": true,
-  "description": "NFC Tap Builder by Tap.Giving: the public MCP server for Tap.Giving. Build and order custom NFC tap discs and tap tags for organizations of every kind: churches, nonprofits, restaurants, coffee shops, and local businesses. This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.",
+  "description": "NFC Tap Builder by Tap.Giving: the public MCP server for Tap.Giving. Build and order custom NFC tap discs and tap tags for organizations of every kind: churches, nonprofits, restaurants, coffee shops, and local businesses. This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice.",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
