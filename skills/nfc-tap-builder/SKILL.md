@@ -1,13 +1,13 @@
 ---
 name: nfc-tap-builder
-description: Design and order custom NFC tap-to-give discs for a church or nonprofit through the Tap.Giving MCP server (NFC Tap Builder by Tap.Giving) at https://tap.giving/mcp. Use when someone wants tap-to-give discs, a pricing quote, the artwork spec, an order setup, an invoice link, or order status for Tap.Giving. Keyless reads cover discovery, quotes, product facts, and the artwork spec; order setup uses an organization API key.
+description: Design and order custom NFC tap discs for an organization through the Tap.Giving MCP server (NFC Tap Builder by Tap.Giving) at https://tap.giving/mcp. Built for churches, nonprofits, restaurants, coffee shops, and local businesses. Use when someone wants NFC tap discs, a pricing quote, the artwork spec, an order setup, an invoice link, or order status for Tap.Giving. Keyless reads cover discovery, quotes, product facts, and the artwork spec; order setup uses an organization API key.
 ---
 
 # NFC Tap Builder by Tap.Giving
 
-Use this skill to help a church or nonprofit design and order custom NFC tap discs through Tap.Giving's hosted MCP server. A tap disc is a durable disc a phone taps to open the organization's giving page instantly. The server takes an order up to two human gates: a person approves the final proof by email, and a person pays a hosted invoice. The server moves no money itself and never takes payment.
+Use this skill to help an organization design and order custom NFC tap discs through Tap.Giving's hosted MCP server. A tap disc is a durable disc a phone taps to open the organization's page instantly. The server takes an order up to two human gates: a person approves the final proof by email, and a person pays a hosted invoice. The server moves no money itself and never takes payment.
 
-Also searched as: tap discs, tap plates, tap tags, NFC tap to give.
+Also searched as: tap discs, tap plates, tap tags, NFC tap discs.
 
 ## Connect
 
@@ -66,7 +66,7 @@ Keyed tools (organization API key required):
 
 | Tool | What it does | Returns |
 | --- | --- | --- |
-| `get_order_questions` | The order questions as structured data, in the exact order to ask them: shape, quantity, metal count, mounting with picture options, the giving page, contact name, email, and phone, and the shipping address last. | `questions` in order, plus the key's organization block |
+| `get_order_questions` | The order questions as structured data, in the exact order to ask them: shape, quantity, metal count, mounting with picture options, the link destination, contact name, email, and phone, and the shipping address last. | `questions` in order, plus the key's organization block |
 | `get_recap` | The full recap, the last thing before the exits: submitted artwork, quantity, shipping address as entered, the exact cost from `get_quote`, and both required notes. | `recapRef`, `cost`, `shipTo`, `notes`, `exits` |
 | `create_order` | Sets up an order through the same front door a website order takes. Idempotent on the caller's idempotency key. Exits: pay now, or lock in this price. | `orderRef`, `quote`, `exit`, `nextStep` |
 | `request_invoice` | Returns the payment handoff: a real, finalized Stripe hosted invoice and its link. If the organization already has an open invoice, that link is returned flagged `existing` instead of stacking a second one. | `invoiceId`, `invoiceNumber`, `hostedInvoiceUrl`, `handoffLine`, `totalCents` |
@@ -100,7 +100,7 @@ Add-on to settle before printing: discs that go on metal surfaces need a shieldi
 - Built-in sizes: one standardized 4-inch size (100 mm), in two shapes, round and square. Every other size or shape is a manual exception: the tools return a `manual_exception` error naming the human route, so take that route instead of promising it.
 - Mounting: 3M adhesive backing is standard; optional pre-drilled screw holes. Call `get_product` for the current mounting, table stand, and lanyard badge facts.
 - Redirect Dashboard: free for everyone, uncapped, included permanently with every order. It is where the tap destination lives, and a destination change takes effect in seconds.
-- Tap.Giving sells hardware only. It works with any giving platform and charges no subscription fees and no ongoing fees: one-time pricing per order.
+- Tap.Giving sells hardware only. It works with any platform and charges no subscription fees and no ongoing fees: one-time pricing per order.
 - Shipping takes about 2 to 3 weeks from artwork approval. That is an estimate, not a promise, and there is no rush service. Never offer one.
 
 ## Artwork
@@ -113,7 +113,7 @@ Add-on to settle before printing: discs that go on metal surfaces need a shieldi
 
 An organization API key looks like `tg_live_<orgslug>_<secret>` (or `tg_test_...` for the test seat) and is sent as `Authorization: Bearer <key>`. Only the SHA-256 hash of a key is stored.
 
-To get a key: email hello@tap.giving from the address you want on the order, say which church or nonprofit the key is for, and the team replies with the key within one business day. If a request needs a person outside the tools, the human route is Ryan, the founder, at ryan@tap.giving.
+To get a key: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. If a request needs a person outside the tools, the human route is Ryan, the founder, at ryan@tap.giving.
 
 ## Human gates
 

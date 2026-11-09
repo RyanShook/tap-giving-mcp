@@ -129,8 +129,8 @@ function quoteText(q: Record<string, unknown>): string {
 // presentation shows the disc, not just words. Both ride inline as
 // image content and at display URLs served by this Worker.
 export const PRODUCT_PHOTOS = [
-  { id: "pew-disc", alt: "A Tap.Giving disc mounted on a church pew", data: pewDiscPhoto, mimeType: "image/webp" },
-  { id: "phone-tap", alt: "A phone tapping a Tap.Giving disc on a chair back, opening the church's giving page", data: phoneTapPhoto, mimeType: "image/webp" },
+  { id: "pew-disc", alt: "A Tap.Giving disc mounted on a seat back", data: pewDiscPhoto, mimeType: "image/webp" },
+  { id: "phone-tap", alt: "A phone tapping a Tap.Giving disc on a chair back, opening the organization's page", data: phoneTapPhoto, mimeType: "image/webp" },
 ] as const;
 
 export function productPhotoImages(): Array<{ data: string; mimeType: string }> {
@@ -157,7 +157,7 @@ export function mountingPhotoImages(): Array<{ data: string; mimeType: string }>
 
 // The tier-cliff window (F7): a quote whose quantity sits within this
 // many discs below the next tier boundary names that boundary, so a
-// church can see when a slightly larger order costs about the same.
+// organization can see when a slightly larger order costs about the same.
 export const TIER_CLIFF_WINDOW = 50;
 
 export function nextTierBoundary(quantity: number): { quantity: number; unitCents: number } | null {
@@ -171,7 +171,7 @@ export function nextTierBoundary(quantity: number): { quantity: number; unitCent
 }
 
 // The below-minimum refusal, in helpful form (F9): the smallest order
-// and what churches do with the extras, in plain words. Used by every
+// and what organizations do with the extras, in plain words. Used by every
 // door that refuses below the minimum.
 export function belowMinimumMessage(quantity: number): string {
   const smallest = quoteFor({ qty: MIN_QTY });
@@ -179,7 +179,7 @@ export function belowMinimumMessage(quantity: number): string {
     `The minimum order is ${MIN_QTY} discs. Quantity ${quantity} is below the minimum; orders under ${MIN_QTY} are not available. ` +
     `The smallest order is ${MIN_QTY} discs for ${dollars(smallest.grandTotalCents)} list ` +
     `(${dollars(smallest.discountedTotalCents)} when the first-order discount applies). ` +
-    `Many churches order the 100 and use the extras in the lobby, the kids' wing, or the fellowship hall.`
+    `Many organizations order the 100 and use the extras at the entrance, in other rooms, or wherever people gather.`
   );
 }
 
@@ -282,7 +282,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     introduction: {
       builder: SERVER_NAME,
       product:
-        "A tap disc is a small physical disc a phone taps to open your giving page instantly. " +
+        "A tap disc is a small physical disc a phone taps to open your page instantly. " +
         "It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, " +
         "and it is durable waterproof PVC.",
       firstChoice: { field: "shape", options: ["round", "square"] },
@@ -315,7 +315,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `${SERVER_NAME}: ${SERVER_DESCRIPTION}`,
     ``,
     `What it is`,
-    `A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.`,
+    `A tap disc is a small physical disc a phone taps to open your page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.`,
     `First choice: the shape, round or square.`,
     ``,
     `Why Tap.Giving`,
@@ -335,7 +335,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.`,
     `Discovery, quotes, product facts, and the artwork spec need no key. Order questions, recaps, and order status are reads that use your organization key, like the writes. ${KEY_REQUEST_LINE}`,
     ...(intentTextLine ? [intentTextLine] : []),
-    `The two photos with this answer show the disc in use: on a church pew, and a phone tapping a disc on a chair back.`,
+    `The two photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.`,
   ].join("\n");
   return { structured, text, images: productPhotoImages() };
 }
@@ -397,7 +397,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       p.guarantee,
       `Table stands: 70 x 100 mm at $7, 120 x 140 mm at $9, minimum 100. Lanyard badges: 90 x 130 mm at $5, minimum 100. (Priced for information; discs are the orderable product here.)`,
       `${p.shipping.cost} ${p.shipping.terms}`,
-      `The photos with this answer show the disc in use: on a church pew, and a phone tapping a disc on a chair back.`,
+      `The photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.`,
     ].join("\n");
   return { structured, text, ...(topic === undefined || topic === "discs" ? { images: productPhotoImages() } : {}) };
 }
@@ -639,7 +639,7 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
     if (order) {
       const seat = await callSeat(ctx.env, "recordArtworkSubmission", {
         artworkRef, sha256: declaredSha, orderRef,
-        orgSlug: order.orgSlug, contactEmail: order.contactEmail, church: order.church,
+        orgSlug: order.orgSlug, contactEmail: order.contactEmail, church: order.organizationName ?? (order as unknown as Record<string, unknown>).church,
         filename, mediaType, displayUrl: `https://tap.giving${artworkDisplayPath(artworkRef)}`,
       }, ctx.fetchFn);
       if (seat.ok) {
@@ -724,7 +724,7 @@ const INTENT_SOURCE = "mcp:intent";
 async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
   const email = reqString(args, "email", 200).toLowerCase();
   if (!email.includes("@")) throw invalidInput("email must be an email address.");
-  const church = optString(args, "church", 300);
+  const organizationName = optString(args, "organizationName", 300) ?? optString(args, "church", 300);
   const quantityHint = optInt(args, "quantityHint");
   const sourceNote = optString(args, "sourceNote", 300);
   const artworkRef = optString(args, "artworkRef", 120);
@@ -757,7 +757,7 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
     },
     body: JSON.stringify({
       email,
-      ...(church ? { church } : {}),
+      ...(organizationName ? { church: organizationName } : {}),
       source: INTENT_SOURCE,
       ...(quantityHint ? { quantity: String(quantityHint) } : {}),
       ...(sourceNote ? { note: sourceNote } : {}),
@@ -778,7 +778,7 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
   const intentRef = `intent_${(await sha256Hex(`${email}:${Date.now()}:${Math.random()}`)).slice(0, 24)}`;
   await ctx.env.MCP_KEYS.put(`INTENT:${intentRef}`, JSON.stringify({
     intentRef, email,
-    ...(church ? { church } : {}),
+    ...(organizationName ? { organizationName } : {}),
     ...(quantityHint ? { quantityHint } : {}),
     ...(artworkRef ? { artworkRef } : {}),
     orgSlug: ctx.auth?.record.orgSlug ?? null,
@@ -857,10 +857,10 @@ async function toolGetOrderQuestions(ctx: Ctx, _args: Record<string, unknown>): 
         })),
       },
       {
-        order: 5, field: "givingUrl", question: "Where should a tap send people?",
+        order: 5, field: "linkDestination", question: "Where should a tap send people?",
         optional: true,
         note: LINK_DESTINATION_NOTE +
-          " One field, two names: get_recap and create_order accept this as givingUrl or as linkDestination; they are the same value, the page a tap opens.",
+          " get_recap and create_order accept this as linkDestination: the page a tap opens.",
         input: { type: "url", schemes: ["http", "https"] },
       },
       {
@@ -899,7 +899,7 @@ async function toolGetOrderQuestions(ctx: Ctx, _args: Record<string, unknown>): 
     `2. Quantity: "How many tap discs?" (minimum ${MIN_QTY}).`,
     "3. Metal surfaces: how many discs sit on metal? Those need the $1.00 shielding layer; omit the count when unknown.",
     '4. Mounting: "How should we mount them?" The two photos with this answer show the options: adhesive backing, and pre-drilled holes for screws (screws not included).',
-    `5. Giving page (optional): ${LINK_DESTINATION_NOTE} get_recap and create_order accept it as givingUrl or linkDestination; they are the same field.`,
+    `5. Link destination (optional): ${LINK_DESTINATION_NOTE} get_recap and create_order accept it as linkDestination.`,
     "6. Contact name.",
     `7. Contact email: must be ${auth.record.contactEmail}, the address on this key's organization. The final proof is emailed there.`,
     "8. Contact phone.",
@@ -919,7 +919,7 @@ export interface RecapRecord {
 }
 
 function canonicalOrderInputs(v: Record<string, unknown>): Record<string, unknown> {
-  const keys = ["quantity", "size", "mounting", "antiMetalCount", "shipTo", "artworkRef", "linkDestination", "givingUrl", "contactEmail"];
+  const keys = ["quantity", "size", "mounting", "antiMetalCount", "shipTo", "artworkRef", "linkDestination", "contactEmail"];
   const out: Record<string, unknown> = {};
   for (const k of keys) if (v[k] !== undefined) out[k] = v[k];
   return out;
@@ -940,7 +940,7 @@ export function diffFields(a: Record<string, unknown>, b: Record<string, unknown
 // invoice, the two orders are compared over exactly the fields the
 // invoice and production embody (the verdict's five). Excluded on
 // purpose: contactEmail (identical by construction), linkDestination
-// and givingUrl (changeable anytime by design), antiMetalCount (it
+// and linkDestination (changeable anytime by design), antiMetalCount (it
 // moves the total, which the reuse text already shows).
 const INVOICE_COMPARE_FIELDS = ["artworkRef", "quantity", "size", "mounting", "shipTo"] as const;
 
@@ -1030,7 +1030,7 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
   const contactNameIn = optString(args, "contactName", 200);
   const contactPhoneIn = optString(args, "contactPhone", 60);
   const contactEmailOut = (inputs.contactEmail as string | undefined) ?? auth.record.contactEmail;
-  const givingUrlOut = (inputs.givingUrl as string | undefined) ?? (inputs.linkDestination as string | undefined);
+  const givingUrlOut = (inputs.linkDestination as string | undefined) ?? (inputs.givingUrl as string | undefined);
   const structured: Record<string, unknown> = {
     recapRef,
     artwork,
@@ -1046,7 +1046,7 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
     mounting: inputs.mounting,
     shipTo: inputs.shipTo,
     destination: {
-      givingUrl: givingUrlOut ?? null,
+      linkDestination: givingUrlOut ?? null,
       note: givingUrlOut
         ? "Your discs start pointed at this page."
         : "No destination given: your discs ship pointed at your own Tap.Giving page (your free Redirect Dashboard), and you can set or change the destination anytime from the dashboard.",
@@ -1095,7 +1095,7 @@ export interface OrderRecord {
   orgSlug: string;
   mode: "live" | "test";
   exit: "pay_now" | "lock_in";
-  church: string;
+  organizationName: string;
   contactName: string;
   contactEmail: string;
   contactPhone: string;
@@ -1104,7 +1104,6 @@ export interface OrderRecord {
   mounting: "adhesive" | "screws";
   antiMetalCount?: number;
   shipTo: Record<string, string>;
-  givingUrl?: string;
   linkDestination?: string;
   artworkRef?: string;
   note?: string;
@@ -1175,8 +1174,7 @@ async function validateOrderShape(ctx: Ctx, args: Record<string, unknown>, auth:
       `(${TEAM_EMAIL}) for a key for your own organization.`,
       { retryable: false, details: { orgName: auth.record.orgName, contactEmail: auth.record.contactEmail } });
   }
-  const linkDestination = screenDestination(optString(args, "linkDestination", 500), "linkDestination");
-  const givingUrl = screenDestination(optString(args, "givingUrl", 500), "givingUrl");
+  const linkDestination = screenDestination(optString(args, "linkDestination", 500) ?? optString(args, "givingUrl", 500), "linkDestination");
   const artworkRef = optString(args, "artworkRef", 120);
   if (artworkRef) {
     const rec = await readArtworkRecord(ctx.env, artworkRef);
@@ -1192,7 +1190,6 @@ async function validateOrderShape(ctx: Ctx, args: Record<string, unknown>, auth:
     shipTo,
     ...(contactEmail ? { contactEmail } : {}),
     ...(linkDestination ? { linkDestination } : {}),
-    ...(givingUrl ? { givingUrl } : {}),
     ...(artworkRef ? { artworkRef } : {}),
   };
 }
@@ -1236,7 +1233,7 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
   }
   const exit = exitRaw as "pay_now" | "lock_in";
   const note = optString(args, "note", 480);
-  const church = optString(args, "church", 300) ?? auth.record.orgName;
+  const organizationName = optString(args, "organizationName", 300) ?? optString(args, "church", 300) ?? auth.record.orgName;
 
   // Recap binding: create_order carries the recapRef, and a recap
   // whose inputs differ from the order's is a conflict (spec 2.11).
@@ -1289,7 +1286,7 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
     source: "mcp",
     discountEligible,
     lead: {
-      church,
+      church: organizationName,
       email: contactEmail,
       name: contactName,
       phone: contactPhone,
@@ -1301,9 +1298,9 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
       withHoles: shapeInputs.mounting === "screws",
       ...(shapeInputs.antiMetalCount !== undefined ? { antiMetal: shapeInputs.antiMetalCount } : {}),
       brandMode: "name",
-      brandName: church,
+      brandName: organizationName,
       ...(((shapeInputs.linkDestination as string | undefined) ?? (shapeInputs.givingUrl as string | undefined))
-        ? { givingUrl: (shapeInputs.linkDestination as string | undefined) ?? (shapeInputs.givingUrl as string | undefined) }
+        ? { givingUrl: shapeInputs.linkDestination as string }
         : {}),
     },
     shipTo,
@@ -1342,12 +1339,11 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
 
   const order: OrderRecord = {
     orderRef, orgSlug, mode, exit,
-    church, contactName, contactEmail, contactPhone,
+    organizationName, contactName, contactEmail, contactPhone,
     quantity: shapeInputs.quantity as number,
     size, mounting: shapeInputs.mounting as "adhesive" | "screws",
     ...(shapeInputs.antiMetalCount !== undefined ? { antiMetalCount: shapeInputs.antiMetalCount as number } : {}),
     shipTo,
-    ...((shapeInputs.givingUrl as string | undefined) ? { givingUrl: shapeInputs.givingUrl as string } : {}),
     ...((shapeInputs.linkDestination as string | undefined) ? { linkDestination: shapeInputs.linkDestination as string } : {}),
     ...((shapeInputs.artworkRef as string | undefined) ? { artworkRef: shapeInputs.artworkRef as string } : {}),
     ...(note ? { note } : {}),
@@ -1372,7 +1368,7 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
       await ctx.env.MCP_ARTWORK.put(artworkJsonKey(order.artworkRef), JSON.stringify(rec), { expirationTtl: ARTWORK_TTL });
       const seat = await callSeat(ctx.env, "recordArtworkSubmission", {
         artworkRef: order.artworkRef, sha256: rec.sha256, orderRef,
-        orgSlug, contactEmail, church, filename: rec.filename, mediaType: rec.mediaType,
+        orgSlug, contactEmail, church: organizationName, filename: rec.filename, mediaType: rec.mediaType,
         displayUrl: `https://tap.giving${artworkDisplayPath(order.artworkRef)}`,
       }, ctx.fetchFn);
       if (seat.ok) {
@@ -1445,14 +1441,14 @@ async function toolRequestInvoice(ctx: Ctx, args: Record<string, unknown>): Prom
     minted = await mintInvoice({
       stripeKey: key,
       orderRef,
-      church: order.church,
+      organizationName: order.organizationName ?? (order as unknown as Record<string, unknown>).church as string,
       email: order.contactEmail,
       qty: order.quantity,
       unitCents: order.quote.unitCents,
       discountEligible: order.quote.discountEligible,
       shape: order.size === "100mm-square" ? "square" : "round",
       mounting: order.mounting,
-      linkDestination: order.linkDestination ?? order.givingUrl,
+      linkDestination: order.linkDestination ?? (order as unknown as Record<string, unknown>).givingUrl as string | undefined,
       antiMetalCount: order.antiMetalCount,
       exit: order.exit,
     }, ctx.fetchFn);
@@ -1696,8 +1692,9 @@ export const TOOLS: ToolDef[] = [
     description:
       "Start here. One call orients a cold agent: the builder's introduction (NFC Tap Builder by Tap.Giving), the product in plain words, " +
       "the first choice (shape: round or square), the pricing tiers, the artwork spec summary, and the full capability list with the human gates. " +
-      "No key, no email, nothing asked. " + GATES.payment,
-    inputSchema: { type: "object", properties: { intent: { type: "string", description: "Optional free-text intent, echoed back as guidance." } } },
+      "No key, no email, nothing asked. Call this first when an agent is new to the server; call get_product for product facts alone, get_artwork_spec when a shape is chosen and artwork comes next, and get_order_questions only with a key in hand. " +
+      "The optional intent argument is echoed back as guidance with a quantity headline when it names a disc count. " + GATES.payment,
+    inputSchema: { type: "object", properties: { intent: { type: "string", description: "Optional free-text description of what the person wants (for example an organization type and a rough disc count). It is echoed back as guidance, and a disc count in it produces a price headline for that quantity." } } },
     annotations: READ,
     run: toolGetDiscovery,
   },
@@ -1706,7 +1703,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "The binding quote for a prospective order (also known as get_pricing): quantity, tier, list totals as the headline, the first-order 10 percent discount (code WELCOME10, 7-day renewing window) shown as a conditional line, " +
       "add-ons, free shipping as its own line, and the exact grand total. No tax line: " + TAX_NOTE + " " +
-      "Quantities below the 100-disc minimum are refused by this tool itself. No key needed.",
+      "Quantities below the 100-disc minimum are refused by this tool itself. No key needed. Call this when the person names a quantity and wants the exact price; for product facts without a quantity, call get_product instead. The next step after a quote is get_artwork_spec for the artwork, then start_order_intent.",
     inputSchema: {
       type: "object",
       required: ["quantity"],
@@ -1721,12 +1718,11 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_product",
     description:
-      "The full product facts: the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, " +
-      "100 mm (4 inch) round and square built-ins (every other size is a manual exception), mounting, the metal caveat, table stands and lanyard badges, " +
-      "the free Redirect Dashboard, and shipping terms (free; 2 to 3 weeks from artwork approval). No key needed.",
+      "The full product facts, with no key needed. Returns one block per topic: discs (the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, the 100 mm (4 inch) round and square built-ins; every other size is a manual exception), mounting (options and the metal caveat), stands and badges (table stands and lanyard badges, priced for information), and shipping (free; 2 to 3 weeks from artwork approval), plus the free Redirect Dashboard. " +
+      "Pass the optional topic argument to return only one block. Call this for product facts alone; for a first orientation call get_discovery, and for the price at a quantity call get_quote.",
     inputSchema: {
       type: "object",
-      properties: { topic: { type: "string", enum: [...PRODUCT_TOPICS], description: "Optional: narrow to one topic." } },
+      properties: { topic: { type: "string", enum: [...PRODUCT_TOPICS], description: "Optional: return only this one product block (discs, stands, badges, mounting, or shipping). Omit it to return every block." } },
     },
     annotations: READ,
     run: toolGetProduct,
@@ -1736,12 +1732,13 @@ export const TOOLS: ToolDef[] = [
     description:
       "The production artwork spec for the chosen shape: 106 mm artboard, cut, bleed, and safe-zone geometry as structured millimetre data plus plain guidelines, " +
       "the format wanted back (vector, SVG preferred), house template examples to react to, and the optional logo ask. The agent builds the artwork with its own tools; " +
-      "this server has no design-generation tool. No key needed.",
+      "this server has no design-generation tool. No key needed. Choose the shape first (the discovery call names it the first choice), then call this for that shape; call get_discovery instead when the person has not chosen yet, and submit_artwork once the artwork file exists. " +
+      "The shape argument selects round or square geometry; chosenExampleRef carries the house example direction the person picked, from the examples this tool returns.",
     inputSchema: {
       type: "object",
       properties: {
-        shape: { type: "string", enum: ["round", "square"] },
-        chosenExampleRef: { type: "string", description: "The example direction the person picked, carried with the spec." },
+        shape: { type: "string", enum: ["round", "square"], description: "The disc shape to return geometry for: round or square. Omit it to return both shapes." },
+        chosenExampleRef: { type: "string", description: "The house example the person picked: an example id from a previous call, or its pick-list number within the chosen shape. It is carried with the spec as the design direction." },
       },
     },
     annotations: READ,
@@ -1752,25 +1749,25 @@ export const TOOLS: ToolDef[] = [
     description:
       "Send the finished artwork back. Intake is permissive by ruling: a real image is accepted in any format and rejected only on three sanity grounds " +
       "(malicious or masquerading content, over 5 MB decoded, or not decodable as the type it claims). Production fitness is judged later in the normal proof flow, never here. " +
-      "No key and no email are needed on the cold path; a keyed submission binds to the key's organization. Returns the artworkRef every later step carries, a displayUrl, and a preview of the person's own design composited on the disc (cut shape applied). " +
+      "No key and no email are needed on the cold path; a keyed submission binds to the key's organization. The file argument carries the artwork file (filename, mediaType, contentBase64); sha256 is the hex SHA-256 of those file bytes; shape optionally names the shape the artwork was designed for; orderRef optionally attaches the submission to an existing order; logo optionally carries the source logo the artwork was built from; note is free text for the team. Each call creates a separate submission: resubmitting the same file mints a new artworkRef rather than replacing the earlier one. Returns the artworkRef every later step carries, a displayUrl, and a preview of the person's own design composited on the disc (cut shape applied). " +
       GATES.designApproval,
     inputSchema: {
       type: "object",
       required: ["file", "sha256"],
       properties: {
         file: {
-          type: "object", required: ["filename", "mediaType", "contentBase64"],
+          type: "object", description: "The artwork file itself: its filename, its media type, and its bytes as base64.", required: ["filename", "mediaType", "contentBase64"],
           properties: { filename: { type: "string" }, mediaType: { type: "string" }, contentBase64: { type: "string" } },
         },
         sha256: { type: "string", description: "Hex SHA-256 of the file bytes." },
         shape: { type: "string", enum: ["round", "square"], description: "Optional: the shape the artwork was designed for; the on-disc preview uses its cut. Omit it and the preview shows both shapes." },
-        orderRef: { type: "string", description: "Optional: attach to an order this key's organization already created." },
+        orderRef: { type: "string", description: "Optional: attach the submission to an order this key's organization already created (the orderRef create_order returned)." },
         logo: {
           type: "object",
           properties: { filename: { type: "string" }, mediaType: { type: "string" }, contentBase64: { type: "string" } },
           description: "Optional source logo the artwork was built from; travels with the submission as source material.",
         },
-        note: { type: "string" },
+        note: { type: "string", description: "Optional free-text note for the Tap.Giving team, carried with the submission." },
       },
     },
     annotations: WRITE,
@@ -1782,16 +1779,16 @@ export const TOOLS: ToolDef[] = [
       "The kickoff and the journey's first ask: capture a contact email through the same public capture endpoint the website's email-first door uses, " +
       "so follow-up rides the existing lead machinery. No key needed. An intent is a lead, not an order: it creates no invoice and reserves nothing. " +
       "Returns an intentRef, links an artworkRef when given, and says plainly what follow-up to expect. " +
-      "Completing an order needs an organization API key (issued by the Tap.Giving team; get_discovery says how to ask).",
+      "Completing an order needs an organization API key (issued by the Tap.Giving team; get_discovery says how to ask). Call this once per contact: a repeat call with the same email creates a second lead record rather than updating the first. This call captures the contact only; create_order is the later, keyed call that sets up the order itself.",
     inputSchema: {
       type: "object",
       required: ["email"],
       properties: {
-        email: { type: "string" },
-        church: { type: "string", description: "Optional organization name." },
-        quantityHint: { type: "integer" },
+        email: { type: "string", description: "The contact email to capture; follow-up goes to this address." },
+        organizationName: { type: "string", description: "Optional organization name." },
+        quantityHint: { type: "integer", description: "Optional rough disc count the person mentioned; it shapes the follow-up and is not a binding quote." },
         artworkRef: { type: "string", description: "Optional: link an earlier submit_artwork reference to this intent." },
-        sourceNote: { type: "string" },
+        sourceNote: { type: "string", description: "Optional free-text note about where this contact came from or what they asked about; it travels with the lead for the team." },
       },
     },
     annotations: WRITE,
@@ -1800,8 +1797,8 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_order_questions",
     description:
-      "The order questions as structured data, in the exact order to ask them, covering every field create_order requires (shape, quantity, metal count, mounting with the picture assets, the giving page, contact name, email, and phone, and the shipping address last), " +
-      "plus the key's own organization block (name and the contact email orders must use). The contact email is captured first in this step, via start_order_intent. Key required.",
+      "The order questions as structured data, returned in the exact order to ask them. The questions cover every field create_order requires: shape, quantity, metal count, and mounting with the picture assets. Then the link destination. Then contact name, email, and phone. The shipping address comes last. " +
+      "The result also returns the key's own organization block: the organization name and the contact email orders must use. The journey captures the contact email before this step, through start_order_intent. Key required. Call this once a key exists and the person is ready to order; for a first orientation without a key, call get_discovery.",
     inputSchema: { type: "object", properties: {} },
     annotations: READ,
     run: toolGetOrderQuestions,
@@ -1809,29 +1806,28 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_recap",
     description:
-      "The full recap, the last thing before the exits: the submitted artwork (displayUrl plus image content where renderable), the quantity, the shipping address as entered, " +
+      "The full recap, the last thing before the exits: it validates the same order inputs create_order will carry (quantity from 100 to 7000, one of the two built-in sizes, adhesive or screws mounting, a complete shipping address) and returns the submitted artwork (displayUrl plus image content where renderable), the quantity, the shipping address as entered, " +
       "the exact cost from get_quote, and both required notes. Returns a recapRef; create_order carries it, and an order whose inputs differ from the recap is refused as a conflict. Key required.",
     inputSchema: {
       type: "object",
       required: ["quantity", "size", "mounting", "shipTo"],
       properties: {
-        quantity: { type: "integer" },
-        size: { type: "string", enum: ["100mm-round", "100mm-square"] },
-        mounting: { type: "string", enum: ["adhesive", "screws"] },
-        antiMetalCount: { type: "integer" },
+        quantity: { type: "integer", description: "Discs in the order, 100 to 7000; priced from the published tiers." },
+        size: { type: "string", enum: ["100mm-round", "100mm-square"], description: "The built-in size and shape: 100mm-round or 100mm-square." },
+        mounting: { type: "string", enum: ["adhesive", "screws"], description: "How the discs mount: adhesive backing, or pre-drilled screw holes plus adhesive." },
+        antiMetalCount: { type: "integer", description: "How many discs sit on metal surfaces and need the $1 shielding layer. Omit when unknown; an unknown count bills nothing." },
         shipTo: {
-          type: "object", required: ["name", "street", "city", "state", "postalCode", "country", "phone"],
+          type: "object", description: "The shipping address for the finished discs; every field is required, and the phone is its own field.", required: ["name", "street", "city", "state", "postalCode", "country", "phone"],
           properties: {
-            name: { type: "string" }, street: { type: "string" }, city: { type: "string" },
-            state: { type: "string" }, postalCode: { type: "string" }, country: { type: "string" }, phone: { type: "string" },
+            name: { type: "string", description: "Recipient name or organization name at the shipping address." }, street: { type: "string", description: "Street address." }, city: { type: "string", description: "City." },
+            state: { type: "string", description: "State or province." }, postalCode: { type: "string", description: "Postal or ZIP code." }, country: { type: "string", description: "Country." }, phone: { type: "string", description: "A phone number for the delivery address." },
           },
         },
-        artworkRef: { type: "string" },
-        linkDestination: { type: "string" },
-        givingUrl: { type: "string" },
-        contactEmail: { type: "string" },
-        contactName: { type: "string" },
-        contactPhone: { type: "string" },
+        artworkRef: { type: "string", description: "Optional: the artwork reference submit_artwork returned, shown on the disc in the recap." },
+        linkDestination: { type: "string", description: "Optional: the page a tap opens. Any http or https URL, changeable anytime; the Redirect Dashboard is the default." },
+        contactEmail: { type: "string", description: "The order contact email; it must be the key organization's contact email, and the final proof is emailed there." },
+        contactName: { type: "string", description: "Optional display only: the contact person's name, echoed in the recap." },
+        contactPhone: { type: "string", description: "Optional display only: the contact phone, echoed in the recap." },
       },
     },
     annotations: READ,
@@ -1842,31 +1838,32 @@ export const TOOLS: ToolDef[] = [
     description:
       "Set up an order for the key's organization through the same front door a website order takes (an INVREQ record the hourly adoption resolves into the CRM, indistinguishable downstream). " +
       "This is the lock-in write behind both recap exits; it carries the recapRef and a required idempotencyKey (a retry with the same key and payload returns the original orderRef; the same key with a different payload is a conflict naming the differing fields). " +
-      "The 100-disc minimum is enforced here. Sizes other than the two built-ins return manual_exception. " + GATES.designApproval + " " + GATES.payment,
+      "The 100-disc minimum is enforced here. Sizes other than the two built-ins return manual_exception. Returns the orderRef (the reference every later call uses), the exact quote, the chosen exit, and the next step. " +
+      "Failure modes: a recap whose inputs differ from the order is refused as a conflict naming the differing fields; a reused idempotencyKey with a different payload is a conflict naming the original order; a missing or mismatched contact email for the key is refused. " +
+      "Routing: start_order_intent is the earlier keyless contact capture, get_recap must run immediately before this call over the same inputs, and request_invoice follows it. " + GATES.designApproval + " " + GATES.payment,
     inputSchema: {
       type: "object",
       required: ["contactName", "contactEmail", "contactPhone", "quantity", "size", "mounting", "shipTo", "recapRef", "idempotencyKey"],
       properties: {
-        contactName: { type: "string" },
+        contactName: { type: "string", description: "The contact person's name for the order." },
         contactEmail: { type: "string", description: "Must belong to the key's organization." },
-        contactPhone: { type: "string" },
-        church: { type: "string", description: "Organization name; defaults to the key's organization name." },
-        quantity: { type: "integer" },
+        contactPhone: { type: "string", description: "A phone number that reaches the contact." },
+        organizationName: { type: "string", description: "Organization name; defaults to the key's organization name." },
+        quantity: { type: "integer", description: "Discs in the order, 100 to 7000." },
         size: { type: "string", description: "100mm-round or 100mm-square; anything else is a manual exception handled by hand through the Tap.Giving team." },
-        mounting: { type: "string", enum: ["adhesive", "screws"] },
-        antiMetalCount: { type: "integer" },
+        mounting: { type: "string", enum: ["adhesive", "screws"], description: "How the discs mount: adhesive backing, or pre-drilled screw holes plus adhesive." },
+        antiMetalCount: { type: "integer", description: "How many discs sit on metal surfaces and need the $1 shielding layer. Omit when unknown." },
         shipTo: {
-          type: "object", required: ["name", "street", "city", "state", "postalCode", "country", "phone"],
+          type: "object", description: "The shipping address for the finished discs; every field is required.", required: ["name", "street", "city", "state", "postalCode", "country", "phone"],
           properties: {
-            name: { type: "string" }, street: { type: "string" }, city: { type: "string" },
-            state: { type: "string" }, postalCode: { type: "string" }, country: { type: "string" }, phone: { type: "string" },
+            name: { type: "string", description: "Recipient name or organization name at the shipping address." }, street: { type: "string", description: "Street address." }, city: { type: "string", description: "City." },
+            state: { type: "string", description: "State or province." }, postalCode: { type: "string", description: "Postal or ZIP code." }, country: { type: "string", description: "Country." }, phone: { type: "string", description: "A phone number for the delivery address." },
           },
         },
-        givingUrl: { type: "string" },
         linkDestination: { type: "string", description: "Any http or https URL; optional, changeable anytime; the Redirect Dashboard is the default." },
-        artworkRef: { type: "string" },
-        note: { type: "string" },
-        recapRef: { type: "string" },
+        artworkRef: { type: "string", description: "The artwork reference submit_artwork returned for this order's design." },
+        note: { type: "string", description: "Optional free-text note carried on the order for the team." },
+        recapRef: { type: "string", description: "The reference get_recap returned for these same inputs; the order is refused if its inputs differ from that recap." },
         exit: { type: "string", enum: ["pay_now", "lock_in"], description: "The person's chosen exit, recorded on the order and the invoice metadata. Both exits write the same record shape." },
         idempotencyKey: { type: "string", description: "8 to 128 characters, minted per intended order, reused on retries." },
       },
@@ -1877,7 +1874,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "request_invoice",
     description:
-      "Return the payment handoff for an order this key's organization created: a real, finalized Stripe hosted invoice and its link, minted under the invoice playbook " +
+      "Return the payment handoff for an order this key's organization created: call create_order first, because this tool needs that call's orderRef (the mcp: reference in its result). It returns a real, finalized Stripe hosted invoice and its link, minted under the invoice playbook " +
       "(send_invoice collection, 7 days to due, first-order coupon when eligible, the free shipping line, finalized with auto_advance=false so Stripe emails nothing). " +
       "If the customer already has an open or draft invoice, that invoice's link is returned flagged existing. " +
       "Both test-mode and live-mode keys mint here; the minted invoice shape passed the field-for-field parity check against Stripe test mode on 2026-11-07. " +
@@ -1886,7 +1883,7 @@ export const TOOLS: ToolDef[] = [
       type: "object",
       required: ["orderRef", "idempotencyKey"],
       properties: {
-        orderRef: { type: "string" },
+        orderRef: { type: "string", description: "The order reference create_order returned (it begins with mcp:); the invoice is minted for that order." },
         idempotencyKey: { type: "string", description: "Per invoice request; retries return the same invoice." },
       },
     },
@@ -1897,10 +1894,12 @@ export const TOOLS: ToolDef[] = [
     name: "get_order_status",
     description:
       "Where an order stands, from the records fulfillment reads: the CRM stage, the fulfillment state with tracking when present, and the invoice state with its hosted link. " +
-      "An order not yet adopted returns stage \"received\" with the adoption expectation, not an error. Key required; only the key's own organization's orders.",
+      "An order not yet adopted returns stage \"received\" with the adoption expectation, not an error. Key required; only the key's own organization's orders. " +
+      "Give exactly one identifier: orderRef (the reference create_order returned; the usual key for an order) or invoiceId (the Stripe invoice id request_invoice returned; use it when the invoice is what you hold). " +
+      "Call this to check an existing order; it never changes anything. Use get_recap before an order exists, get_order_questions to gather an order's inputs, and request_invoice to mint or fetch the payment link.",
     inputSchema: {
       type: "object",
-      properties: { orderRef: { type: "string" }, invoiceId: { type: "string" } },
+      properties: { orderRef: { type: "string", description: "The order reference create_order returned (begins with mcp:). The usual identifier; give this or invoiceId, not both." }, invoiceId: { type: "string", description: "The Stripe invoice id request_invoice returned. Use it when the invoice is the identifier you hold." } },
     },
     annotations: READ,
     run: toolGetOrderStatus,
@@ -1914,7 +1913,7 @@ export const TOOLS: ToolDef[] = [
       type: "object",
       required: ["callbackUrl", "events"],
       properties: {
-        callbackUrl: { type: "string", description: "https URL." },
+        callbackUrl: { type: "string", description: "The https URL deliveries will POST to. It must be publicly reachable (no localhost or private addresses) and answer with a 2xx status; verify deliveries with the subscription secret shown once in the result (deliveries are signed with it). Failed deliveries are retried with backoff." },
         events: { type: "array", items: { type: "string", enum: ["proof_ready", "shipped"] } },
       },
     },

@@ -191,7 +191,7 @@ test("submit_artwork: masquerade and hash mismatch are refused", async () => {
 test("start_order_intent posts to /api/lead with the mcp:intent source", async () => {
   const { env } = await makeEnv();
   const calls: Array<{ url: string; body?: string }> = [];
-  const r = await runTool(env, req(), "start_order_intent", { email: "mcp-acceptance@example.com", church: "MCP Acceptance Test Church", quantityHint: 250 }, stubFetch(calls) as typeof fetch);
+  const r = await runTool(env, req(), "start_order_intent", { email: "mcp-acceptance@example.com", organizationName: "MCP Acceptance Test Organization", quantityHint: 250 }, stubFetch(calls) as typeof fetch);
   assert.equal(r.structured.captured, true);
   const lead = calls.find((c) => c.url.includes("/api/lead"));
   assert.ok(lead);
@@ -531,7 +531,7 @@ test("F12: chosenExampleRef resolves by number and by id, confirms by name, refu
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const byNum = await runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: "2" }, fetchFn);
-  assert.ok(byNum.text.includes("You picked: Deep Green & Gold Cross"), "pick confirmed by name");
+  assert.ok(byNum.text.includes("You picked: Deep Green & Gold Leaf"), "pick confirmed by name");
   assert.equal(byNum.images!.length, 1, "only the chosen design is shown");
   assert.equal((byNum.structured.chosenExample as { id: string }).id, "ex-forest-round");
   const byId = await runTool(env, req(), "get_artwork_spec", { shape: "square", chosenExampleRef: "ex-sand-square" }, fetchFn);
@@ -564,11 +564,11 @@ test("F13/F16: an SVG submission returns its design on the disc; the recap embed
     const recap = await runTool(env, req(TEST_KEY), "get_recap", {
       quantity: 150, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
       artworkRef: sub.structured.artworkRef as string, contactEmail: "mcp-acceptance@example.com",
-      givingUrl: "https://give.example.com/cedar",
+      linkDestination: "https://give.example.com/cedar",
     }, fetchFn);
     assert.ok(recap.image, "recap embeds the on-disc render");
     assert.equal(recap.image!.mimeType, "image/png");
-    assert.ok(recap.text.includes("Tap destination: https://give.example.com/cedar"), "recap shows the giving URL entered");
+    assert.ok(recap.text.includes("Tap destination: https://give.example.com/cedar"), "recap shows the link destination entered");
   } finally {
     setRasterizerForTests(null);
   }
@@ -581,7 +581,7 @@ test("F4 + F15: order questions carry the whoami block and every required field;
   const org = q.structured.organization as { name: string; contactEmail: string };
   assert.equal(org.contactEmail, "mcp-acceptance@example.com");
   const fields = (q.structured.questions as Array<{ field: string }>).map((x) => x.field);
-  assert.deepEqual(fields, ["size", "quantity", "antiMetalCount", "mounting", "givingUrl", "contactName", "contactEmail", "contactPhone", "shipTo"]);
+  assert.deepEqual(fields, ["size", "quantity", "antiMetalCount", "mounting", "linkDestination", "contactName", "contactEmail", "contactPhone", "shipTo"]);
   assert.ok(q.text.includes("never left going nowhere") || q.text.includes("never"), "blank destination default is stated");
   await assert.rejects(
     () => runTool(env, req(TEST_KEY), "get_recap", {
@@ -603,7 +603,7 @@ test("F14: intent with a key skips the get-a-key line, returns intentRef, links 
     file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
   }, fetchFn);
   const keyed = await runTool(env, req(TEST_KEY), "start_order_intent", {
-    email: "mcp-acceptance@example.com", church: "MCP Acceptance Test Church", artworkRef: art.structured.artworkRef as string,
+    email: "mcp-acceptance@example.com", organizationName: "MCP Acceptance Test Organization", artworkRef: art.structured.artworkRef as string,
   }, fetchFn);
   assert.ok(String(keyed.structured.intentRef).startsWith("intent_"));
   assert.equal(keyed.structured.artworkLinked, true);
@@ -775,7 +775,7 @@ test("R2 isolation: a test-key intent says the capture is real; a test order say
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const intent = await runTool(env, req(TEST_KEY), "start_order_intent", {
-    email: "pastor.dana@cedarhollow.example", church: "Cedar Hollow Community Church", quantityHint: 150,
+    email: "pastor.dana@cedarhollow.example", organizationName: "Cedar Hollow Community Organization", quantityHint: 150,
   }, fetchFn);
   assert.ok(intent.text.includes("this contact capture is real"), "capture honesty in intent text");
   assert.ok(intent.text.includes("lead list"), "the lead list is named");

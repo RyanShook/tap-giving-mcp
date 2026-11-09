@@ -4,7 +4,7 @@
 Six generic Tap.Giving house designs, round and square variants,
 authored as full-bleed 106 mm artboard SVGs and rendered to PNG at
 424 px (4 px per mm). No customer artwork: every design is a house
-template with a placeholder-style church name, exactly as the
+template with a placeholder-style organization name, exactly as the
 examples ruling requires. Fonts: DejaVu (present on the box), named
 generically in the SVG so the source stays portable.
 
@@ -54,7 +54,7 @@ def text(x, y, s, size, fill, family="serif", weight="normal", spacing="0", anch
 
 
 def tap_line(y, fill):
-    return text(53, y, "TAP TO GIVE", 6.2, fill, family="sans-serif", weight="bold", spacing="2.4")
+    return text(53, y, "TAP HERE", 6.2, fill, family="sans-serif", weight="bold", spacing="2.4")
 
 
 DESIGNS = {}
@@ -62,12 +62,12 @@ DESIGNS = {}
 # 1. Classic navy, gold icon, round.
 inner = (
     TAP_ICON.format(x=53, y=34, s=0.62, c="#d9a441")
-    + text(53, 66, "GRACE CHURCH", 8.6, "#ffffff", weight="bold", spacing="1.2")
+    + text(53, 66, "YOUR NAME HERE", 8.6, "#ffffff", weight="bold", spacing="1.2")
     + tap_line(78, "#d9a441")
-    + text(53, 88, "Thank you for giving", 4.6, "#cfd8e6", family="sans-serif")
+    + text(53, 88, "Tap to open our page", 4.6, "#cfd8e6", family="sans-serif")
 )
 DESIGNS["ex-navy-round"] = ("round", design("#16324f", "round", inner),
-                            "Classic navy with a gold tap icon and a clean church name")
+                            "Classic navy with a gold tap icon and a clean organization name")
 
 # 2. Warm cream, serif, square.
 inner = (
@@ -75,29 +75,28 @@ inner = (
     + TAP_ICON.format(x=53, y=36, s=0.58, c="#8a6d3b")
     + text(53, 68, "New Life Fellowship", 8.2, "#4a3b26")
     + tap_line(80, "#8a6d3b")
-    + text(53, 90, "Every gift makes a difference", 4.4, "#7a6a52", family="sans-serif")
+    + text(53, 90, "All are welcome here", 4.4, "#7a6a52", family="sans-serif")
 )
 DESIGNS["ex-cream-square"] = ("square", design("#f5eddc", "square", inner),
                               "Warm cream with serif lettering and a centered tap icon")
 
-# 3. Deep green, arched name, cross accent, round.
+# 3. Deep green, arched name, leaf accent, round.
 inner = (
     '<path d="M20,24 A33,9 0 0,1 86,24" fill="none" stroke="#cfe3cf" stroke-width="0.7"/>'
     + text(53, 37, "THE OAKS", 8.8, "#ffffff", weight="bold", spacing="2")
-    + text(53, 47, "COMMUNITY CHURCH", 4.6, "#cfe3cf", family="sans-serif", spacing="2.6")
-    + '<g stroke="#e8c766" stroke-width="2.4" stroke-linecap="round">'
-    + '<line x1="53" y1="54" x2="53" y2="68"/><line x1="47.5" y1="59.5" x2="58.5" y2="59.5"/></g>'
+    + text(53, 47, "COMMUNITY CENTER", 4.6, "#cfe3cf", family="sans-serif", spacing="2.6")
+    + '<path d="M53,68 C53,60 46,58 42,58 C42,66 47,68 53,68 Z M53,68 C53,60 60,58 64,58 C64,66 59,68 53,68 Z" fill="#e8c766"/>'
     + tap_line(80, "#e8c766")
-    + text(53, 90, "Give with a tap", 4.6, "#cfe3cf", family="sans-serif")
+    + text(53, 90, "Tap to open our page", 4.6, "#cfe3cf", family="sans-serif")
 )
 DESIGNS["ex-forest-round"] = ("round", design("#1e4634", "round", inner),
-                              "Deep green with an arched name and a small cross accent")
+                              "Deep green with an arched name and a small leaf accent")
 
 # 4. Burgundy, gold frame, bold, square.
 inner = (
     '<rect x="7" y="7" width="92" height="92" fill="none" stroke="#d9a441" stroke-width="1.1"/>'
     + text(53, 34, "REDEMPTION", 10.5, "#ffffff", family="sans-serif", weight="bold", spacing="1.6")
-    + text(53, 44, "CITY CHURCH", 6.4, "#e6c98a", family="sans-serif", spacing="3.4")
+    + text(53, 44, "CITY KITCHEN", 6.4, "#e6c98a", family="sans-serif", spacing="3.4")
     + TAP_ICON.format(x=53, y=63, s=0.44, c="#d9a441")
     + tap_line(88, "#ffffff")
 )
@@ -107,7 +106,7 @@ DESIGNS["ex-burgundy-square"] = ("square", design("#5e1f24", "square", inner),
 # 5. Modern slate, minimal, round.
 inner = (
     TAP_ICON.format(x=53, y=30, s=0.6, c="#ffffff")
-    + text(53, 72, "harbor church", 8.4, "#ffffff", family="sans-serif", spacing="0.6")
+    + text(53, 72, "harbor coffee", 8.4, "#ffffff", family="sans-serif", spacing="0.6")
     + tap_line(84, "#9fb4c8")
 )
 DESIGNS["ex-slate-round"] = ("round", design("#3d4c5c", "round", inner),

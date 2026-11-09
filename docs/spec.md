@@ -344,7 +344,7 @@ the first tool a new agent calls and its description says so.
   introduction: the OPENING SEQUENCE content (Ryan's scripting): the
   builder introduces itself by its presentation name and explains the
   product plainly, in words the client presents first: a tap disc is a
-  small physical disc a phone taps to open your giving page instantly;
+  small physical disc a phone taps to open your page instantly;
   it carries a locked NTAG213 chip; it comes in one standardized
   4-inch size (100 mm), in two shapes; it is durable waterproof PVC;
   and the FIRST CHOICE the person makes is the shape, round or square,
@@ -452,7 +452,7 @@ the same price, every other size or shape a manual exception handled by
 hand (named as such, never presented as self-serve), mounting adhesive
 or screws, table stands and lanyard badges as related products with their
 own prices and minimums, Redirect Dashboard included free, works with any
-giving platform, no monthly fee, ships free.
+platform, no monthly fee, ships free.
 
 Inputs: none required; optional `topic` enum (discs, stands, badges,
 mounting, shipping) to narrow the answer. Shipping terms ride this tool
@@ -522,7 +522,7 @@ Inputs:
   country, phone}. Phone inside shipTo is required as its own field; the
   approval email's shipping block always carries the customer's phone as
   its last line, and this record is where that block is built from.
-- givingUrl: string, optional. A customer's giving URL is never required
+- linkDestination: string, optional. A customer's destination URL is never required
   and never gates anything; the order defaults to shipping with the
   Redirect Dashboard and the disc encodes the go.tap.giving slug.
 - artworkRef: string, optional; the submit_artwork reference for this
@@ -580,7 +580,7 @@ stated rather than passing downstream, Ryan's ruling); `manual_exception` (non-b
 size); `conflict` (same idempotencyKey, different payload: the original
 record wins and the differing fields are named, never silently merged).
 
-Destination screening (Ryan's ruling, applies to givingUrl and
+Destination screening (Ryan's ruling, applies to linkDestination and
 linkDestination): ANY URL is accepted; there is no domain allowlist.
 Screening is only for malicious or injection-shaped input: the value
 must parse as a URL with an http or https scheme; other schemes
@@ -707,7 +707,7 @@ nothing).
 - Benefits block (contract element, Ryan): the output ALSO carries
   `benefits`, the standing differentiators the client presents to the
   person immediately after the design step (section 2.11, step 1b):
-  works with any giving platform; no subscription fees; durable
+  works with any platform; no subscription fees; durable
   waterproof PVC with a locked NTAG213 chip; custom branding from 100
   discs; free shipping. The block's facts are the llms.txt and
   for-agents fact set, worded consistently with them, and the same
@@ -983,7 +983,7 @@ acceptance of section 2.6.
 
 Step 1b, benefits block (contract element): immediately after the
 design step, the client presents the benefits block carried in the
-submit_artwork output (section 2.6): works with any giving platform,
+submit_artwork output (section 2.6): works with any platform,
 no subscription fees, durable waterproof PVC with a locked NTAG213
 chip, custom branding from 100 discs, free shipping. It sits here, and
 not earlier, because the person has just seen their own design and the
@@ -1221,11 +1221,11 @@ The MCP presents as a builder, in the vocabulary people actually use.
   working name used in early drafts of this spec.)
 - Server description (shipped with the name, in the initialize
   metadata, the GET page, and the README): "Build and order custom NFC
-  tap discs, tap plates, and tap tags for churches and nonprofits:
-  NFC tap to give, designed by your own agent, priced from the
+  tap discs and tap tags for organizations of every kind: built for
+  churches, nonprofits, restaurants, coffee shops, and local businesses, designed by your own agent, priced from the
   published tiers, ordered up to the human payment and proof gates."
   The synonym set is contractual, so differently worded agent requests
-  still match: tap discs, tap plates, tap tags, NFC tap to give.
+  still match: tap discs, tap plates, tap tags, NFC tap discs.
   The description also carries, verbatim, the no-money sentence the
   directory rules require (below): "This server moves no money itself:
   it returns a hosted invoice link for a person to pay." Anthropic's
@@ -1327,7 +1327,7 @@ Marketing condition sets).
 
 - Key: none required. This is the one unauthenticated write, and it is
   deliberately the same write a browser makes.
-- Inputs: email (required); church name (optional); quantityHint
+- Inputs: email (required); organization name (optional); quantityHint
   (optional); sourceNote (optional).
 - What it does: tap-mcp POSTs to the SAME public capture endpoint the
   website's email-first door uses, POST /api/lead on tap-autoreply, with
@@ -1992,3 +1992,62 @@ section 8. What remains is only what Engineering cannot do itself.
   pre-decided fallbacks: /api/lead's timing check against server-side
   captures (fallback seat variant, section 3.4) and the invocation
   seat's status arm weight (fallback status shape, section 5.3).
+
+
+## 2026-11-08 generic reframe and TDQS description pass (landing record)
+
+Ryan's directive (2026-11-08, via the CEO chat, with two addenda the
+same evening): the server presents as a generic NFC provider for
+organizations of every kind. The applications list (churches,
+nonprofits, restaurants, coffee shops, and local businesses, in that
+order) is the only place verticals are named. Everywhere else in
+served text, schemas, and docs the generic noun is "organization".
+The tap.giving website stays church-first and is out of this pass's
+scope.
+
+Renamed fields (external contract change, authorized by Ryan;
+directory re-tests should use the new names):
+
+- `church` to `organizationName`: start_order_intent input,
+  create_order input, the stored order record, the stored intent
+  record, and the Stripe mint input. Handlers still accept the old
+  input name server-side for in-flight calls, and records already
+  written under the old field names still read back.
+- `givingUrl` to `linkDestination`: get_recap input (the givingUrl
+  property is removed; linkDestination already existed), create_order
+  input (same removal), the get_order_questions question field, the
+  get_recap structured destination output, and the stored order
+  record. An order input still carrying givingUrl is normalized into
+  linkDestination by the shared order-shape validation.
+- Downstream contracts in the business machinery keep their own field
+  names at the payload boundary: the lead capture body, the
+  invoice-request body, and the artwork seat payloads still carry
+  `church` (and the invoice-request design payload still carries
+  `givingUrl`), fed from the renamed fields. Those systems are out of
+  this repo's scope.
+- Deliberate exception: the Stripe invoice memo's tax line changed
+  from "Tax exempt, 501(c)(3) church or nonprofit" to "Tax exempt
+  where applicable" under the generic-verbiage rule, so the memo no
+  longer mirrors the invoice playbook field for field; the
+  2026-11-07 parity result stands as the historical record of the
+  pre-reframe text. The memo shape lines and the invoice line-item
+  description also dropped "Tap-to-Give" for "NFC Tap Discs".
+
+The six house example designs were redrawn with generic sample
+organizations and "TAP HERE" wording, and the forest example's cross
+accent became a leaf ("Deep Green & Gold Leaf"). Test fixtures keep
+their historical organization names and slugs as data values.
+
+The same pass folded in Marketing's Glama TDQS fix list (baseline
+TDQS A 3.9/5.0 across the 12 tools): schema descriptions added for
+get_order_status (orderRef, invoiceId), get_recap (all 11 parameters
+including the nested shipTo fields), create_order, start_order_intent
+(sourceNote, quantityHint), and submit_artwork; routing sentences
+added across the read and order tools; return shapes and failure
+modes stated for get_product and create_order; behavior notes added
+(repeat start_order_intent calls create a second lead, artwork
+resubmission creates a separate submission, the discovery intent
+echo, register_webhook callbackUrl guidance); prerequisite and
+next-step sentences for get_artwork_spec, get_quote, and
+request_invoice. list_orders, cancel and amend operations, and
+webhook delivery remain v1.1 scope and were not built.

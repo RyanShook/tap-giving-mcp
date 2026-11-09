@@ -14,12 +14,13 @@ export const SERVER_TITLE = "NFC Tap Builder by Tap.Giving";
 export const NO_FEES_LINE =
   "No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently.";
 
+export const APPLICATIONS_LIST = "churches, nonprofits, restaurants, coffee shops, and local businesses";
 export const SERVER_DESCRIPTION =
-  "Build and order custom NFC tap discs and tap tags for churches and nonprofits: " +
-  "NFC tap to give, designed by your own agent, priced from the published tiers, ordered up to the " +
+  "Build and order custom NFC tap discs and tap tags for organizations of every kind: " +
+  "built for " + APPLICATIONS_LIST + ", designed by your own agent, priced from the published tiers, ordered up to the " +
   "human payment and proof gates. " + NO_FEES_LINE + " This server moves no money itself: it returns a hosted invoice " +
   "link for a person to pay.";
-export const PRESENTATION_SYNONYMS = ["tap discs", "tap plates", "tap tags", "NFC tap to give"];
+export const PRESENTATION_SYNONYMS = ["tap discs", "tap plates", "tap tags", "NFC tap discs"];
 export const ENDPOINT = "https://tap.giving/mcp";
 export const REPO_URL = "https://github.com/RyanShook/tap-giving-mcp";
 // How a person gets a key (F2): a role and an address, never a first
@@ -28,7 +29,7 @@ export const REPO_URL = "https://github.com/RyanShook/tap-giving-mcp";
 export const TEAM_EMAIL = "hello@tap.giving";
 export const KEY_REQUEST_LINE =
   "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address " +
-  "you want on the order, say which church or nonprofit the key is for, and the team replies with the key " +
+  "you want on the order, say which organization the key is for, and the team replies with the key " +
   "within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, " +
   "and order status use the organization's key.";
 
@@ -36,7 +37,7 @@ export const KEY_REQUEST_LINE =
 // carried in submit_artwork's output and in get_discovery so the
 // wording exists in exactly one shape (spec section 2.6).
 export const BENEFITS: string[] = [
-  "Works with any giving platform",
+  "Works with any platform",
   "No subscription fees",
   "Durable waterproof PVC with a locked tap chip",
   "Custom branding from 100 discs",
@@ -64,7 +65,7 @@ export const PRODUCT = {
   redirectDashboard:
     "The Redirect Dashboard is included free on every order, permanently: re-point where a tap lands anytime (change where any disc points in seconds), and see tap counts.",
   guarantee: "Covered by our 30-day money-back guarantee.",
-  worksWith: "Works with any giving platform. No subscription fees.",
+  worksWith: "Works with any platform. No subscription fees.",
   stands: [
     { name: "Table stand, small", size: "70 x 100 mm", priceCents: 700, minimum: 100 },
     { name: "Table stand, large", size: "120 x 140 mm", priceCents: 900, minimum: 100 },
@@ -111,7 +112,7 @@ export const ARTWORK_GEOMETRY = {
   background: "Flat solid colour background (a standing production rule).",
   minimumLogoMm: 18,
   encoding:
-    "The disc encodes the organization's Tap.Giving address, assigned by Tap.Giving; never invent a raw giving URL for the artwork.",
+    "The disc encodes the organization's Tap.Giving address, assigned by Tap.Giving; never invent a raw destination URL for the artwork.",
   screwHoles: {
     count: 2,
     diameterMm: 6,
@@ -147,7 +148,7 @@ export const MOUNTING_OPTIONS = [
     imageUrl: "https://tap.giving/assets/mount-adhesive.webp",
     imageWidth: 660,
     imageHeight: 453,
-    text: "Non-destructive 3M adhesive: peel and stick onto the pew or the back of a chair. No drilling.",
+    text: "Non-destructive 3M adhesive: peel and stick onto a seat back, table, or counter. No drilling.",
   },
   {
     value: "screws",
@@ -160,7 +161,7 @@ export const MOUNTING_OPTIONS = [
 ] as const;
 
 export const LINK_DESTINATION_NOTE =
-  "Where should a tap send people? Give your giving page URL and your discs start pointed there. " +
+  "Where should a tap send people? Give the page URL and your discs start pointed there. " +
   "Leaving it blank is fine too, and a tap is never left going nowhere: your discs ship pointed at your " +
   "own Tap.Giving page (your free Redirect Dashboard), and you can set or change the destination anytime " +
   "from the dashboard.";

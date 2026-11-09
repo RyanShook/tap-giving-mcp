@@ -99,8 +99,8 @@ export function buildMemo(opts: {
   antiMetalCount?: number; // known count only
 }): string {
   const shapeLine = opts.shape === "square"
-    ? "4\" square NFC Tap-to-give discs with adhesive backing"
-    : "4\" NFC Tap-to-give discs with adhesive backing";
+    ? "4\" square NFC tap discs with adhesive backing"
+    : "4\" NFC tap discs with adhesive backing";
   const first = opts.mounting === "screws" ? shapeLine + " and pre-drilled screw holes" : shapeLine;
   const url = opts.linkDestination;
   const lockedLine = url
@@ -113,7 +113,7 @@ export function buildMemo(opts: {
     lockedLine,
     "Editable design proof available immediately",
     "Delivery 2-3 weeks from artwork approval",
-    "Tax exempt, 501(c)(3) church or nonprofit",
+    "Tax exempt where applicable",
   ];
   if (opts.antiMetalCount && opts.antiMetalCount > 0) {
     lines.push(`${opts.antiMetalCount} discs with anti-metal backing for metal surfaces`);
@@ -124,7 +124,7 @@ export function buildMemo(opts: {
 export interface MintInput {
   stripeKey: string;
   orderRef: string;
-  church: string;
+  organizationName: string;
   email: string;
   qty: number;
   unitCents: number; // LIST tier price; the coupon does the discounting
@@ -165,7 +165,7 @@ export async function mintInvoice(
     await stripeCall(key, "POST", `/customers/${customerId}`, { tax_exempt: "exempt" }, undefined, fetchFn);
   } else {
     const created = await stripeCall(key, "POST", "/customers",
-      { name: input.church || undefined, email, tax_exempt: "exempt" },
+      { name: input.organizationName || undefined, email, tax_exempt: "exempt" },
       `cf-cust:${email}`, fetchFn);
     customerId = created.id;
     customerReused = false;
@@ -218,7 +218,7 @@ export async function mintInvoice(
 
   await stripeCall(key, "POST", "/invoiceitems", {
     customer: customerId, currency: "usd", invoice: inv.id,
-    description: "NFC Tap-to-Give Discs", quantity: input.qty, unit_amount_decimal: input.unitCents,
+    description: "NFC Tap Discs", quantity: input.qty, unit_amount_decimal: input.unitCents,
   }, `cf-item:plates:${inv.id}`, fetchFn);
 
   if (input.antiMetalCount && input.antiMetalCount > 0) {

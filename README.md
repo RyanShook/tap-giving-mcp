@@ -1,8 +1,8 @@
 # NFC Tap Builder by Tap.Giving
 
 Welcome. This is the public home of Tap.Giving's MCP server, "NFC Tap
-Builder by Tap.Giving": the connector that lets an AI agent help a
-church or nonprofit design and order custom NFC tap discs, tap
+Builder by Tap.Giving": the connector that lets an AI agent help an
+organization design and order custom NFC tap discs, tap
 plates, and tap tags end to end, from first discovery to a hosted
 invoice link a person pays. No subscriptions and no ongoing fees:
 one-time pricing per order, and the Redirect Dashboard is included
@@ -66,9 +66,9 @@ carries this same connect guidance.
 ## What the server does
 
 Build and order custom NFC tap discs, tap plates, and tap tags for
-churches and nonprofits: NFC tap to give, designed by your own agent,
-priced from the published tiers, ordered up to the human payment and
-proof gates.
+organizations of every kind: built for churches, nonprofits, restaurants, coffee shops, and local businesses,
+designed by your own agent, priced from the published tiers, ordered
+up to the human payment and proof gates.
 
 The read side is open and needs no key: an agent can discover the
 product, see the published pricing, read the artwork spec with house
@@ -128,7 +128,7 @@ Response, structured content (abbreviated):
   "server": {"name": "NFC Tap Builder by Tap.Giving", "endpoint": "https://tap.giving/mcp", "synonyms": ["tap discs", "tap plates", "tap tags", "NFC tap to give"]},
   "introduction": {
     "builder": "NFC Tap Builder by Tap.Giving",
-    "product": "A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.",
+    "product": "A tap disc is a small physical disc a phone taps to open your page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.",
     "firstChoice": {"field": "shape", "options": ["round", "square"]}
   },
   "pricing": {
@@ -144,17 +144,17 @@ Response, structured content (abbreviated):
   },
   "artworkSpec": {"summary": "106 mm square artboard; 100 mm cut (round or square); 3 mm bleed; vector artwork back (SVG preferred).", "tool": "get_artwork_spec"},
   "photos": [
-    {"id": "pew-disc", "alt": "A Tap.Giving disc mounted on a church pew", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/pew-disc.webp"},
-    {"id": "phone-tap", "alt": "A phone tapping a Tap.Giving disc on a chair back, opening the church's giving page", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/phone-tap.webp"}
+    {"id": "pew-disc", "alt": "A Tap.Giving disc mounted on a seat back", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/pew-disc.webp"},
+    {"id": "phone-tap", "alt": "A phone tapping a Tap.Giving disc on a chair back, opening the organization's page", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/phone-tap.webp"}
   ],
   "capabilities": {
     "readTools": ["get_discovery", "get_quote", "get_product", "get_artwork_spec"],
     "keyedReadTools": ["get_order_questions", "get_recap", "get_order_status"],
     "writeTools": ["submit_artwork", "start_order_intent", "create_order", "request_invoice", "register_webhook"],
     "gates": ["Design approval stays human: a person approves the final proof by email before production. No tool on this server records or implies an approval.", "Payment stays human: this server moves no money itself. It returns a hosted invoice link and a person pays on Stripe's hosted page.", "Production release and the supplier handoff stay human: no tool on this server releases an order to production or touches fulfillment state."],
-    "howToGetAKey": "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which church or nonprofit the key is for, and the team replies with the key within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, and order status use the organization's key.",
+    "howToGetAKey": "An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, and order status use the organization's key.",
     "kickoff": "start_order_intent",
-    "benefits": ["Works with any giving platform", "No subscription fees", "Durable waterproof PVC with a locked tap chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
+    "benefits": ["Works with any platform", "No subscription fees", "Durable waterproof PVC with a locked tap chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
     "guarantee": "Covered by our 30-day money-back guarantee."
   }
 }
@@ -163,15 +163,15 @@ Response, structured content (abbreviated):
 Response, text rendering (complete):
 
 ```text
-NFC Tap Builder by Tap.Giving: Build and order custom NFC tap discs and tap tags for churches and nonprofits: NFC tap to give, designed by your own agent, priced from the published tiers, ordered up to the human payment and proof gates. No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently. This server moves no money itself: it returns a hosted invoice link for a person to pay.
+NFC Tap Builder by Tap.Giving: Build and order custom NFC tap discs and tap tags for organizations of every kind: built for churches, nonprofits, restaurants, coffee shops, and local businesses, designed by your own agent, priced from the published tiers, ordered up to the human payment and proof gates. No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently. This server moves no money itself: it returns a hosted invoice link for a person to pay.
 
 What it is
-A tap disc is a small physical disc a phone taps to open your giving page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.
+A tap disc is a small physical disc a phone taps to open your page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.
 First choice: the shape, round or square.
 
 Why Tap.Giving
 No subscriptions and no ongoing fees: one-time pricing per order, and the Redirect Dashboard is included free, permanently.
-- Works with any giving platform
+- Works with any platform
 - No subscription fees
 - Durable waterproof PVC with a locked tap chip
 - Custom branding from 100 discs
@@ -189,8 +189,8 @@ How it works
 
 Gates
 Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.
-Discovery, quotes, product facts, and the artwork spec need no key. Order questions, recaps, and order status are reads that use your organization key, like the writes. An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which church or nonprofit the key is for, and the team replies with the key within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, and order status use the organization's key.
-The two photos with this answer show the disc in use: on a church pew, and a phone tapping a disc on a chair back.
+Discovery, quotes, product facts, and the artwork spec need no key. Order questions, recaps, and order status are reads that use your organization key, like the writes. An organization API key is issued by the Tap.Giving team: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Read tools need no key; order questions, recaps, order setup, invoice requests, and order status use the organization's key.
+The two photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.
 ```
 
 
@@ -265,7 +265,7 @@ Response, structured content:
   "displayUrl": "https://tap.giving/mcp/artwork/art_fc94d730591f03bab798edfe",
   "sha256": "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
   "validation": {"policy": "permissive", "checks": {"notMalicious": true, "sizeOk": true, "decodable": true}, "findings": ["accepted; vector preferred for production"]},
-  "benefits": ["Works with any giving platform", "No subscription fees", "Durable waterproof PVC with a locked tap chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
+  "benefits": ["Works with any platform", "No subscription fees", "Durable waterproof PVC with a locked tap chip", "Custom branding from 100 discs", "Free shipping", "Covered by our 30-day money-back guarantee"],
   "preview": {"kind": "on-disc", "shapes": ["round", "square"], "note": "Your design on the disc, cut shape applied. This is a preview render; the final proof comes by email before production."},
   "nextStep": "Show the person their design on the disc (the preview image), then capture the contact email at order setup (start_order_intent) and ask the order questions (get_order_questions)."
 }
@@ -288,7 +288,7 @@ email among its inputs.
 Request:
 
 ```json
-{"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "create_order", "arguments": {"contactName": "MCP Acceptance", "contactEmail": "mcp-acceptance@example.com", "contactPhone": "+17135550199", "church": "MCP Acceptance Test Church", "quantity": 250, "size": "100mm-round", "mounting": "adhesive", "artworkRef": "art_2ce8de191f7035de811e224b", "recapRef": "recap_f562143ce62c3282468a7670", "exit": "pay_now", "idempotencyKey": "worked-example-2026-11-07-01", "shipTo": {"name": "MCP Acceptance Test Church", "street": "100 Test Way", "city": "Spring", "state": "TX", "postalCode": "77380", "country": "US", "phone": "+17135550199"}}}}
+{"jsonrpc": "2.0", "id": 5, "method": "tools/call", "params": {"name": "create_order", "arguments": {"contactName": "MCP Acceptance", "contactEmail": "mcp-acceptance@example.com", "contactPhone": "+17135550199", "organizationName": "MCP Acceptance Test Organization", "quantity": 250, "size": "100mm-round", "mounting": "adhesive", "artworkRef": "art_2ce8de191f7035de811e224b", "recapRef": "recap_f562143ce62c3282468a7670", "exit": "pay_now", "idempotencyKey": "worked-example-2026-11-07-01", "shipTo": {"name": "MCP Acceptance Test Organization", "street": "100 Test Way", "city": "Spring", "state": "TX", "postalCode": "77380", "country": "US", "phone": "+17135550199"}}}}
 ```
 
 Response, structured content (abbreviated; the full quote object
