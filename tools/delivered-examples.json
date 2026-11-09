@@ -1,1 +1,758 @@
-[{"evidence":"CRM proof pointer + ledger shipped 2026-11-02","id":"479church","organization":"479Church","source":"479church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; two shipped runs (give + info designs), main give design shown","id":"beachside-church","organization":"Beachside Church","source":"beachside-church-proof.png","stage":"shipped"},{"evidence":"Ledger status delivered, 700 discs, UPS delivered Oct 2026","id":"brookwood-baptist-church","organization":"Brookwood Baptist Church","source":"brookwood-baptist-church-proof.png","stage":"delivered"},{"evidence":"CRM proof pointer; manifest payment 2026-10-26, ledger shipped","id":"canvas-church","organization":"Canvas Church","source":"canvas-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer (proof and plate files byte-identical)","id":"center-point-church","organization":"Center Point Church","source":"center-point-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer hash 9e18334a; ledger status delivered","id":"cornerstone-fellowship","organization":"Cornerstone Fellowship","source":"cornerstone-fellowship/9e18334a/proof.png","stage":"delivered"},{"evidence":"CRM proof pointer (proof and plate files byte-identical)","id":"faith-baptist-church-canoga-park","organization":"Faith Baptist Church (Canoga Park)","source":"faith-baptist-church-canoga-park-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger status delivered, UPS 2026-10-30","id":"family-church","organization":"Family Church","source":"family-church-proof.png","stage":"delivered"},{"evidence":"CRM proof pointer; ledger shipped 2026-10-19","id":"good-news-bible-chapel","organization":"Good News Bible Chapel","source":"good-news-bible-chapel-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped","id":"hutto-bible-church","organization":"Hutto Bible Church","source":"hutto-bible-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer (SVG only, rendered to PNG); ledger status delivered","id":"lakewood-park-baptist-church","organization":"Lakewood Park Baptist Church","source":"lakewood-park-baptist-church-proof.svg","stage":"delivered"},{"evidence":"CRM proof pointer; disc order shipped (the stand order is a different product, not a disc example)","id":"legacy-childrens-foundation","organization":"Legacy Children's Foundation","source":"legacy-childrens-foundation-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger note: 250 charcoal square discs shipped","id":"lincoln-heights-christian-church","organization":"Lincoln Heights Christian Church","source":"lincoln-heights-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped","id":"new-day-church-mhc","organization":"New Day Church MHC","source":"new-day-church-mhc-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer (subdir copy byte-identical); ledger shipped 2026-11-05","id":"paradise-valley-christian-church","organization":"Paradise Valley Christian Church","source":"paradise-valley-christian-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped, UPS Oct 2026","id":"redemption-city-church","organization":"Redemption City Church","source":"redemption-city-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer hash ffa1683a; ledger shipped, UPS delivery Nov 9 2026","id":"south-daytona-christian-church","organization":"South Daytona Christian Church","source":"south-daytona-christian-church/ffa1683a/proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped (colorway option files collapsed)","id":"st-andrews-episcopal-church","organization":"St. Andrew's Episcopal Church","source":"st-andrews-episcopal-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped","id":"st-chrysostoms-episcopal-church","organization":"St. Chrysostom's Episcopal Church","source":"st-chrysostoms-episcopal-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped 300 discs (option2 file collapsed)","id":"st-martins-episcopal-church-houston-tx","organization":"St. Martin's Episcopal Church (Houston, TX)","source":"st-martin-s-episcopal-church-houston-tx-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; original order + reorder shipped, same design","id":"the-kings-church","organization":"The King's Church (Columbia, MO)","source":"the-kings-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer (proof and plate files byte-identical)","id":"todd-coconato-ministries","organization":"Todd Coconato Ministries","source":"tcm-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped","id":"trinity-episcopal-church","organization":"Trinity Episcopal Church (The Woodlands, TX)","source":"trinity-episcopal-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer names the black design as the delivered one (color variants collapsed)","id":"victory-fellowship-church","organization":"Victory Fellowship Church","source":"victory-fellowship-church-black-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped","id":"village-baptist-church","organization":"Village Baptist Church","source":"village-baptist-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped","id":"visible-church","organization":"Visible Church","source":"visible-church-proof.png","stage":"shipped"},{"evidence":"CRM proof pointer; ledger shipped 2026-11-05","id":"west-end-baptist-church","organization":"West End Baptist Church","source":"west-end-baptist-church-proof.png","stage":"shipped"}]
+[
+  {
+    "evidence": "CRM proof pointer + ledger shipped 2026-11-02",
+    "id": "479church",
+    "organization": "479Church",
+    "source": "479church-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, tap wording and signal icon left of a QR code, wordmark along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt and signal icon on the left, QR code on the right of a thin divider, organization wordmark centered along the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; two shipped runs (give + info designs), main give design shown",
+    "id": "beachside-church",
+    "organization": "Beachside Church",
+    "source": "beachside-church-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, TAP TO GIVE wording left of a QR code, logo and name along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, logo over the organization name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "Ledger status delivered, 700 discs, UPS delivered Oct 2026",
+    "id": "brookwood-baptist-church",
+    "organization": "Brookwood Baptist Church",
+    "source": "brookwood-baptist-church-proof.png",
+    "stage": "delivered",
+    "description": "Deep red round, tap wording left of a QR code, multicolor pinwheel logo over the name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#7F1D1D",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right, logo and name centered at the bottom; small dashed circles mark the screw-hole positions",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; manifest payment 2026-10-26, ledger shipped",
+    "id": "canvas-church",
+    "organization": "Canvas Church",
+    "source": "canvas-church-proof.png",
+    "stage": "shipped",
+    "description": "Deep red round with a CONNECT WITH US headline, tap wording left of a QR code, logo at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#7F1D1D",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Headline across the top, split middle (tap prompt left, QR code right), logo and name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer (proof and plate files byte-identical)",
+    "id": "center-point-church",
+    "organization": "Center Point Church",
+    "source": "center-point-church-proof.png",
+    "stage": "shipped",
+    "description": "Bright red round, big TAP YOUR PHONE HERE type on the right, phone-in-hand line icon on the left, small QR code below",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#D70A0E",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Type-led layout: large stacked headline right, line icon of a hand holding a phone left, pin logo at top center, small QR code under the headline",
+    "iconTreatment": "White outline icon of a hand holding a phone with signal arcs",
+    "logoSlot": {
+      "position": "top center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer hash 9e18334a; ledger status delivered",
+    "id": "cornerstone-fellowship",
+    "organization": "Cornerstone Fellowship",
+    "source": "cornerstone-fellowship/9e18334a/proof.png",
+    "stage": "delivered",
+    "description": "Charcoal round, tap wording left of a QR code, small church logo and name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#404040",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, logo and name at the bottom left of center",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer (proof and plate files byte-identical)",
+    "id": "faith-baptist-church-canoga-park",
+    "organization": "Faith Baptist Church (Canoga Park)",
+    "source": "faith-baptist-church-canoga-park-proof.png",
+    "stage": "shipped",
+    "description": "Blue round, big TAP HERE type with a phone icon, and a Giving / Events / Connect list with small icons",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#054FB8",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Type-led layout: large TAP HERE headline top left, phone outline icon top right, icon list (heart, calendar, people) down the left",
+    "iconTreatment": "Phone outline icon with signal arcs; small round icons beside each list item",
+    "logoSlot": {
+      "position": "no separate logo; the organization name is set in type",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger status delivered, UPS 2026-10-30",
+    "id": "family-church",
+    "organization": "Family Church",
+    "source": "family-church-proof.png",
+    "stage": "delivered",
+    "description": "Cream round, QR code left, dotted-circle mark right, SCAN TO CONNECT / TAP TO GIVE wording below",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#F3F0E9",
+        "role": "background"
+      },
+      {
+        "hex": "#1A1A1A",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Light layout: QR code on the left, green dotted-circle mark on the right, two lines of dark wording centered below",
+    "iconTreatment": "Dotted-circle mark in green; QR code carries no icon treatment",
+    "logoSlot": {
+      "position": "no separate logo; wording is set in type below the mark",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped 2026-10-19",
+    "id": "good-news-bible-chapel",
+    "organization": "Good News Bible Chapel",
+    "source": "good-news-bible-chapel-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, TAP OR SCAN TO GIVE wording left of a QR code, GNBC monogram at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#1E3A8A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: stacked tap wording left, QR code right with a TAP TO SCAN caption, boxed monogram centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped",
+    "id": "hutto-bible-church",
+    "organization": "Hutto Bible Church",
+    "source": "hutto-bible-church-proof.png",
+    "stage": "shipped",
+    "description": "White round, black tap wording left of a QR code, logo at the top, GIVE / CONNECT / MORE wording below",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#FFFFFF",
+        "role": "background"
+      },
+      {
+        "hex": "#1A1A1A",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Light centered layout: logo at top center, split middle (tap prompt left, QR code right), stacked action words below",
+    "iconTreatment": "Black tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "top center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer (SVG only, rendered to PNG); ledger status delivered",
+    "id": "lakewood-park-baptist-church",
+    "organization": "Lakewood Park Baptist Church",
+    "source": "lakewood-park-baptist-church-proof.svg",
+    "stage": "delivered",
+    "description": "Navy round, stacked TAP YOUR PHONE HERE wording on the left, QR code on the right, logo artwork along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#1E3A8A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: stacked tap wording left, QR code right, logo set in paths along the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; disc order shipped (the stand order is a different product, not a disc example)",
+    "id": "legacy-childrens-foundation",
+    "organization": "Legacy Children's Foundation",
+    "source": "legacy-childrens-foundation-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, gold Tap to Ignite a Future headline, big gold signal icon in the middle, logo at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#1F3A5F",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Centered layout: gold headline across the top, large signal icon in the center, logo and name with a graduation-cap mark at the bottom",
+    "iconTreatment": "Large gold tap-signal arcs in the center",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger note: 250 charcoal square discs shipped",
+    "id": "lincoln-heights-christian-church",
+    "organization": "Lincoln Heights Christian Church",
+    "source": "lincoln-heights-proof.png",
+    "stage": "shipped",
+    "description": "Charcoal square, TAP TO GIVE headline across the top, big signal icon and QR code in the middle, logo at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#2D2D2D",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Square layout: headline across the top, split middle (large signal icon left, QR code right), logo and name at the bottom left",
+    "iconTreatment": "Large white tap-signal arcs on the left",
+    "logoSlot": {
+      "position": "bottom left",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped",
+    "id": "new-day-church-mhc",
+    "organization": "New Day Church MHC",
+    "source": "new-day-church-mhc-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, tap wording left of a QR code, circled ND logo and name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right, logo and name centered at the bottom; small dashed circles mark the screw-hole positions",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer (subdir copy byte-identical); ledger shipped 2026-11-05",
+    "id": "paradise-valley-christian-church",
+    "organization": "Paradise Valley Christian Church",
+    "source": "paradise-valley-christian-church-proof.png",
+    "stage": "shipped",
+    "description": "Charcoal round, organization name across the top, tap wording left of a QR code, TAP TO CONNECT pill along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#28282B",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Name across the top, split middle (tap prompt left, QR code right), outlined pill with a small signal icon along the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording and inside the bottom pill",
+    "logoSlot": {
+      "position": "top center (name set in type)",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped, UPS Oct 2026",
+    "id": "redemption-city-church",
+    "organization": "Redemption City Church",
+    "source": "redemption-city-church-proof.png",
+    "stage": "shipped",
+    "description": "White round, black tap wording left of a QR code, striped R mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#FFFFFF",
+        "role": "background"
+      },
+      {
+        "hex": "#1A1A1A",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Light split layout: tap prompt left, QR code right of a thin divider, striped monogram centered at the bottom",
+    "iconTreatment": "Black tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer hash ffa1683a; ledger shipped, UPS delivery Nov 9 2026",
+    "id": "south-daytona-christian-church",
+    "organization": "South Daytona Christian Church",
+    "source": "south-daytona-christian-church/ffa1683a/proof.png",
+    "stage": "shipped",
+    "description": "Black round, tap wording left of a QR code with a TAP TO SCAN caption, crosshair mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#000000",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right, crosshair mark centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped (colorway option files collapsed)",
+    "id": "st-andrews-episcopal-church",
+    "organization": "St. Andrew's Episcopal Church",
+    "source": "st-andrews-episcopal-church-proof.png",
+    "stage": "shipped",
+    "description": "Deep red square, tap wording left of a QR code, compass seal over a serif name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#7F1D1D",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Square split layout: tap prompt left, QR code right, round seal over the serif organization name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped",
+    "id": "st-chrysostoms-episcopal-church",
+    "organization": "St. Chrysostom's Episcopal Church",
+    "source": "st-chrysostoms-episcopal-church-proof.png",
+    "stage": "shipped",
+    "description": "Royal blue round, tap wording left of a QR code, white arched-window mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#10069F",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, arched-window mark centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped 300 discs (option2 file collapsed)",
+    "id": "st-martins-episcopal-church-houston-tx",
+    "organization": "St. Martin's Episcopal Church (Houston, TX)",
+    "source": "st-martin-s-episcopal-church-houston-tx-proof.png",
+    "stage": "shipped",
+    "description": "Slate blue round, gold Join. Connect. Give. wording and a QR code, gold cross over the name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#365071",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: gold stacked wording left, QR code right, gold cross over the name centered at the bottom",
+    "iconTreatment": "Gold tap-signal arcs beside the wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; original order + reorder shipped, same design",
+    "id": "the-kings-church",
+    "organization": "The King's Church (Columbia, MO)",
+    "source": "the-kings-church-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, tap wording left of a QR code, crown over a script name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, crown and script name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer (proof and plate files byte-identical)",
+    "id": "todd-coconato-ministries",
+    "organization": "Todd Coconato Ministries",
+    "source": "tcm-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, tap wording left of a QR code, circled R mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, large circled letter mark centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped",
+    "id": "trinity-episcopal-church",
+    "organization": "Trinity Episcopal Church (The Woodlands, TX)",
+    "source": "trinity-episcopal-church-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, TAP / SCAN / GIVE wording left of a QR code, round seal at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#1F3A5F",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: stacked tap wording left, QR code right, round seal centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer names the black design as the delivered one (color variants collapsed)",
+    "id": "victory-fellowship-church",
+    "organization": "Victory Fellowship Church",
+    "source": "victory-fellowship-church-black-proof.png",
+    "stage": "shipped",
+    "description": "Black round, tap wording left of a QR code, cross and VFC mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#111111",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, cross monogram centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped",
+    "id": "village-baptist-church",
+    "organization": "Village Baptist Church",
+    "source": "village-baptist-church-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, TAP YOUR PHONE HERE headline across the top, big signal icon in the middle, logo at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Centered layout: headline across the top, large signal icon in the center, multicolor window logo and name at the bottom",
+    "iconTreatment": "Large white tap-signal arcs in the center",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped",
+    "id": "visible-church",
+    "organization": "Visible Church",
+    "source": "visible-church-proof.png",
+    "stage": "shipped",
+    "description": "Navy round, tap wording left of a QR code, script wordmark along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, script wordmark centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  },
+  {
+    "evidence": "CRM proof pointer; ledger shipped 2026-11-05",
+    "id": "west-end-baptist-church",
+    "organization": "West End Baptist Church",
+    "source": "west-end-baptist-church-proof.png",
+    "stage": "shipped",
+    "description": "Teal round, tap wording left of a QR code with a TAP TO SCAN caption, script name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F5F58",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right, script name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
+  }
+]

@@ -2,195 +2,763 @@
 // Metadata only: image bytes live in the MCP_ARTWORK KV namespace under
 // EXAMPLE:<id> and derive solely from delivered proof files in the
 // website asset library (website/assets/proofs/). Do not edit by hand.
-export interface DeliveredExample { id: string; organization: string; shape: "round" | "square"; stage: string; source: string }
+export interface ExampleLogoSlot { position: string; maxWidthMm: number; maxHeightMm: number; clearSpaceMm: number; note: string }
+export interface DeliveredExample { id: string; organization: string; shape: "round" | "square"; stage: string; source: string; description: string; size: string; palette: { hex: string; role: string }[]; layout: string; iconTreatment: string; logoSlot: ExampleLogoSlot }
 export const EXAMPLES_INDEX: DeliveredExample[] = [
   {
     "id": "479church",
     "organization": "479Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "479church-proof.png"
+    "source": "479church-proof.png",
+    "description": "Navy round, tap wording and signal icon left of a QR code, wordmark along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt and signal icon on the left, QR code on the right of a thin divider, organization wordmark centered along the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "beachside-church",
     "organization": "Beachside Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "beachside-church-proof.png"
+    "source": "beachside-church-proof.png",
+    "description": "Navy round, TAP TO GIVE wording left of a QR code, logo and name along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, logo over the organization name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "brookwood-baptist-church",
     "organization": "Brookwood Baptist Church",
     "shape": "round",
     "stage": "delivered",
-    "source": "brookwood-baptist-church-proof.png"
+    "source": "brookwood-baptist-church-proof.png",
+    "description": "Deep red round, tap wording left of a QR code, multicolor pinwheel logo over the name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#7F1D1D",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right, logo and name centered at the bottom; small dashed circles mark the screw-hole positions",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "canvas-church",
     "organization": "Canvas Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "canvas-church-proof.png"
+    "source": "canvas-church-proof.png",
+    "description": "Deep red round with a CONNECT WITH US headline, tap wording left of a QR code, logo at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#7F1D1D",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Headline across the top, split middle (tap prompt left, QR code right), logo and name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "center-point-church",
     "organization": "Center Point Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "center-point-church-proof.png"
+    "source": "center-point-church-proof.png",
+    "description": "Bright red round, big TAP YOUR PHONE HERE type on the right, phone-in-hand line icon on the left, small QR code below",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#D70A0E",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Type-led layout: large stacked headline right, line icon of a hand holding a phone left, pin logo at top center, small QR code under the headline",
+    "iconTreatment": "White outline icon of a hand holding a phone with signal arcs",
+    "logoSlot": {
+      "position": "top center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "cornerstone-fellowship",
     "organization": "Cornerstone Fellowship",
     "shape": "round",
     "stage": "delivered",
-    "source": "cornerstone-fellowship/9e18334a/proof.png"
+    "source": "cornerstone-fellowship/9e18334a/proof.png",
+    "description": "Charcoal round, tap wording left of a QR code, small church logo and name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#404040",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, logo and name at the bottom left of center",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "faith-baptist-church-canoga-park",
     "organization": "Faith Baptist Church (Canoga Park)",
     "shape": "round",
     "stage": "shipped",
-    "source": "faith-baptist-church-canoga-park-proof.png"
+    "source": "faith-baptist-church-canoga-park-proof.png",
+    "description": "Blue round, big TAP HERE type with a phone icon, and a Giving / Events / Connect list with small icons",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#054FB8",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Type-led layout: large TAP HERE headline top left, phone outline icon top right, icon list (heart, calendar, people) down the left",
+    "iconTreatment": "Phone outline icon with signal arcs; small round icons beside each list item",
+    "logoSlot": {
+      "position": "no separate logo; the organization name is set in type",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "family-church",
     "organization": "Family Church",
     "shape": "round",
     "stage": "delivered",
-    "source": "family-church-proof.png"
+    "source": "family-church-proof.png",
+    "description": "Cream round, QR code left, dotted-circle mark right, SCAN TO CONNECT / TAP TO GIVE wording below",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#F3F0E9",
+        "role": "background"
+      },
+      {
+        "hex": "#1A1A1A",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Light layout: QR code on the left, green dotted-circle mark on the right, two lines of dark wording centered below",
+    "iconTreatment": "Dotted-circle mark in green; QR code carries no icon treatment",
+    "logoSlot": {
+      "position": "no separate logo; wording is set in type below the mark",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "good-news-bible-chapel",
     "organization": "Good News Bible Chapel",
     "shape": "round",
     "stage": "shipped",
-    "source": "good-news-bible-chapel-proof.png"
+    "source": "good-news-bible-chapel-proof.png",
+    "description": "Navy round, TAP OR SCAN TO GIVE wording left of a QR code, GNBC monogram at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#1E3A8A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: stacked tap wording left, QR code right with a TAP TO SCAN caption, boxed monogram centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "hutto-bible-church",
     "organization": "Hutto Bible Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "hutto-bible-church-proof.png"
+    "source": "hutto-bible-church-proof.png",
+    "description": "White round, black tap wording left of a QR code, logo at the top, GIVE / CONNECT / MORE wording below",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#FFFFFF",
+        "role": "background"
+      },
+      {
+        "hex": "#1A1A1A",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Light centered layout: logo at top center, split middle (tap prompt left, QR code right), stacked action words below",
+    "iconTreatment": "Black tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "top center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "lakewood-park-baptist-church",
     "organization": "Lakewood Park Baptist Church",
     "shape": "round",
     "stage": "delivered",
-    "source": "lakewood-park-baptist-church-proof.svg"
+    "source": "lakewood-park-baptist-church-proof.svg",
+    "description": "Navy round, stacked TAP YOUR PHONE HERE wording on the left, QR code on the right, logo artwork along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#1E3A8A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: stacked tap wording left, QR code right, logo set in paths along the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "legacy-childrens-foundation",
     "organization": "Legacy Children's Foundation",
     "shape": "round",
     "stage": "shipped",
-    "source": "legacy-childrens-foundation-proof.png"
+    "source": "legacy-childrens-foundation-proof.png",
+    "description": "Navy round, gold Tap to Ignite a Future headline, big gold signal icon in the middle, logo at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#1F3A5F",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Centered layout: gold headline across the top, large signal icon in the center, logo and name with a graduation-cap mark at the bottom",
+    "iconTreatment": "Large gold tap-signal arcs in the center",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "lincoln-heights-christian-church",
     "organization": "Lincoln Heights Christian Church",
     "shape": "square",
     "stage": "shipped",
-    "source": "lincoln-heights-proof.png"
+    "source": "lincoln-heights-proof.png",
+    "description": "Charcoal square, TAP TO GIVE headline across the top, big signal icon and QR code in the middle, logo at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#2D2D2D",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Square layout: headline across the top, split middle (large signal icon left, QR code right), logo and name at the bottom left",
+    "iconTreatment": "Large white tap-signal arcs on the left",
+    "logoSlot": {
+      "position": "bottom left",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "new-day-church-mhc",
     "organization": "New Day Church MHC",
     "shape": "round",
     "stage": "shipped",
-    "source": "new-day-church-mhc-proof.png"
+    "source": "new-day-church-mhc-proof.png",
+    "description": "Navy round, tap wording left of a QR code, circled ND logo and name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right, logo and name centered at the bottom; small dashed circles mark the screw-hole positions",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "paradise-valley-christian-church",
     "organization": "Paradise Valley Christian Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "paradise-valley-christian-church-proof.png"
+    "source": "paradise-valley-christian-church-proof.png",
+    "description": "Charcoal round, organization name across the top, tap wording left of a QR code, TAP TO CONNECT pill along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#28282B",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Name across the top, split middle (tap prompt left, QR code right), outlined pill with a small signal icon along the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording and inside the bottom pill",
+    "logoSlot": {
+      "position": "top center (name set in type)",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "redemption-city-church",
     "organization": "Redemption City Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "redemption-city-church-proof.png"
+    "source": "redemption-city-church-proof.png",
+    "description": "White round, black tap wording left of a QR code, striped R mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#FFFFFF",
+        "role": "background"
+      },
+      {
+        "hex": "#1A1A1A",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Light split layout: tap prompt left, QR code right of a thin divider, striped monogram centered at the bottom",
+    "iconTreatment": "Black tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "south-daytona-christian-church",
     "organization": "South Daytona Christian Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "south-daytona-christian-church/ffa1683a/proof.png"
+    "source": "south-daytona-christian-church/ffa1683a/proof.png",
+    "description": "Black round, tap wording left of a QR code with a TAP TO SCAN caption, crosshair mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#000000",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right, crosshair mark centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "st-andrews-episcopal-church",
     "organization": "St. Andrew's Episcopal Church",
     "shape": "square",
     "stage": "shipped",
-    "source": "st-andrews-episcopal-church-proof.png"
+    "source": "st-andrews-episcopal-church-proof.png",
+    "description": "Deep red square, tap wording left of a QR code, compass seal over a serif name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#7F1D1D",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Square split layout: tap prompt left, QR code right, round seal over the serif organization name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "st-chrysostoms-episcopal-church",
     "organization": "St. Chrysostom's Episcopal Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "st-chrysostoms-episcopal-church-proof.png"
+    "source": "st-chrysostoms-episcopal-church-proof.png",
+    "description": "Royal blue round, tap wording left of a QR code, white arched-window mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#10069F",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, arched-window mark centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "st-martins-episcopal-church-houston-tx",
     "organization": "St. Martin's Episcopal Church (Houston, TX)",
     "shape": "round",
     "stage": "shipped",
-    "source": "st-martin-s-episcopal-church-houston-tx-proof.png"
+    "source": "st-martin-s-episcopal-church-houston-tx-proof.png",
+    "description": "Slate blue round, gold Join. Connect. Give. wording and a QR code, gold cross over the name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#365071",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: gold stacked wording left, QR code right, gold cross over the name centered at the bottom",
+    "iconTreatment": "Gold tap-signal arcs beside the wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "the-kings-church",
     "organization": "The King's Church (Columbia, MO)",
     "shape": "round",
     "stage": "shipped",
-    "source": "the-kings-church-proof.png"
+    "source": "the-kings-church-proof.png",
+    "description": "Navy round, tap wording left of a QR code, crown over a script name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, crown and script name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "todd-coconato-ministries",
     "organization": "Todd Coconato Ministries",
     "shape": "round",
     "stage": "shipped",
-    "source": "tcm-proof.png"
+    "source": "tcm-proof.png",
+    "description": "Navy round, tap wording left of a QR code, circled R mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, large circled letter mark centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "trinity-episcopal-church",
     "organization": "Trinity Episcopal Church (The Woodlands, TX)",
     "shape": "round",
     "stage": "shipped",
-    "source": "trinity-episcopal-church-proof.png"
+    "source": "trinity-episcopal-church-proof.png",
+    "description": "Navy round, TAP / SCAN / GIVE wording left of a QR code, round seal at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#1F3A5F",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: stacked tap wording left, QR code right, round seal centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "victory-fellowship-church",
     "organization": "Victory Fellowship Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "victory-fellowship-church-black-proof.png"
+    "source": "victory-fellowship-church-black-proof.png",
+    "description": "Black round, tap wording left of a QR code, cross and VFC mark at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#111111",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, cross monogram centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "village-baptist-church",
     "organization": "Village Baptist Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "village-baptist-church-proof.png"
+    "source": "village-baptist-church-proof.png",
+    "description": "Navy round, TAP YOUR PHONE HERE headline across the top, big signal icon in the middle, logo at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Centered layout: headline across the top, large signal icon in the center, multicolor window logo and name at the bottom",
+    "iconTreatment": "Large white tap-signal arcs in the center",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "visible-church",
     "organization": "Visible Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "visible-church-proof.png"
+    "source": "visible-church-proof.png",
+    "description": "Navy round, tap wording left of a QR code, script wordmark along the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F172A",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right of a thin divider, script wordmark centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   },
   {
     "id": "west-end-baptist-church",
     "organization": "West End Baptist Church",
     "shape": "round",
     "stage": "shipped",
-    "source": "west-end-baptist-church-proof.png"
+    "source": "west-end-baptist-church-proof.png",
+    "description": "Teal round, tap wording left of a QR code with a TAP TO SCAN caption, script name at the bottom",
+    "size": "100 mm",
+    "palette": [
+      {
+        "hex": "#0F5F58",
+        "role": "background"
+      },
+      {
+        "hex": "#FFFFFF",
+        "role": "artwork and type"
+      }
+    ],
+    "layout": "Split layout: tap prompt left, QR code right, script name centered at the bottom",
+    "iconTreatment": "White tap-signal arcs beside the tap wording",
+    "logoSlot": {
+      "position": "bottom center",
+      "maxWidthMm": 44,
+      "maxHeightMm": 20,
+      "clearSpaceMm": 5,
+      "note": "Logo sits directly on the disc background, never on a white chip or badge."
+    }
   }
 ];
