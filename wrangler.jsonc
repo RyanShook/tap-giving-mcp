@@ -4,7 +4,7 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-05-01",
 	"compatibility_flags": ["nodejs_compat"],
-	"rules": [{ "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }],
+	"rules": [{ "type": "Data", "globs": ["**/*.ttf"], "fallthrough": true }, { "type": "CompiledWasm", "globs": ["**/*.wasm"], "fallthrough": true }],
 	"workers_dev": true,
 	"observability": {
 		"enabled": true

@@ -7,6 +7,17 @@
 // clipped by the cut path). Rasterization is best-effort: any failure
 // returns null and the caller falls back to the submitted bytes.
 //
+// 2026-11-08 cold-test fix: the resvg package import was a dynamic
+// import() inside a catch-all, and the deployed bundle had been built
+// while node_modules lacked @resvg/resvg-wasm, so esbuild left the
+// bare specifier external; the Workers runtime cannot resolve bare
+// package specifiers, the import threw on every call, and the catch
+// swallowed it silently (preview kind unavailable / submitted-file
+// for every submission, while the fake-rasterizer tests passed). The
+// package is now a STATIC import: a missing package fails the build
+// loudly instead of degrading at runtime, and every failure path
+// logs through console.error so wrangler tail shows it.
+//
 // The wrapper's canvas is exactly the cut region of the 106 mm
 // artboard (viewBox 3 3 100 100): the bleed margin is never shown,
 // because the disc is the 100 mm piece.
@@ -84,6 +95,10 @@ export function buildDiscSvg(opts: {
 }
 
 // ─── rasterizer (resvg WASM, lazily initialized) ────────────────────
+// The package import is STATIC on purpose (see the header note): if
+// @resvg/resvg-wasm is missing, the build fails, instead of a dynamic
+// import being left external and throwing inside a catch at runtime.
+import { initWasm, Resvg } from "@resvg/resvg-wasm";
 
 type RasterizerFn = (svgText: string) => Promise<Uint8Array | null>;
 let testRasterizer: RasterizerFn | null = null;
@@ -94,29 +109,56 @@ export function setRasterizerForTests(fn: RasterizerFn | null): void {
 }
 
 let resvgReady: Promise<boolean> | null = null;
+let fontBuffers: Uint8Array[] = [];
+
+/**
+ * The .wasm and .ttf bundled assets. In the deployed Worker these
+ * imports resolve through wrangler's module rules (CompiledWasm /
+ * Data); under the node test runner the unknown extensions throw,
+ * and the fallback reads the same files from disk and compiles the
+ * wasm itself, so the real rasterizer path is exercised in tests
+ * too (the fake seam is no longer the only tested path).
+ */
+async function loadBundledAssets(): Promise<{ wasm: WebAssembly.Module; fonts: Uint8Array[] }> {
+  try {
+    const wasm = (await import("./assets/resvg.wasm")).default as WebAssembly.Module;
+    const sans = (await import("./assets/DejaVuSans.ttf")).default as ArrayBuffer;
+    const sansBold = (await import("./assets/DejaVuSans-Bold.ttf")).default as ArrayBuffer;
+    const serif = (await import("./assets/DejaVuSerif.ttf")).default as ArrayBuffer;
+    return { wasm, fonts: [sans, sansBold, serif].map((b) => new Uint8Array(b)) };
+  } catch (bundledErr) {
+    try {
+      const fs = await import("node:fs");
+      const read = (name: string) => fs.readFileSync(new URL(`./assets/${name}`, import.meta.url));
+      // The Workers type declarations omit WebAssembly.compile; the
+      // node runtime (this fallback's only home) has it.
+      const compile = (WebAssembly as unknown as { compile(b: BufferSource): Promise<WebAssembly.Module> }).compile.bind(WebAssembly);
+      const wasm = await compile(read("resvg.wasm"));
+      const fonts = ["DejaVuSans.ttf", "DejaVuSans-Bold.ttf", "DejaVuSerif.ttf"].map((n) => new Uint8Array(read(n)));
+      return { wasm, fonts };
+    } catch {
+      throw bundledErr;
+    }
+  }
+}
 
 async function initResvg(): Promise<boolean> {
   if (!resvgReady) {
     resvgReady = (async () => {
       try {
-        const mod = await import("@resvg/resvg-wasm");
-        // The .wasm and .ttf imports resolve through wrangler's module
-        // rules (CompiledWasm / Data) in the deployed Worker; under
-        // the node test runner they throw and the preview degrades.
-        const wasm = (await import("./assets/resvg.wasm")).default as WebAssembly.Module;
-        const sans = (await import("./assets/DejaVuSans.ttf")).default as ArrayBuffer;
-        const sansBold = (await import("./assets/DejaVuSans-Bold.ttf")).default as ArrayBuffer;
-        const serif = (await import("./assets/DejaVuSerif.ttf")).default as ArrayBuffer;
+        const { wasm, fonts } = await loadBundledAssets();
         // resvg-wasm accepts ArrayBuffer | Uint8Array buffers, but its
         // option parsing reads .buffer off each entry; a standalone
         // ArrayBuffer has no such property and the constructor throws
         // the buffer itself. Uint8Array view wrappers are the safe
         // shape (verified against resvg-wasm 2.6.2).
-        fontBuffers = [new Uint8Array(sans), new Uint8Array(sansBold), new Uint8Array(serif)];
-        await mod.initWasm(wasm);
-        resvgModule = mod;
+        fontBuffers = fonts;
+        await initWasm(wasm);
         return true;
       } catch (e) {
+        // Never silent: a dead rasterizer degrades every preview, and
+        // the 2026-11-08 failure hid here for the server's whole life.
+        console.error("[preview] resvg init failed:", e);
         return false;
       }
     })();
@@ -124,15 +166,12 @@ async function initResvg(): Promise<boolean> {
   return resvgReady;
 }
 
-let resvgModule: { Resvg: new (svg: string, opts?: Record<string, unknown>) => { render(): { asPng(): Uint8Array } } } | null = null;
-let fontBuffers: Uint8Array[] = [];
-
 /** Rasterize an SVG document to PNG at 424 px wide. Null on any failure. */
 export async function renderSvgToPng(svgText: string): Promise<Uint8Array | null> {
   if (testRasterizer) return testRasterizer(svgText);
-  if (!(await initResvg()) || !resvgModule) return null;
+  if (!(await initResvg())) return null;
   try {
-    const r = new resvgModule.Resvg(svgText, {
+    const r = new Resvg(svgText, {
       fitTo: { mode: "width", value: 424 },
       font: {
         fontBuffers,
@@ -143,6 +182,7 @@ export async function renderSvgToPng(svgText: string): Promise<Uint8Array | null
     });
     return r.render().asPng();
   } catch (e) {
+    console.error("[preview] resvg render failed:", e);
     return null;
   }
 }
@@ -172,7 +212,8 @@ export async function renderArtworkOnDisc(
       return await renderSvgToPng(buildDiscSvg({ shape, imageDataUrl: dataUrl, holes }));
     }
     return null;
-  } catch {
+  } catch (e) {
+    console.error(`[preview] on-disc render failed (${detectedType}):`, e);
     return null;
   }
 }
