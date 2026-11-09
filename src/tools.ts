@@ -5,14 +5,17 @@
 // meets the boundaries in tools/list.
 
 import {
-  ARTWORK_GUIDELINES, ARTWORK_GEOMETRY, BENEFITS, ENDPOINT, GATES, KEY_REQUEST_LINE,
+  ARTWORK_GUIDELINES, ARTWORK_GEOMETRY, BENEFITS, ENDPOINT, GATES,
   LINK_DESTINATION_NOTE, MOUNTING_OPTIONS, PRODUCT, PRODUCT_TOPICS, RECAP_NOTES,
-  DESTINATION_MODEL, DISCOUNT_WINDOW_MEANING, TEST_KEY_LINE, TURNAROUND,
+  DESTINATION_MODEL, DISCOUNT_WINDOW_MEANING, TURNAROUND,
   NO_FEES_LINE, TEAM_EMAIL,
   SERVER_DESCRIPTION, SERVER_NAME, POSITIONING_LINE, PRESENTATION_SYNONYMS, TAX_NOTE, PRICE_RANGE_LINE,
   SAMPLES_LINE, SAMPLES_GUIDANCE_LINE, TAX_EXEMPT_LINE, TAX_EXEMPT_GUIDANCE_LINE, PAYMENT_GUIDANCE_LINE,
   PLAIN_NFC_LINE, QR_CONDITIONAL_LINE, VERSUS_PRINTED_CODES_LINE, DURABILITY_LINE, MOUNTING_SURFACE_GUIDE,
+  PROTECTED_STRING, confirmationText, DESIGN_SHAPES, DESIGN_SHAPES_NOTE, COLOR_SPACE_STATEMENT,
+  AGENT_PDF_CHECKLIST, QR_DESIGN_RULES, LOGO_RULES, GEOMETRY_GLOSSARY,
   VERIFY_AGAINST_EXAMPLE, VERIFY_AGAINST_EXAMPLE_TEXT } from "./facts.ts";
+import { EXPLAINER_TOPICS, explainerResourceUri } from "./explainer.ts";
 import { PRICING_TIERS } from "./pricing.ts";
 import { renderArtworkOnDisc, renderArtworkFileToPng, bytesToBase64, SCREW_HOLES } from "./preview.ts";
 import phoneTapPhoto from "./product-assets/phone-tap.webp.ts";
@@ -22,7 +25,7 @@ import { MAX_QTY, MIN_QTY, PRICE_SOURCE, quoteFor, tierForQuantity, type Quote }
 import {
   ToolError, invalidInput, isRecord, optInt, optString, reqInt, reqString,
 } from "./errors.ts";
-import { authenticate, requireKey, sha256Hex, touchKey, type AuthedKey } from "./keys.ts";
+import { sha256Hex, randomToken } from "./util.ts";
 import { DETECTED_MEDIA_TYPE, MAX_ARTWORK_BYTES, sniffArtwork } from "./sniff.ts";
 import { callSeat } from "./seat.ts";
 import { StripeCallError, stripeCall } from "./stripe.ts";
@@ -46,7 +49,6 @@ export interface ToolResult {
 interface Ctx {
   env: Env;
   request: Request;
-  auth: AuthedKey | null;
   fetchFn: typeof fetch;
 }
 
@@ -54,9 +56,24 @@ function orderNamespace(env: Env, mode: "live" | "test"): KVNamespace {
   return mode === "live" ? env.ORDERS : env.DEV_ORDERS;
 }
 
+// The test lane (settlement 1, 2026-11-09): identity-based and
+// server-side, never offered in copy. A placement is test-lane when
+// the contact email domain is on the operator list or the
+// organization name carries a TEST / DO NOT CONTACT marker. Test
+// placements route to DEV_ORDERS, skip CRM adoption, email Ryan
+// TEST-marked to team inboxes only, mint on the test Stripe key
+// inside the seat, and suppress the customer email.
+export const TEST_LANE_DOMAINS = ["mcptest.org"];
+export function laneFor(contactEmail: string, organizationName?: string): "live" | "test" {
+  const domain = contactEmail.toLowerCase().split("@")[1] ?? "";
+  if (TEST_LANE_DOMAINS.includes(domain)) return "test";
+  if (organizationName && /\bTEST\b|DO NOT CONTACT/i.test(organizationName)) return "test";
+  return "live";
+}
+
 function stripeKeyFor(env: Env, mode: "live" | "test"): string {
   const key = mode === "live" ? env.STRIPE_API_KEY_LIVE : env.STRIPE_API_KEY_TEST;
-  if (!key) throw new ToolError("stripe_unavailable", "Stripe is not configured for this key's mode right now. Nothing was minted; it is safe to retry later.");
+  if (!key) throw new ToolError("stripe_unavailable", "Stripe is not configured for this mode right now. Nothing was minted; it is safe to retry later.");
   return key;
 }
 
@@ -195,6 +212,16 @@ export function exampleEntry(e: DeliveredExample): Record<string, unknown> {
   return {
     id: e.id, organization: e.organization, shape: e.shape,
     displayUrl: `https://tap.giving/mcp/examples/${e.id}.png`,
+    description: e.description,
+    size: e.size,
+    palette: e.palette,
+    layout: e.layout,
+    iconTreatment: e.iconTreatment,
+    logoSlot: e.logoSlot,
+    reproduction:
+      "Reproduce this direction with the organization's own logo and name: match the layout, the palette " +
+      "(sRGB values of the delivered artwork), the icon treatment, and the logo slot. The example itself is " +
+      "the named organization's design and is never shipped to a different organization as-is.",
   };
 }
 
@@ -283,7 +310,15 @@ function artworkSpecObject(shape?: string): Record<string, unknown> {
   };
   const examples = examplesForShape(shape).map(exampleEntry);
   return {
-    sizes: "100 mm (4 inch), round or square. Every other size or shape is a manual exception handled by hand.",
+    sizes: "100 mm (4 inch), round or square, are the self-serve orderable sizes. The design directions cover the full marketed set in designShapes; every other size is arranged by hand, never self-serve.",
+    designShapes: DESIGN_SHAPES,
+    designShapesNote: DESIGN_SHAPES_NOTE,
+    colorSpace: COLOR_SPACE_STATEMENT,
+    agentPdfChecklist: AGENT_PDF_CHECKLIST,
+    qrRules: QR_DESIGN_RULES,
+    logoRules: LOGO_RULES,
+    glossary: GEOMETRY_GLOSSARY,
+    explainerResources: EXPLAINER_TOPICS.map((t) => ({ uri: explainerResourceUri(t.slug), title: t.title })),
     canvasMm: g.canvasMm,
     canvasInches: 4.17,
     bleedMm: g.bleedMm,
@@ -455,37 +490,33 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       { step: "build the artwork", tool: "get_artwork_spec", detail: "Compose the artwork from a design direction with your own tools." },
       { step: "submit and proof", tool: "submit_artwork", detail: "Submit the finished file and see it on the disc as a proof. The artwork is yours to take to any printer." },
       { step: "order, optional", tool: "get_quote", detail: "Only if you want discs from Tap.Giving: the binding quote at an exact quantity, the first step of the optional order path." },
-      { step: "order questions", tool: "get_order_questions", detail: "The optional order path: capture the contact email (start_order_intent) and answer the order questions. No key is needed." },
-      { step: "recap", tool: "get_recap", detail: "The optional order path: the whole order, the artwork on the disc, and the exact total, checked before anything is placed. No key is needed." },
-      { step: "place the order", tool: "create_order", detail: "The optional order path: the order is recorded and the full order is emailed to the Tap.Giving team. A person from Tap.Giving follows up with the invoice, and the final proof is approved by email before anything is printed. No key is needed." },
+      { step: "order questions", tool: "get_order_questions", detail: "The optional order path: capture the contact email first (start_order_intent), then answer the order questions. Prices are first stated here, in the order phase." },
+      { step: "recap", tool: "get_recap", detail: "The optional order path: the whole order, the artwork on the disc, and the exact total, checked before anything is placed." },
+      { step: "Email me my invoice and design proof.", tool: "create_order", detail: "The final step of the optional order path: the order is recorded, the invoice is created at the quoted total, and the invoice and the design proof are emailed to the contact. The final proof is approved by email before anything is printed." },
     ],
-    pricing: {
-      range: PRICE_RANGE_LINE,
-      shipping: "Free on every order.",
-      note: "Call get_quote for the binding quote at an exact quantity.",
-    },
     artworkSpec: {
       summary: "106 mm (about 4.2 inch) square artboard; 100 mm (4 inch) cut (round or square); 3 mm (about 0.12 inch) bleed; vector artwork back (SVG preferred).",
       tool: "get_artwork_spec",
     },
     destination: DESTINATION_MODEL,
     turnaround: TURNAROUND,
-    testKey: TEST_KEY_LINE,
     samples: SAMPLES_LINE,
     taxExempt: TAX_EXEMPT_LINE,
     plainLanguage: {
       nfc: PLAIN_NFC_LINE,
-      keys: "Placing an order never needs a key. A key is only for reading order status and registering webhooks, and it can optionally bind an order to an organization.",
+      status: "There is no account, key, or login at any point. Order status is read with the one-time status reference create_order returns at placement; it is shown once and cannot be recovered, so keep it with the order confirmation.",
+    },
+    explainer: {
+      note: "Stuck, or explaining this to someone else? The explainer resources walk through how it works, step by step.",
+      resources: EXPLAINER_TOPICS.map((t) => ({ uri: explainerResourceUri(t.slug), title: t.title })),
+      prompt: "explain_where_i_am",
     },
     photos: productPhotoStructured(),
     capabilities: {
-      readTools: ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap"],
-      keyedReadTools: ["get_order_status"],
-      writeTools: ["submit_artwork", "start_order_intent", "create_order", "register_webhook"],
-      artworkExport: "After submit_artwork, the submitted file stays fetchable at its displayUrl: the PRINT FILE, exactly as submitted. The same address with .png on the end returns a full-resolution PNG rendered from the submitted file. The fetch is a keyless capability read: the artwork reference itself is the capability, and it works at any time. The on-disc preview is a mock composite, labeled a preview, never the print file.",
+      readTools: ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap", "get_order_status"],
+      writeTools: ["submit_artwork", "start_order_intent", "create_order"],
+      artworkExport: "After submit_artwork, the submitted file stays fetchable at its displayUrl: the PRINT FILE, exactly the file the agent submitted (the agent produces the print-ready PDF from the spec; this server never builds or returns one). The same address with .png on the end returns a full-resolution PNG rendered from the submitted file. The fetch is a capability read: the artwork reference itself is the capability, within 30 days of submission. The on-disc preview is a mock composite, labeled a preview, never the print file.",
       gates: [GATES.designApproval, GATES.payment, GATES.production],
-      howToGetAKey: KEY_REQUEST_LINE,
-      keyWait: "Placing an order needs no key: the whole placement run is keyless (the order questions, the recap, and placing the order), and a person from Tap.Giving follows up with the invoice. A key is optional and organization-bound: it enriches the order questions with the key's own organization block, and it governs order status (get_order_status) and webhook registration (register_webhook).",
       kickoff: "get_artwork_spec",
       benefits: BENEFITS,
       guarantee: "Covered by our 30-day money-back guarantee.",
@@ -509,21 +540,18 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `3. Build the artwork from a direction with your own tools, adding the organization's logo or name.`,
     `4. Submit the finished file with submit_artwork and see it on the disc as a proof. The artwork is yours from here: take it to any printer, or order the discs from Tap.Giving.`,
     `5. Optional, only if you want the discs made: get the binding quote from get_quote.`,
-    `6. Capture the contact email (start_order_intent) and answer the order questions (get_order_questions). No key is needed.`,
+    `6. Capture the contact email first (start_order_intent), then answer the order questions (get_order_questions). Prices are first stated at the order questions, in the order phase.`,
     `7. Check the recap (get_recap): the whole order, your artwork on the disc, and the exact total.`,
-    `8. Place the order (create_order). The order is recorded, the full order is emailed to the Tap.Giving team, and a person from Tap.Giving follows up with the invoice. The final proof is emailed for a person's approval before anything is printed.`,
+    `8. Final step, Email me my invoice and design proof (create_order): the order is recorded, the invoice is created at the quoted total, and the invoice and the design proof are emailed to the contact. The final proof is approved by email before anything is printed.`,
     ``,
     `Why Tap.Giving`,
-    NO_FEES_LINE,
     ...BENEFITS.map((b) => `- ${b}`),
-    ``,
-    `Pricing`,
-    `${PRICE_RANGE_LINE} Free shipping. ${TAX_NOTE} ${TAX_EXEMPT_LINE} Every order is covered by our 30-day money-back guarantee. Production and delivery run 2 to 3 weeks from artwork approval.`,
+    `Every order is covered by our 30-day money-back guarantee. ${TAX_NOTE} Production and delivery run 2 to 3 weeks from artwork approval.`,
     SAMPLES_LINE,
     ``,
     `Gates`,
-    `Design approval, payment, and production release stay human: a person approves the final proof by email. This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.`,
-    `Placing an order needs no key: the whole placement run is keyless (the order questions, the recap, and placing the order), and a person from Tap.Giving follows up with the invoice. Order status is the one read that uses the organization key. ${KEY_REQUEST_LINE} ${TEST_KEY_LINE}`,
+    `Design approval, payment, and production release stay human: a person approves the final proof by email. ${PROTECTED_STRING}`,
+    `There is no account, key, or login at any point in using this server. Order status is read with the status reference create_order returns at placement; it is shown once and cannot be recovered. Stuck? The explainer resources (tapgiving://explainer/how-it-works and its topics) walk through where you are.`,
     ...(guidanceTextLine ? [guidanceTextLine] : []),
     `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library (settings, tap moments, product details, mounting): show them whenever the person wants to see the disc in place.`,
   ].join("\n");
@@ -572,7 +600,6 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       versusPrintedCodes: VERSUS_PRINTED_CODES_LINE,
       worksWith: p.worksWith,
       guarantee: p.guarantee,
-      priceRange: PRICE_RANGE_LINE,
     },
     photos: productPhotoStructured(),
     stands: { products: p.stands, ordering: "Stands come from the Tap.Giving team, not through this server: email hello@tap.giving to add them to an order. Discs are the orderable product here." },
@@ -600,7 +627,6 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
     discs: [
       `Tap discs: ${p.chipPlain}. ${p.material}.`,
       DURABILITY_LINE,
-      PRICE_RANGE_LINE,
       p.sizePolicy,
       p.mountingDetail,
       p.metalCaveat,
@@ -664,13 +690,12 @@ function resolveChosenExample(
   const byId = all.find((e) => e.id === ref);
   if (byId) return byId;
   if (/^\d+$/.test(ref)) {
-    const inline = all.slice(0, INLINE_EXAMPLE_LIMIT);
     const n = parseInt(ref, 10);
-    if (n >= 1 && n <= inline.length) return inline[n - 1];
+    if (n >= 1 && n <= all.length) return all[n - 1];
   }
   throw invalidInput(
     `chosenExampleRef "${ref}" is not one of the delivered examples${shape ? ` for the ${shape} shape` : ""}. ` +
-    `Pick by number from the shown list (${all.slice(0, INLINE_EXAMPLE_LIMIT).map((e, i) => `${i + 1}. ${e.organization} (${e.id})`).join("; ")}) or pass any example id from the structured examples index.`,
+    `Pick by number from the pick list (1 to ${all.length}) or pass any example id from the structured examples index.`,
     { validExampleIds: all.map((e) => e.id) },
   );
 }
@@ -685,10 +710,8 @@ async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Prom
   const structured = artworkSpecObject(shape);
   if (chosenExampleRef && chosen) {
     structured.chosenExampleRef = chosenExampleRef;
-    structured.chosenExample = {
-      id: chosen.id, organization: chosen.organization, shape: chosen.shape,
-      displayUrl: `https://tap.giving/mcp/examples/${chosen.id}.png`,
-    };
+    structured.chosenExample = exampleEntry(chosen);
+    structured.verifyAgainstExample = VERIFY_AGAINST_EXAMPLE;
   }
   // The structured index carries the FULL delivered set for the shape.
   // Inline images stay bounded: the first INLINE_EXAMPLE_LIMIT examples
@@ -697,8 +720,8 @@ async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Prom
   // same order as the image blocks that follow the text.
   const allForShape = examplesForShape(shape);
   const inlineSubset = allForShape.slice(0, INLINE_EXAMPLE_LIMIT);
-  const pickList = inlineSubset.map((e, i) =>
-    `${i + 1}. ${e.organization} (${e.shape}): the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`);
+  const pickList = allForShape.map((e) =>
+    `${EXAMPLES_INDEX.findIndex((x) => x.id === e.id) + 1}. ${e.description}, ${e.shape}, ${e.size}: the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`);
   const shown = chosen ? [chosen] : inlineSubset;
   const images: Array<{ data: string; mimeType: string }> = [];
   for (const e of shown) {
@@ -723,7 +746,7 @@ async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Prom
           `The artwork you compose is yours: print-ready and vendor-neutral, yours to take to any printer. Nothing in this spec or the proof obliges an order from Tap.Giving.`,
         ]
       : [
-          `Delivered examples: ${allForShape.length} real ${shapeWord} designs that Tap.Giving produced and delivered to organizations. The full set is in the structured examples index with a display URL for each; the first ${inlineSubset.length} ride along in the images that follow, then the two mounting photos.`,
+          `Delivered examples: ${allForShape.length} real ${shapeWord} designs that Tap.Giving produced and delivered to organizations. The numbered pick list below covers the full set; the first ${inlineSubset.length} ride along in the images that follow, then the two mounting photos, and every entry is in the structured examples index with its reproduction data (description, size, palette, layout, icon treatment, logo slot).`,
           ...pickList,
           `Tell me the number of an example from the list above, or pass any example id from the structured index as chosenExampleRef. Then compose original artwork for the organization you are working with, using the example as a reference, and submit it with submit_artwork. An example is a real organization's delivered design: it is never shipped to a different organization as-is.`,
           `The artwork you compose is yours: print-ready and vendor-neutral, yours to take to any printer. Nothing in this spec or the proof obliges an order from Tap.Giving.`,
@@ -751,9 +774,11 @@ export interface ArtworkRecord {
   status: "unbound" | "bound" | "claimed" | "superseded";
   note?: string;
   intentRef?: string;
+  designUrl?: string;
   logoDataUrl?: string;
   createdAt: string;
   seatRecorded: boolean;
+  claimedByEmail?: string;
 }
 
 function artworkJsonKey(ref: string): string {
@@ -794,6 +819,8 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
   if (shapeArg !== undefined && shapeArg !== "round" && shapeArg !== "square") {
     throw invalidInput(`shape must be "round" or "square" when given.`);
   }
+  const designUrl = screenDestination(optString(args, "designUrl", 500), "designUrl");
+  const chosenExampleRef = optString(args, "chosenExampleRef", 80);
   const logo = args.logo;
   let logoDataUrl: string | undefined;
   if (logo !== undefined && logo !== null) {
@@ -840,17 +867,11 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
     findings.push("accepted; vector preferred for production");
   }
 
-  // Order binding checks, when an order or a key is in play.
-  let orgSlug: string | null = ctx.auth?.record.orgSlug ?? null;
+  // Order binding checks, when an order is in play.
+  let orgSlug: string | null = null;
   if (orderRef) {
     const order = await readOrderRecord(ctx.env, orderRef);
     if (!order) throw new ToolError("not_found", `orderRef ${orderRef} is not an order this server knows.`);
-    if (ctx.auth && order.orgSlug !== ctx.auth.record.orgSlug) {
-      throw new ToolError("forbidden", "That order belongs to a different organization than this key.");
-    }
-    if (!ctx.auth && order.orgSlug !== orgSlug && orgSlug !== null) {
-      throw new ToolError("forbidden", "That order belongs to an organization; attach artwork to it with that organization's key.");
-    }
     orgSlug = order.orgSlug;
     if (order.artworkRef && order.artworkRef !== "") {
       const prior = await readArtworkRecord(ctx.env, order.artworkRef);
@@ -877,6 +898,7 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
     orderRef: orderRef ?? null,
     status: orderRef ? "bound" : orgSlug ? "bound" : "unbound",
     ...(note ? { note } : {}),
+    ...(designUrl ? { designUrl } : {}),
     ...(logoDataUrl ? { logoDataUrl } : {}),
     createdAt: new Date().toISOString(),
     seatRecorded: false,
@@ -962,7 +984,7 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
       printFile: {
         label: "PRINT FILE",
         url: `https://tap.giving${artworkDisplayPath(artworkRef)}`,
-        note: "The artwork file exactly as submitted: this is the file that would go to production. Fetchable at any time; the artwork reference is the capability and no key is needed.",
+        note: "Your own agent's file, exactly as submitted: this is the file that would go to production. The print-ready PDF is the file your agent produces from the spec; this server never builds or returns a PDF. Fetchable at any time within 30 days of submission; the artwork reference is the capability.",
       },
       printRenderPng: {
         label: "PRINT RENDER (PNG)",
@@ -973,6 +995,8 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
       previewNote: "The preview images with this answer are the mock composite labeled ON-DISC PREVIEW. A preview is never the print file.",
     },
     verifyAgainstExample: VERIFY_AGAINST_EXAMPLE,
+    ...(designUrl ? { designUrl, designUrlNote: "The destination entered in the design phase. The design QR code is a labeled mock built from this URL; production encodes the disc's Redirect Dashboard link to this same destination, and the recap confirms it before any order is placed." } : {}),
+    ...(chosenExampleRef ? (() => { try { return { chosenExample: exampleEntry(resolveChosenExample(chosenExampleRef, shapeArg)) }; } catch { return {}; } })() : {}),
     preview: {
       kind: previewKind,
       ...(previewKind === "on-disc" ? { shapes: previewShapes, note: "Your design on the disc, cut shape applied. This preview render is the design check at this stage. Nothing is emailed at the artwork stage, because no contact is captured yet. The emailed final proof belongs to the order stage, after order setup." } : {}),
@@ -985,22 +1009,22 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
         : previewKind === "submitted-file"
           ? "The submitted file is shown with this answer as-is; this server could not render it on the disc in this call, so do not describe it as an on-disc preview. "
           : "No preview image could be rendered in this call, so do not tell the person a preview is shown; the file is on record under the artworkRef. ") +
-      "The design is the person's to keep from here: the submitted file is theirs, print-ready and vendor-neutral, to take to any printer. " +
+      "Keeping the file is an equal exit: the design is the person's to keep from here, the submitted file is theirs, print-ready and vendor-neutral, to take to any printer, and stopping here is a complete outcome. " +
       "Nothing is emailed at this stage: the emailed final proof belongs to the order stage, after order setup. " +
-      "If they want the discs made by Tap.Giving (optional), the order path runs keyless end to end: capture the contact email (start_order_intent), ask the order questions (get_order_questions), show the recap (get_recap), and place the order (create_order). A person from Tap.Giving then follows up with the invoice. No key is needed at any step of placing the order.",
+      "If they want the discs made by Tap.Giving (optional), the order path is: capture the contact email (start_order_intent), ask the order questions (get_order_questions), show the recap (get_recap), and place the order at the final step, Email me my invoice and design proof (create_order), which emails the invoice and the design proof to the contact.",
   };
   const text = [
     `Artwork received: ${artworkRef} (${filename}, ${detectedType}, ${bytes.length} bytes).`,
     findings.length ? findings.join(" ") : "Accepted under the permissive intake policy.",
     previewKind === "on-disc"
       ? (shapeArg
-          ? `Here is your design on the ${shapeArg} disc, in the images that follow; this preview is the design check at this stage.`
-          : `Here is your design on the disc, shown on both shapes in the images that follow; the shape chosen at order setup settles which one is printed. This preview is the design check at this stage.`)
+          ? `Here is your design on the ${shapeArg} disc, in the images that follow; this preview is the design check at this stage. Nothing is emailed at this stage: no contact is captured yet.`
+          : `Here is your design on the disc, shown on both shapes in the images that follow; the shape chosen at order setup settles which one is printed. This preview is the design check at this stage. Nothing is emailed at this stage: no contact is captured yet.`)
       : previewKind === "submitted-file"
         ? `The on-disc render was unavailable in this call, so your submitted file is shown as-is. Nothing is emailed at this stage: no contact is captured yet.`
         : `Your file is on record; it could not be rendered to an image here. Nothing is emailed at this stage: no contact is captured yet.`,
     ...(fontNote ? [fontNote] : []),
-    `PRINT FILE: your submitted file itself, fetchable at any time at https://tap.giving${artworkDisplayPath(artworkRef)} (no key needed; the reference is the capability). PRINT RENDER (PNG): a full-resolution PNG rendered from that file, at https://tap.giving${artworkDisplayPath(artworkRef)}.png. The images with this answer are the ON-DISC PREVIEW, a mock composite; a preview is never the print file.`,
+    `PRINT FILE: your own submitted file itself, fetchable at any time within 30 days at https://tap.giving${artworkDisplayPath(artworkRef)} (the reference is the capability). Your agent produces the print-ready PDF from the spec; this server never builds or returns one. PRINT RENDER (PNG): a full-resolution PNG rendered from that file, at https://tap.giving${artworkDisplayPath(artworkRef)}.png. The images with this answer are the ON-DISC PREVIEW, a mock composite; a preview is never the print file.`,
     VERIFY_AGAINST_EXAMPLE_TEXT,
   ].join("\n");
   return { structured, text, images: previewImages };
@@ -1054,9 +1078,6 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
   if (artworkRef) {
     artworkRec = await readArtworkRecord(ctx.env, artworkRef);
     if (!artworkRec) throw new ToolError("not_found", `artworkRef ${artworkRef} is not a submission this server holds (unclaimed submissions expire after 30 days).`);
-    if (ctx.auth && artworkRec.orgSlug && artworkRec.orgSlug !== ctx.auth.record.orgSlug) {
-      throw new ToolError("forbidden", "That artwork was submitted under a different organization.", { retryable: false });
-    }
   }
 
   // Dedupe (2026-11-08 cold-test fix): one intent per email. The
@@ -1074,12 +1095,10 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
       // Link a newly supplied artwork to the existing intent.
       if (artworkRec && artworkRef && existing.artworkRef !== artworkRef) {
         artworkRec.intentRef = indexedRef;
-        if (ctx.auth && !artworkRec.orgSlug) artworkRec.orgSlug = ctx.auth.record.orgSlug;
         await ctx.env.MCP_ARTWORK.put(artworkJsonKey(artworkRef), JSON.stringify(artworkRec), { expirationTtl: ARTWORK_TTL });
         existing.artworkRef = artworkRef;
         await ctx.env.MCP_KEYS.put(`INTENT:${indexedRef}`, JSON.stringify(existing), { expirationTtl: 30 * DAY });
       }
-      const keyedExisting = !!ctx.auth;
       return {
         structured: {
           captured: true,
@@ -1090,18 +1109,13 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
           followUp:
             "This email was already captured, so no second lead was created. The Tap.Giving team follows up by email, usually within one business day. " +
             "The contact was recorded through the same capture the website uses, so the follow-up is the ordinary first email, not a sales list.",
-          nextStep: keyedExisting
-            ? "Placing the order needs no key: get_order_questions, then get_recap, then create_order; a person from Tap.Giving follows up with the invoice. " +
-              " An intent is a lead, not an order: it creates no invoice and reserves nothing."
-            : "Placing the order needs no key: get_order_questions, then get_recap, then create_order; a person from Tap.Giving follows up with the invoice. " +
-              " An intent is a lead, not an order: it creates no invoice and reserves nothing.",
+          nextStep: "Next: get_order_questions, then get_recap, then place the order at the final step, Email me my invoice and design proof (create_order). " +
+            "An intent is a lead, not an order: it creates no invoice and reserves nothing.",
         },
         text:
           `Already captured as ${indexedRef}: this email already has an intent, so no second lead was created and the Tap.Giving team will follow up with ${email} by email, usually within one business day.` +
-          (existing.artworkRef ? ` Your artwork (${existing.artworkRef as string}) is linked to this intent.` : "") +
-          (ctx.auth?.record.mode === "test"
-            ? "\nTest-key note: this contact capture is real. The email was recorded in Tap.Giving's lead list through the same capture the website uses, and the team may follow up. Test mode covers orders and invoices, not this capture."
-            : ""),
+          (existing.artworkRef ? ` Your artwork (${existing.artworkRef as string}) is linked to this intent.` : ""),
+        images: productPhotoImages(),
       };
     }
     // Index pointed at an expired intent record: fall through and
@@ -1153,147 +1167,131 @@ async function toolStartOrderIntent(ctx: Ctx, args: Record<string, unknown>): Pr
     ...(organizationName ? { organizationName } : {}),
     ...(quantityHint ? { quantityHint } : {}),
     ...(artworkRef ? { artworkRef } : {}),
-    orgSlug: ctx.auth?.record.orgSlug ?? null,
+    orgSlug: null,
     createdAt: new Date().toISOString(),
   }), { expirationTtl: 30 * DAY });
   if (artworkRec && artworkRef) {
     artworkRec.intentRef = intentRef;
-    if (ctx.auth && !artworkRec.orgSlug) artworkRec.orgSlug = ctx.auth.record.orgSlug;
     await ctx.env.MCP_ARTWORK.put(artworkJsonKey(artworkRef), JSON.stringify(artworkRec), { expirationTtl: ARTWORK_TTL });
   }
 
-  const keyed = !!ctx.auth;
+  const lane = laneFor(email, organizationName);
+  const laneLine = lane === "test"
+    ? " This is a test-lane capture: this contact capture is real, and test orders stay out of the production CRM."
+    : "";
   const structured: Record<string, unknown> = {
     captured: true,
     intentRef,
     source: INTENT_SOURCE,
+    ...(lane === "test" ? { lane: "test" } : {}),
     ...(artworkRef ? { artworkRef, artworkLinked: true } : {}),
     followUp:
       "The Tap.Giving team follows up by email, usually within one business day. The contact was recorded through " +
-      "the same capture the website uses, so the follow-up is the ordinary first email, not a sales list.",
-    nextStep: keyed
-      ? "Placing the order needs no key: get_order_questions, then get_recap, then create_order; a person from Tap.Giving follows up with the invoice. " +
-              " An intent is a lead, not an order: it creates no invoice and reserves nothing."
-      : "Placing the order needs no key: get_order_questions, then get_recap, then create_order; a person from Tap.Giving follows up with the invoice. " +
-              " An intent is a lead, not an order: it creates no invoice and reserves nothing.",
+      "the same capture the website uses, so the follow-up is the ordinary first email, not a sales list. " +
+      "The capture is real in every lane: it rides the production lead machinery, and the team may follow up." + laneLine,
+    nextStep: "Next: get_order_questions, then get_recap, then place the order at the final step, Email me my invoice and design proof (create_order). " +
+      "An intent is a lead, not an order: it creates no invoice and reserves nothing.",
   };
-  const baseText = keyed
-    ? `Captured as ${intentRef}. The Tap.Giving team will also follow up with ${email} by email, usually within one business day. Placing the order needs no key: order questions, recap, then create_order.${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`
-    : `Captured as ${intentRef}. The Tap.Giving team will follow up with ${email} by email, usually within one business day. Placing the order needs no key: order questions, recap, then create_order, and a person from Tap.Giving follows up with the invoice.${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}`;
   return {
     structured,
-    // Test isolation, stated plainly (round 2 operational note): the
-    // capture rides the production lead machinery in every mode, and
-    // the response says so instead of letting the TEST MODE banner
-    // imply otherwise. Test mode covers orders and invoices.
-    text: ctx.auth?.record.mode === "test"
-      ? `${baseText}\nTest-key note: this contact capture is real. The email was recorded in Tap.Giving's lead list through the same capture the website uses, and the team may follow up. Test mode covers orders and invoices, not this capture.`
-      : baseText,
+    text: `Captured as ${intentRef}. The Tap.Giving team will follow up with ${email} by email, usually within one business day. Next: order questions, recap, then the final step, Email me my invoice and design proof.${artworkRef ? ` Your artwork (${artworkRef}) is linked to this intent.` : ""}${laneLine} The photo with this answer shows the disc in use: a phone tapping a disc on a chair back.`,
+    images: productPhotoImages(),
   };
 }
 
 // ─── order questions and recap ──────────────────────────────────────
 
-async function toolGetOrderQuestions(ctx: Ctx, _args: Record<string, unknown>): Promise<ToolResult> {
-  // Keyless since the 2026-11-08 F3 amendment: the question set is
-  // static and public. With a key the answer also carries the whoami
-  // block (F4, F15): the key's own organization and the contact
-  // email orders must use. Without a key there is NO organization
-  // block at all, and the contact-email question states the binding
-  // rule without naming any organization's address.
-  const auth = ctx.auth;
+async function toolGetOrderQuestions(_ctx: Ctx, _args: Record<string, unknown>): Promise<ToolResult> {
+  // The question set is static and public, in the order the order
+  // phase collects it (settlement, 2026-11-09): email first (already
+  // captured by start_order_intent), then the organization name, the
+  // shipping address and phone, quantity, shape, mounting, and the
+  // link destination as a recap confirmation. Prices are first
+  // stated here, in the order phase.
   const structured: Record<string, unknown> = {
-    ...(auth
-      ? {
-          organization: {
-            name: auth.record.orgName,
-            contactEmail: auth.record.contactEmail,
-            note: "This key belongs to this organization. The order's contact email must be the organization's contact email shown here.",
-          },
-        }
-      : {
-          keylessNote:
-            "You are asking without an organization key, so no organization is bound yet. Placing the order needs no key; the order is bound by its contact email, so the contact email on the order must be one the organization owns.",
-        }),
+    pricing: {
+      range: PRICE_RANGE_LINE,
+      noFees: NO_FEES_LINE,
+      note: "Prices are first stated here, at the order questions. Exact totals come from get_quote and the recap.",
+    },
     questions: [
       {
-        order: 1, field: "size", question: "Round or square?",
-        input: { type: "enum", values: ["100mm-round", "100mm-square"] },
-        note: "The two built-in sizes, both 100 mm (4 inch) at the same price.",
+        order: 1, field: "contactEmail", question: "What email should the invoice, the proof, and the order emails go to?",
+        input: { type: "email" },
+        note: "Collected first, through start_order_intent. The order binds to this email: it must be an address the organization owns, and the same email captured in the flow. The invoice and the design proof are emailed to this address at placement.",
       },
       {
-        order: 2, field: "quantity", question: "How many tap discs?",
+        order: 2, field: "organizationName", question: "What is the organization's name?",
+        input: { type: "text" },
+      },
+      {
+        order: 3, field: "shipTo", question: "Where should we ship them, and what phone reaches the contact?",
+        input: {
+          type: "object",
+          fields: ["name", "street", "city", "state", "postalCode", "country", "phone"],
+          note: "The contact phone is collected with this shipping block (the contactPhone answer) and defaults into the shipping phone: the approval email's shipping block always carries the customer's phone as its last line. create_order takes contactPhone and shipTo.phone; use the contact phone for both unless a different delivery phone is given.",
+        },
+      },
+      {
+        order: 4, field: "quantity", question: "How many tap discs?",
         input: { type: "integer", minimum: MIN_QTY, maximum: MAX_QTY },
         note: `The minimum order is ${MIN_QTY} discs, enforced by get_quote and create_order.`,
       },
       {
-        order: 3, field: "antiMetalCount", question: "How many discs will sit on metal surfaces?",
+        order: 5, field: "size", question: "Round or square?",
+        input: { type: "enum", values: ["100mm-round", "100mm-square"] },
+        note: "The two built-in sizes, both 100 mm (4 inch) at the same price. Every other size is arranged by hand through the team, never self-serve.",
+      },
+      {
+        order: 6, field: "antiMetalCount", question: "How many discs will sit on metal surfaces?",
         optional: true,
         input: { type: "integer", minimum: 0 },
         note: "Discs on metal need the anti-metal shielding layer at $1.00 per shielded disc, decided before printing. Omit the count when it is unknown; an unknown count bills nothing.",
       },
       {
-        order: 4, field: "mounting", question: "How should we mount them?",
+        order: 7, field: "mounting", question: "How should we mount them?",
         input: { type: "enum", values: MOUNTING_OPTIONS.map((o) => o.value) },
         options: MOUNTING_OPTIONS.map((o) => ({
           value: o.value, label: o.label, imageUrl: o.imageUrl, text: o.text,
         })),
       },
       {
-        order: 5, field: "linkDestination", question: "Where should a tap send people?",
+        order: 8, field: "linkDestination", question: "Confirm where a tap should send people.",
         optional: true,
-        note: LINK_DESTINATION_NOTE +
-          " get_recap and create_order accept this as linkDestination: the page a tap opens.",
+        confirmation: true,
+        note: "A confirmation, not a fresh collection: the destination carried from the design (the designUrl entered in the design phase, stored on the artwork record). " +
+          LINK_DESTINATION_NOTE +
+          " Give a URL here only to change it; get_recap and create_order accept it as linkDestination.",
         input: { type: "url", schemes: ["http", "https"] },
       },
       {
-        order: 6, field: "contactName", question: "Who is the contact for this order?",
+        order: 9, field: "contactName", question: "Who is the contact for this order?",
         input: { type: "text" },
-      },
-      {
-        order: 7, field: "contactEmail", question: "What email should the proof and order emails go to?",
-        input: { type: "email" },
-        note: auth
-          ? `Must be the organization's contact email for this key: ${auth.record.contactEmail}. The final proof is emailed to this address.`
-          : "The order binds to this email: it must be an address the organization owns, and the same email captured in the flow. The final proof is emailed to this address.",
-      },
-      {
-        order: 8, field: "contactPhone", question: "What phone number reaches the contact?",
-        input: { type: "phone" },
-      },
-      {
-        order: 9, field: "shipTo", question: "Where should we ship them?",
-        input: {
-          type: "object",
-          fields: ["name", "street", "city", "state", "postalCode", "country", "phone"],
-          note: "Phone is its own required field: the approval email's shipping block always carries the customer's phone as its last line.",
-        },
+        note: "Asked with the shipping block answers at create_order: contactName and contactPhone ride create_order itself.",
       },
     ],
     alsoRequiredAtCreateOrder: {
       recapRef: "Comes from get_recap over these same answers; run the recap before create_order.",
       idempotencyKey: "Mint one per intended order (8 to 128 characters) and reuse it on retries.",
       artworkRef: "Optional but expected: the reference from submit_artwork.",
+      contactPhone: "Collected with the shipping block (question 3) and passed to create_order; it also defaults into shipTo.phone.",
     },
-    emailFirst: "Capture the contact email first in this step (start_order_intent), before the questions: the journey's first ask.",
+    emailFirst: "The contact email is captured first in this phase (start_order_intent), before the questions: the order phase's first ask.",
+    destinationModel: "Where a tap lands is set per disc. An order starts with one destination for the whole set; to run two destinations, split the set afterwards in the free Redirect Dashboard, per disc or per group, in seconds.",
   };
   const text = [
-    auth
-      ? `This key belongs to ${auth.record.orgName}; the contact email for orders is ${auth.record.contactEmail}.`
-      : "No key on this call, so no organization is bound yet; when the order is placed it binds to its contact email, an address the organization owns and the same email captured in the flow.",
-    "Order questions, in order (every field create_order needs):",
-    "1. Shape and size: round or square, both 100 mm (4 inch).",
-    `2. Quantity: "How many tap discs?" (minimum ${MIN_QTY}).`,
-    "3. Metal surfaces: how many discs sit on metal? Those need the $1.00 shielding layer; omit the count when unknown.",
-    '4. Mounting: "How should we mount them?" The two photos with this answer show the options: adhesive backing, and pre-drilled holes for screws (screws not included).',
-    `5. Link destination (optional): ${LINK_DESTINATION_NOTE} get_recap and create_order accept it as linkDestination.`,
-    "6. Contact name.",
-    auth
-      ? `7. Contact email: must be ${auth.record.contactEmail}, the address on this key's organization. The final proof is emailed there.`
-      : "7. Contact email: must be the contact email of the organization whose key places the order. The final proof is emailed there.",
-    "8. Contact phone.",
-    "9. Shipping address, phone included, asked last.",
-    "Then run get_recap over the answers; keep the recap reference it returns, because placing the order uses it.",
+    "Order questions, in the order to ask them:",
+    "1. Contact email: captured first through start_order_intent. The invoice and the design proof are emailed to this address at placement.",
+    "2. Organization name.",
+    "3. Shipping address and phone: the contact phone is collected in this block and defaults into the shipping phone.",
+    `4. Quantity: "How many tap discs?" (minimum ${MIN_QTY}).`,
+    "5. Shape and size: round or square, both 100 mm (4 inch), at the same price.",
+    "6. Metal surfaces: how many discs sit on metal? Those need the $1.00 shielding layer, decided before printing; omit the count when unknown.",
+    '7. Mounting: "How should we mount them?" The two photos with this answer show the options: adhesive backing, and pre-drilled holes for screws (screws not included).',
+    `8. Link destination, as a confirmation: the destination carried from the design. ${LINK_DESTINATION_NOTE}`,
+    "The contact name rides create_order with these answers.",
+    `${PRICE_RANGE_LINE} ${NO_FEES_LINE}`,
+    "Then run get_recap over the answers; keep the recap reference it returns, because placing the order at the final step (Email me my invoice and design proof) uses it.",
   ].join("\n");
   return { structured, text, images: mountingPhotoImages() };
 }
@@ -1393,33 +1391,31 @@ async function readIntentForFlow(
     if (byRef) return byRef;
   }
   if (email) {
-    return parse(await env.MCP_KEYS.get(`INTENTBYEMAIL:${email.toLowerCase()}`));
+    const indexedRef = await env.MCP_KEYS.get(`INTENTBYEMAIL:${await sha256Hex(email.toLowerCase())}`);
+    if (indexedRef) return parse(await env.MCP_KEYS.get(`INTENT:${indexedRef}`));
   }
   return null;
 }
 
 async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
-  // P-15: the recap needs no key. Keyed, it binds to the key's
-  // organization as before; keyless, it binds to the contact email
-  // (and the captured intent, when one exists) from the flow.
-  const auth = ctx.auth;
-  const inputs = await validateOrderShape(ctx, args, auth);
+  // The recap binds to the contact email (and the captured intent,
+  // when one exists) from the flow.
+  const inputs = await validateOrderShape(ctx, args);
   const quote = quoteFor({
     qty: inputs.quantity as number,
     antiMetal: inputs.antiMetalCount as number | undefined,
     redirect: false,
   });
-  const contactEmailBound = (inputs.contactEmail as string | undefined) ?? auth?.record.contactEmail;
-  const intent = auth ? null : await readIntentForFlow(ctx.env, optString(args, "intentRef", 120), contactEmailBound);
-  const orgNameBound = auth?.record.orgName
-    ?? optString(args, "organizationName", 300) ?? optString(args, "church", 300)
+  const contactEmailBound = inputs.contactEmail as string;
+  const intent = await readIntentForFlow(ctx.env, optString(args, "intentRef", 120), contactEmailBound);
+  const orgNameBound = optString(args, "organizationName", 300) ?? optString(args, "church", 300)
     ?? intent?.organizationName;
-  const bindingSeed = auth ? auth.record.orgSlug : `keyless:${contactEmailBound ?? ""}`;
+  const bindingSeed = `keyless:${contactEmailBound ?? ""}`;
   const recapRef = `recap_${(await sha256Hex(`${bindingSeed}:${JSON.stringify(canonicalOrderInputs(inputs))}:${Date.now()}`)).slice(0, 24)}`;
   const record: RecapRecord = {
     recapRef,
-    orgSlug: auth ? auth.record.orgSlug : null,
-    mode: auth ? auth.record.mode : "live",
+    orgSlug: null,
+    mode: laneFor(contactEmailBound, orgNameBound),
     inputs: canonicalOrderInputs(inputs),
     quoteGrandTotalCents: quote.grandTotalCents,
     createdAt: new Date().toISOString(),
@@ -1453,6 +1449,7 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
     }
   }
 
+  if (!image) image = productPhotoImages()[0];
   const quoteObj = quoteOutput(quote);
   const contactNameIn = optString(args, "contactName", 200);
   const contactPhoneIn = optString(args, "contactPhone", 60);
@@ -1466,9 +1463,7 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
       organization: orgNameBound ?? null,
       contactEmail: contactEmailOut,
       proofRecipientEmail: contactEmailOut,
-      ...(auth
-        ? {}
-        : { binding: "keyless: this recap binds to the contact email collected in the flow (and the captured intent, when one exists), not to an organization key" }),
+      binding: "This recap binds to the contact email collected in the flow (and the captured intent, when one exists).",
       ...(contactNameIn ? { contactName: contactNameIn } : {}),
       ...(contactPhoneIn ? { contactPhone: contactPhoneIn } : {}),
     },
@@ -1490,13 +1485,13 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
         "placed within 7 days of your quote; if you miss it, a fresh quote restarts it.",
     },
     sequence:
-      "A person from Tap.Giving follows up with the invoice after the order is placed; production waits until the final proof is approved by email. " +
+      "Placing the order at the final step (Email me my invoice and design proof) emails the invoice and the design proof to the contact email; production waits until the final proof is approved by email. " +
       "Nothing is printed before that approval.",
     tapGivingContact: { email: TEAM_EMAIL },
     notes: RECAP_NOTES,
     exits: [
-      { value: "pay_now", label: "Pay now", presented: "first, the default path", meaning: "create_order places the order now, and a person from Tap.Giving follows up with the invoice so the person can pay right away." },
-      { value: "lock_in", label: "I want to lock in this price", presented: "second", meaning: "the same create_order; a person from Tap.Giving follows up with the invoice for the person to pay when they choose. The quoted total is the price protection." },
+      { value: "pay_now", label: "Pay now", presented: "first, the default path", meaning: "create_order places the order now; the invoice and the design proof are emailed to the contact at placement, and the person pays the hosted invoice right away." },
+      { value: "lock_in", label: "I want to lock in this price", presented: "second", meaning: "the same create_order; the invoice and the design proof are emailed to the contact at placement, for the person to pay when they choose. The quoted total is the price protection." },
     ],
     gates: [GATES.designApproval, GATES.payment],
   };
@@ -1510,10 +1505,10 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
     `Contact: ${contactNameIn ? `${contactNameIn}, ` : ""}${contactEmailOut}${contactPhoneIn ? `, phone ${contactPhoneIn}` : ""}. The final proof is emailed to this address for approval.`,
     `Ship to: ${shipTo.name}, ${shipTo.street}, ${shipTo.city}, ${shipTo.state} ${shipTo.postalCode}, ${shipTo.country}. Phone: ${shipTo.phone}.`,
     `Cost: ${dollars(quote.grandTotalCents)} total. Shipping: Free. ${TAX_NOTE}`,
-    `First-order discount, when it applies: if this is ${orgDisplay}'s first order, code WELCOME10 takes 10 percent off discs on the follow-up invoice, making the total ${dollars(quote.discountedTotalCents)}. It applies to any first order placed within 7 days of this quote (${record.createdAt.slice(0, 10)}); if the 7 days pass, a fresh quote restarts the window.`,
+    `First-order discount, when it applies: if this is ${orgDisplay}'s first order, code WELCOME10 takes 10 percent off discs on the invoice emailed at placement, making the total ${dollars(quote.discountedTotalCents)}. It applies to any first order placed within 7 days of this quote (${record.createdAt.slice(0, 10)}); if the 7 days pass, a fresh quote restarts the window.`,
     ...RECAP_NOTES,
-    "How payment and proof fit together: after the order is placed, a person from Tap.Giving follows up with the invoice; production waits until the final proof is approved by email. Nothing is printed before that approval.",
-    "Two ways forward, and both place the same order: pay now (place it now and pay the follow-up invoice when it arrives), or lock in this price (place it now; today's quoted total is what the follow-up invoice carries).",
+    "How payment and proof fit together: placing the order at the final step emails the invoice and the design proof to the contact; production waits until the final proof is approved by email. Nothing is printed before that approval.",
+    "Two ways forward, and both place the same order: pay now (place it now and pay the hosted invoice when it arrives), or lock in this price (place it now; today's quoted total is what the invoice carries).",
     `Questions: the Tap.Giving team at ${TEAM_EMAIL}.`,
   ].join("\n");
   return { structured, text, image };
@@ -1552,10 +1547,21 @@ export interface OrderRecord {
     status: string;
     hostedInvoiceUrl: string;
     totalCents: number;
+    invoicePdf?: string;
+    finalizedAt?: string;
     existing?: boolean;
     existingOrderRef?: string | null;
     existingDifferingFields?: string[];
   };
+  // Final-step chain outcomes (step 11): the invoice mint attempt
+  // when it failed, and the customer email outcome. A replay of
+  // create_order re-attempts only the missing steps.
+  invoiceAttempt?: { ok: boolean; error?: string; at: string };
+  customerEmail?: { sent: boolean; messageRef?: string; error?: string; suppressed?: string; proofPending?: boolean; at: string };
+  // The status capability (step 8): only the SHA-256 hash of the
+  // status reference is stored; the plaintext is shown once, in the
+  // create_order response and the customer email.
+  statusRefHash?: string;
   createdAt: string;
 }
 
@@ -1573,7 +1579,7 @@ export async function saveOrderRecord(env: Env, order: OrderRecord): Promise<voi
 // key (auth), the key's organization binds as before. Keyless
 // (P-15), the binding is the flow's own data: the contact email is
 // required and the artwork must be an unbound (keyless) submission.
-async function validateOrderShape(ctx: Ctx, args: Record<string, unknown>, auth: AuthedKey | null): Promise<Record<string, unknown>> {
+async function validateOrderShape(ctx: Ctx, args: Record<string, unknown>): Promise<Record<string, unknown>> {
   const quantity = reqInt(args, "quantity");
   if (quantity < MIN_QTY) {
     throw invalidInput(belowMinimumMessage(quantity), {
@@ -1606,32 +1612,17 @@ async function validateOrderShape(ctx: Ctx, args: Record<string, unknown>, auth:
     shipTo[f] = reqString(shipToRaw, f, 300);
   }
   const contactEmail = optString(args, "contactEmail", 200)?.toLowerCase();
-  if (auth) {
-    if (contactEmail && contactEmail !== auth.record.contactEmail.toLowerCase()) {
-      throw new ToolError("forbidden",
-        `contactEmail does not belong to this key's organization. This key belongs to ${auth.record.orgName}, ` +
-        `and its contact email is ${auth.record.contactEmail}. Use that email here, or ask the Tap.Giving team ` +
-        `(${TEAM_EMAIL}) for a key for your own organization.`,
-        { retryable: false, details: { orgName: auth.record.orgName, contactEmail: auth.record.contactEmail } });
-    }
-  } else {
-    if (!contactEmail) {
-      throw invalidInput("contactEmail is required when no key is presented: a keyless recap or order binds to the contact email collected in the flow. Capture it first with start_order_intent and use the same email here.");
-    }
-    if (!contactEmail.includes("@")) throw invalidInput("contactEmail must be an email address.");
+  if (!contactEmail) {
+    throw invalidInput("contactEmail is required: a recap or order binds to the contact email collected in the flow. Capture it first with start_order_intent and use the same email here.");
   }
+  if (!contactEmail.includes("@")) throw invalidInput("contactEmail must be an email address.");
   const linkDestination = screenDestination(optString(args, "linkDestination", 500) ?? optString(args, "givingUrl", 500), "linkDestination");
   const artworkRef = optString(args, "artworkRef", 120);
   if (artworkRef) {
     const rec = await readArtworkRecord(ctx.env, artworkRef);
     if (!rec) throw new ToolError("not_found", `artworkRef ${artworkRef} is not a submission this server holds (unclaimed submissions expire after 30 days).`);
-    if (rec.orgSlug) {
-      if (auth && rec.orgSlug !== auth.record.orgSlug) {
-        throw new ToolError("forbidden", "That artwork was submitted under a different organization.", { retryable: false });
-      }
-      if (!auth) {
-        throw new ToolError("forbidden", "That artwork was submitted under an organization key. Place this order with that key, or submit the artwork again without one.", { retryable: false });
-      }
+    if (rec.orgSlug && rec.claimedByEmail !== contactEmail) {
+      throw new ToolError("forbidden", "That artwork was submitted bound to an existing order under a different contact email. Submit the artwork again for a new order.", { retryable: false });
     }
   }
   void ctx;
@@ -1648,27 +1639,20 @@ async function validateOrderShape(ctx: Ctx, args: Record<string, unknown>, auth:
 // ─── create_order ───────────────────────────────────────────────────
 
 async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
-  // P-15: placing an order never requires a key. Keyed, the key's
-  // organization and mode bind as before. Keyless, identity rides on
-  // the flow's own data: the organization name, the contact email,
-  // and the captured intent when one exists; the slug is derived
-  // from the organization name so a later key for the same
-  // organization meets this order on the same slug, and the mode is
-  // live (a keyless placement is a real placement, bounded by the
-  // human proof and payment gates, exactly like the intent capture).
-  const auth = ctx.auth;
+  // Identity rides on the flow's own data: the organization name,
+  // the contact email, and the captured intent when one exists; the
+  // slug is derived from the organization name. The lane is decided
+  // by laneFor once the organization name is known (test lane:
+  // DEV_ORDERS routing, no CRM adoption, TEST-marked team email,
+  // test-key invoice inside the seat, customer email suppressed).
   let orgSlug: string;
-  let mode: "live" | "test";
+  let mode: "live" | "test" = "live";
   let intentGuess: { intentRef: string; organizationName?: string; email?: string } | null = null;
-  if (auth) {
-    orgSlug = auth.record.orgSlug;
-    mode = auth.record.mode;
-  } else {
+  {
     const emailGuess = optString(args, "contactEmail", 200)?.toLowerCase();
     intentGuess = await readIntentForFlow(ctx.env, optString(args, "intentRef", 120), emailGuess);
     const orgNameGuess = optString(args, "organizationName", 300) ?? optString(args, "church", 300) ?? intentGuess?.organizationName;
     orgSlug = slugifyOrg(orgNameGuess ?? "") || slugifyOrg((emailGuess ?? "").split("@")[0] ?? "") || "keyless";
-    mode = "live";
   }
 
   const idempotencyKey = reqString(args, "idempotencyKey", 200);
@@ -1696,7 +1680,7 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
   const contactName = reqString(args, "contactName", 200);
   const contactEmail = reqString(args, "contactEmail", 200).toLowerCase();
   const contactPhone = reqString(args, "contactPhone", 60);
-  const shapeInputs = await validateOrderShape(ctx, { ...args, contactEmail }, auth);
+  const shapeInputs = await validateOrderShape(ctx, { ...args, contactEmail });
   const exitRaw = optString(args, "exit", 20) ?? "pay_now";
   if (exitRaw !== "pay_now" && exitRaw !== "lock_in") {
     throw invalidInput(`exit must be "pay_now" or "lock_in".`);
@@ -1704,11 +1688,12 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
   const exit = exitRaw as "pay_now" | "lock_in";
   const note = optString(args, "note", 480);
   const organizationName = optString(args, "organizationName", 300) ?? optString(args, "church", 300)
-    ?? (auth ? auth.record.orgName : intentGuess?.organizationName)
+    ?? intentGuess?.organizationName
     ?? contactEmail;
-  // Keyless intent binding: an intentRef named by the caller must be
-  // the intent captured for this order's contact email.
-  if (!auth) {
+  mode = laneFor(contactEmail, organizationName);
+  // Intent binding: an intentRef named by the caller must be the
+  // intent captured for this order's contact email.
+  {
     const intentRefArg = optString(args, "intentRef", 120);
     if (intentRefArg) {
       if (!intentGuess || intentGuess.intentRef !== intentRefArg) {
@@ -1728,19 +1713,13 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
     throw new ToolError("not_found", `recapRef ${recapRef} is not a recap this server holds. Call get_recap for these inputs first; the recap is the last thing before the exits.`);
   }
   const recap = JSON.parse(recapRaw) as RecapRecord;
-  if (auth) {
-    if (recap.orgSlug !== orgSlug) {
-      throw new ToolError("forbidden", "That recap belongs to a different organization than this key.", { retryable: false });
-    }
-  } else {
-    if (recap.orgSlug !== null && recap.orgSlug !== undefined) {
-      throw new ToolError("forbidden", "That recap was made under an organization key. Place this order with that key, or run a fresh recap without one.", { retryable: false });
-    }
-    if (!recap.contactEmail || recap.contactEmail !== contactEmail) {
-      throw new ToolError("conflict",
-        "That recap binds to a different contact email than this order. Re-run get_recap with the order's contact email, " +
-        "so the recap the person saw and the order placed are the same.", { retryable: false });
-    }
+  if (recap.orgSlug !== null && recap.orgSlug !== undefined) {
+    throw new ToolError("forbidden", "That recap was made under an organization key, which this server no longer uses. Run a fresh recap.", { retryable: false });
+  }
+  if (!recap.contactEmail || recap.contactEmail !== contactEmail) {
+    throw new ToolError("conflict",
+      "That recap binds to a different contact email than this order. Re-run get_recap with the order's contact email, " +
+      "so the recap the person saw and the order placed are the same.", { retryable: false });
   }
   const orderCanon = canonicalOrderInputs({ ...shapeInputs, contactEmail });
   const drift = diffFields(recap.inputs, orderCanon);
@@ -1776,6 +1755,17 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
   const orderRef = `mcp:${orgSlug}:${idemHash.slice(0, 16)}`;
   const shipTo = shapeInputs.shipTo as Record<string, string>;
   const size = shapeInputs.size as "100mm-round" | "100mm-square";
+  // The destination: the order answer wins; otherwise the design's
+  // own entered URL (the artwork record's designUrl) carries in, as
+  // the recap confirmed it.
+  let effectiveDestination = shapeInputs.linkDestination as string | undefined;
+  if (!effectiveDestination && shapeInputs.artworkRef) {
+    const artRec = await readArtworkRecord(ctx.env, shapeInputs.artworkRef as string);
+    if (artRec?.designUrl) effectiveDestination = artRec.designUrl;
+  }
+  // The status capability: minted at placement, hash stored only.
+  const statusRef = randomToken(32);
+  const statusRefHash = await sha256Hex(statusRef);
 
   // The INVREQ payload, in the website invoice door's shape.
   const invreqBody: Record<string, unknown> = {
@@ -1795,9 +1785,7 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
       ...(shapeInputs.antiMetalCount !== undefined ? { antiMetal: shapeInputs.antiMetalCount } : {}),
       brandMode: "name",
       brandName: organizationName,
-      ...(((shapeInputs.linkDestination as string | undefined) ?? (shapeInputs.givingUrl as string | undefined))
-        ? { givingUrl: shapeInputs.linkDestination as string }
-        : {}),
+      ...(effectiveDestination ? { givingUrl: effectiveDestination } : {}),
     },
     shipTo,
     mcpOrderRef: orderRef,
@@ -1840,21 +1828,21 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
     size, mounting: shapeInputs.mounting as "adhesive" | "screws",
     ...(shapeInputs.antiMetalCount !== undefined ? { antiMetalCount: shapeInputs.antiMetalCount as number } : {}),
     shipTo,
-    ...((shapeInputs.linkDestination as string | undefined) ? { linkDestination: shapeInputs.linkDestination as string } : {}),
+    ...(effectiveDestination ? { linkDestination: effectiveDestination } : {}),
     ...((shapeInputs.artworkRef as string | undefined) ? { artworkRef: shapeInputs.artworkRef as string } : {}),
     ...(note ? { note } : {}),
     recapRef,
     invreqKey,
     quote,
+    statusRefHash,
     createdAt: new Date().toISOString(),
-    ...(auth ? {} : {
-      keylessBinding: {
-        contactEmail,
-        ...(intentGuess ? { intentRef: intentGuess.intentRef } : {}),
-      },
-    }),
+    keylessBinding: {
+      contactEmail,
+      ...(intentGuess ? { intentRef: intentGuess.intentRef } : {}),
+    },
   };
   await saveOrderRecord(ctx.env, order);
+  await ctx.env.MCP_KEYS.put(`STATUS:${statusRefHash}`, orderRef);
   await ctx.env.MCP_KEYS.put(`IDEM:${orgSlug}:${idemHash}`, JSON.stringify({
     payloadHash, orderRef, payload: canonicalOrderInputs(args), createdAt: order.createdAt,
   }));
@@ -1867,6 +1855,7 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
       rec.status = "claimed";
       rec.orderRef = orderRef;
       rec.orgSlug = orgSlug;
+      rec.claimedByEmail = contactEmail;
       await ctx.env.MCP_ARTWORK.put(artworkJsonKey(order.artworkRef), JSON.stringify(rec), { expirationTtl: ARTWORK_TTL });
       const seat = await callSeat(ctx.env, "recordArtworkSubmission", {
         artworkRef: order.artworkRef, sha256: rec.sha256, orderRef,
@@ -1880,8 +1869,7 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
     }
   }
 
-  if (auth) await touchKey(ctx.env.MCP_KEYS, auth);
-  return await createOrderResult(ctx, order, false);
+  return await createOrderResult(ctx, order, false, statusRef);
 }
 
 // P-16, effect 2: the full order emailed to Ryan through the
@@ -1938,13 +1926,127 @@ async function attemptOrderEmail(ctx: Ctx, order: OrderRecord): Promise<void> {
   await saveOrderRecord(ctx.env, order);
 }
 
-async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean): Promise<ToolResult> {
+const INVOICE_SEAT = "tap-mail /api/mcp-invoke (mintOrderInvoice)";
+const CUSTOMER_EMAIL_SEAT = "tap-mail /api/mcp-invoke (sendOrderInvoiceProof)";
+
+function orderTotals(order: OrderRecord): Record<string, unknown> {
+  return {
+    unitCents: order.quote.unitCents,
+    discsSubtotalCents: order.quote.discSubtotalCents,
+    shieldingCents: order.quote.addOnCents,
+    grandTotalCents: order.quote.grandTotalCents,
+    firstOrderTotalCents: order.quote.discountedTotalCents,
+    discountEligible: order.quote.discountEligible,
+  };
+}
+
+// Final-step chain, step 2: the invoice, minted and finalized inside
+// the seat at exactly the quoted total. A failure is recorded on the
+// order and stated as a partial state; a replay re-attempts only
+// this step and never re-mints a minted invoice.
+async function attemptInvoiceMint(ctx: Ctx, order: OrderRecord): Promise<void> {
+  const seat = await callSeat(ctx.env, "mintOrderInvoice", {
+    orderRef: order.orderRef,
+    mode: order.mode,
+    testLane: order.mode === "test",
+    organizationName: order.organizationName,
+    contactName: order.contactName,
+    contactEmail: order.contactEmail,
+    contactPhone: order.contactPhone,
+    quantity: order.quantity,
+    size: order.size,
+    mounting: order.mounting,
+    antiMetalCount: order.antiMetalCount ?? null,
+    linkDestination: order.linkDestination ?? null,
+    artworkRef: order.artworkRef ?? null,
+    shipTo: order.shipTo,
+    exit: order.exit,
+    totals: orderTotals(order),
+  }, ctx.fetchFn);
+  const inv = (seat.body.invoice ?? null) as Record<string, unknown> | null;
+  if (seat.ok && inv && typeof inv.id === "string") {
+    order.invoice = {
+      invoiceId: inv.id,
+      invoiceNumber: typeof inv.number === "string" ? inv.number : null,
+      status: typeof inv.status === "string" ? inv.status : "open",
+      hostedInvoiceUrl: String(inv.hostedInvoiceUrl ?? ""),
+      totalCents: Number(inv.totalCents ?? 0),
+      ...(typeof inv.invoicePdf === "string" ? { invoicePdf: inv.invoicePdf } : {}),
+      ...(typeof inv.finalizedAt === "string" ? { finalizedAt: inv.finalizedAt } : {}),
+      ...(inv.existing === true ? { existing: true } : {}),
+    };
+    order.invoiceAttempt = { ok: true, at: new Date().toISOString() };
+  } else {
+    const error = String(seat.body.error ?? `seat answered HTTP ${seat.status}`).slice(0, 200);
+    console.error(`[create_order] INVOICE MINT FAILED for ${order.orderRef} (record and team email stand): ${error}`);
+    order.invoiceAttempt = { ok: false, error, at: new Date().toISOString() };
+  }
+  await saveOrderRecord(ctx.env, order);
+}
+
+// Final-step chain, step 3: the customer email carrying the invoice
+// and the design proof. Test lane: suppressed by rule. No artwork:
+// the invoice still mints, this email does NOT fire, the state is
+// recorded as proof_pending, and the email fires later from the
+// business side's proof-hold machinery once the proof is published.
+async function attemptCustomerEmail(ctx: Ctx, order: OrderRecord, statusRefPlain?: string): Promise<void> {
+  if (order.mode === "test") {
+    order.customerEmail = { sent: false, suppressed: "test lane: customer email is never sent for a test placement", at: new Date().toISOString() };
+    await saveOrderRecord(ctx.env, order);
+    return;
+  }
+  if (!order.artworkRef) {
+    order.customerEmail = { sent: false, proofPending: true, at: new Date().toISOString() };
+    await saveOrderRecord(ctx.env, order);
+    return;
+  }
+  if (!order.invoice) return;
+  const seat = await callSeat(ctx.env, "sendOrderInvoiceProof", {
+    orderRef: order.orderRef,
+    organizationName: order.organizationName,
+    contactName: order.contactName,
+    contactEmail: order.contactEmail,
+    artworkRef: order.artworkRef,
+    proofUrl: `https://tap.giving/mcp/artwork/${order.artworkRef}.png`,
+    ...(statusRefPlain ? { statusRef: statusRefPlain } : {}),
+    invoice: {
+      id: order.invoice.invoiceId,
+      number: order.invoice.invoiceNumber,
+      hostedInvoiceUrl: order.invoice.hostedInvoiceUrl,
+      invoicePdf: order.invoice.invoicePdf ?? null,
+      totalCents: order.invoice.totalCents,
+    },
+  }, ctx.fetchFn);
+  if (seat.ok) {
+    const ref = typeof seat.body.messageId === "string" ? seat.body.messageId
+      : typeof seat.body.messageRef === "string" ? seat.body.messageRef : undefined;
+    order.customerEmail = { sent: true, ...(ref ? { messageRef: ref } : {}), at: new Date().toISOString() };
+  } else if (seat.body.proof_pending === true || seat.body.proofPending === true) {
+    order.customerEmail = { sent: false, proofPending: true, at: new Date().toISOString() };
+  } else {
+    const error = String(seat.body.error ?? `seat answered HTTP ${seat.status}`).slice(0, 200);
+    console.error(`[create_order] CUSTOMER EMAIL FAILED for ${order.orderRef} (invoice stands): ${error}`);
+    order.customerEmail = { sent: false, error, at: new Date().toISOString() };
+  }
+  await saveOrderRecord(ctx.env, order);
+}
+
+async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean, statusRefPlain?: string): Promise<ToolResult> {
+  // The final-step chain, in order: record (already durable), Ryan
+  // email, invoice, customer email. Each step's outcome is recorded
+  // on the order; a replay re-attempts only the missing steps.
   if (!order.orderEmail?.sent) {
     await attemptOrderEmail(ctx, order);
   }
+  if (!order.invoice) {
+    await attemptInvoiceMint(ctx, order);
+  }
+  if (order.invoice && !order.customerEmail) {
+    await attemptCustomerEmail(ctx, order, statusRefPlain);
+  }
   const quoteObj = quoteOutput(order.quote);
   // Visual standard: the order's own artwork rides the response
-  // where it renders (the on-disc preview of the submitted file).
+  // where it renders; otherwise the labeled product photo.
   let image: ToolResult["image"];
   if (order.artworkRef) {
     const rec = await readArtworkRecord(ctx.env, order.artworkRef);
@@ -1956,30 +2058,52 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
       }
     }
   }
+  if (!image) image = productPhotoImages()[0];
   const emailLine = order.orderEmail?.sent
     ? `The full order has been emailed to the Tap.Giving team${order.mode === "test" ? " (marked TEST, to the team's alert inboxes only)" : ""}, so the follow-up starts from the complete order.`
     : "The order record stands, but the email carrying the full order to the Tap.Giving team failed to send; the failure is logged on the order, and the team can still follow up from the durable record.";
+  const partialStates: string[] = [];
+  if (!order.orderEmail?.sent) partialStates.push("team_email_failed: the order record stands and the failure is recorded on it; a replay with the same idempotencyKey re-attempts only this email");
+  if (!order.invoice) partialStates.push("invoice_pending: the invoice was not minted (the seat error is recorded on the order); a replay with the same idempotencyKey re-attempts only the mint");
+  if (order.invoice && !order.customerEmail?.sent) {
+    if (order.customerEmail?.proofPending) partialStates.push("proof_pending: no artwork is attached to this order, so the customer email has not fired; it fires from the business side once the proof is published");
+    else if (order.customerEmail?.suppressed) partialStates.push("customer_email_suppressed: test lane placements never email the customer");
+    else if (order.customerEmail) partialStates.push("customer_email_failed: the invoice stands and the failure is recorded on the order; a replay with the same idempotencyKey re-attempts only this email");
+  }
   const structured: Record<string, unknown> = {
     orderRef: order.orderRef,
     ...(replayed ? { replayed: true, note: "This idempotencyKey already created this order; the original orderRef is returned and no second order was written." } : {}),
+    ...(statusRefPlain
+      ? { statusRef: statusRefPlain, statusRefNote: "Your status reference: shown once, here and in the customer email. Keep it with the order confirmation; it cannot be recovered if lost. get_order_status reads the order with it, and nothing else can." }
+      : { statusRefNote: "The status reference was shown once at placement and cannot be recovered; it is not stored in recoverable form." }),
     invreqKey: order.invreqKey,
     quote: quoteObj,
     exit: order.exit,
-    confirmation: "Your order is placed, and a person from Tap.Giving will follow up with your invoice.",
+    confirmation: confirmationText(order.contactEmail),
     orderEmail: order.orderEmail ?? { sent: false, seat: ORDER_EMAIL_SEAT },
+    invoice: order.invoice
+      ? { id: order.invoice.invoiceId, number: order.invoice.invoiceNumber, status: order.invoice.status, hostedInvoiceUrl: order.invoice.hostedInvoiceUrl, totalCents: order.invoice.totalCents, ...(order.invoice.finalizedAt ? { finalizedAt: order.invoice.finalizedAt } : {}) }
+      : null,
+    customerEmail: order.customerEmail ?? { sent: false },
+    ...(partialStates.length ? { partialStates } : {}),
     crmExpectation: order.mode === "test"
-      ? "Test mode: this order record stays in the test lane and does NOT enter the production CRM or fulfillment. The order email is marked TEST and goes only to the team's alert inboxes. Only the contact capture in start_order_intent touches the real lead list."
+      ? "Test lane: this order record stays in the test lane and does NOT enter the production CRM or fulfillment. The order email is marked TEST and goes only to the team's alert inboxes. Only the contact capture in start_order_intent touches the real lead list."
       : "The business record appears within about an hour under the organization's name, at stage \"ready\", " +
         "through the same process that handles website invoice requests. Source is distinguishable as the MCP; nothing else differs.",
     nextStep: order.exit === "pay_now"
-      ? "The order is placed. A person from Tap.Giving follows up with the invoice for this order; the person pays it when it arrives."
-      : "The order is placed. A person from Tap.Giving follows up with the invoice for this order, for the person to pay when they choose. A person approves the final proof by email before anything is printed.",
+      ? "The order is placed and the invoice and design proof are on their way to the contact email. The person pays the hosted invoice when it arrives; production waits for the proof approval by email."
+      : "The order is placed and the invoice and design proof are on their way to the contact email, for the person to pay when they choose. A person approves the final proof by email before anything is printed.",
   };
   const text = [
     `Order placed: ${order.orderRef}.`,
+    confirmationText(order.contactEmail),
     `Total: ${dollars(order.quote.grandTotalCents)} for ${order.quantity} discs. Shipping: Free.`,
     emailLine,
-    `Your order is in. The final proof comes by email to ${order.contactEmail}; production waits for that approval, and nothing else is needed from you now.`,
+    order.invoice
+      ? `Invoice ${order.invoice.invoiceNumber ?? order.invoice.invoiceId}: ${dollars(order.invoice.totalCents)}, payable on its hosted page: ${order.invoice.hostedInvoiceUrl}`
+      : "Invoice: not minted yet; the failure is recorded on the order and a replay re-attempts only the mint.",
+    ...(statusRefPlain ? [`Status reference (shown once; it cannot be recovered): ${statusRefPlain}`] : []),
+    ...(partialStates.length ? partialStates.map((p) => `Partial state: ${p}.`) : []),
     structured.nextStep as string,
   ].join("\n");
   return { structured, text, image };
@@ -1988,39 +2112,19 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
 // ─── get_order_status ───────────────────────────────────────────────
 
 async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
-  const auth = requireKey(ctx.auth);
-  const orderRef = optString(args, "orderRef", 160);
-  const invoiceId = optString(args, "invoiceId", 80);
-  let order: OrderRecord | null = null;
-  if (orderRef) {
-    order = await readOrderRecord(ctx.env, orderRef);
-    if (!order || order.orgSlug !== auth.record.orgSlug || order.mode !== auth.record.mode) {
-      throw new ToolError("not_found", `orderRef ${orderRef} is not an order this key's organization created.`);
-    }
-  } else if (invoiceId) {
-    // Resolve an invoice id to this org's order through Stripe, then
-    // the MCP's own order records.
-    const key = stripeKeyFor(ctx.env, auth.record.mode);
-    let inv: any;
-    try {
-      inv = await stripeCall(key, "GET", `/invoices/${invoiceId}`, undefined, undefined, ctx.fetchFn);
-    } catch {
-      throw new ToolError("not_found", `invoiceId ${invoiceId} is not an invoice this server can read for this key's mode.`);
-    }
-    const ref = inv?.metadata?.mcp_order_ref as string | undefined;
-    if (ref) {
-      const byRef = await readOrderRecord(ctx.env, ref);
-      if (byRef && byRef.orgSlug === auth.record.orgSlug) order = byRef;
-    }
-    if (!order) {
-      const structured: Record<string, unknown> = {
-        invoice: { id: invoiceId, status: inv.status, hostedInvoiceUrl: inv.hosted_invoice_url ?? null, totalCents: inv.total ?? null },
-        note: "This invoice was not created through this server for this organization, so no order record joins it here.",
-      };
-      return { structured, text: `Invoice ${invoiceId}: status ${inv.status}.` };
-    }
-  } else {
-    throw invalidInput("Give orderRef or invoiceId.");
+  // The capability read (step 8): the status reference is the only
+  // credential. Only its SHA-256 hash is stored; an unknown
+  // reference answers not_found, indistinguishable from any other
+  // unknown reference, and there is no enumeration surface.
+  const statusRef = optString(args, "statusRef", 200);
+  if (!statusRef) {
+    throw invalidInput("Give the statusRef create_order returned at placement. It is shown once, at placement and in the customer email, and cannot be recovered.");
+  }
+  const hash = await sha256Hex(statusRef);
+  const orderRef = await ctx.env.MCP_KEYS.get(`STATUS:${hash}`);
+  const order = orderRef ? await readOrderRecord(ctx.env, orderRef) : null;
+  if (!order || order.statusRefHash !== hash) {
+    throw new ToolError("not_found", "That status reference is not one this server knows.");
   }
 
   // Live invoice state from Stripe, when an invoice exists.
@@ -2031,13 +2135,15 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
       hostedInvoiceUrl: order.invoice.hostedInvoiceUrl,
       invoiceId: order.invoice.invoiceId,
       invoiceNumber: order.invoice.invoiceNumber,
+      totalCents: order.invoice.totalCents,
     };
     try {
-      const key = stripeKeyFor(ctx.env, auth.record.mode);
+      const key = stripeKeyFor(ctx.env, order.mode);
       const inv = await stripeCall(key, "GET", `/invoices/${order.invoice.invoiceId}`, undefined, undefined, ctx.fetchFn);
       invoiceState = {
-        status: inv.status, hostedInvoiceUrl: inv.hosted_invoice_url ?? order.invoice.hostedInvoiceUrl,
-        invoiceId: inv.id, invoiceNumber: inv.number ?? order.invoice.invoiceNumber,
+        status: inv.status ?? order.invoice.status, hostedInvoiceUrl: inv.hosted_invoice_url ?? order.invoice.hostedInvoiceUrl,
+        invoiceId: inv.id ?? order.invoice.invoiceId, invoiceNumber: inv.number ?? order.invoice.invoiceNumber,
+        totalCents: inv.total ?? order.invoice.totalCents,
       };
       if (inv.status !== order.invoice.status) {
         order.invoice.status = inv.status;
@@ -2046,9 +2152,9 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
     } catch { /* the recorded state stands when Stripe is unreachable */ }
   }
 
-  // Business records through the invocation seat (CRM row,
-  // fulfillment). The pre-decided fallback (spec 5.3): on any seat
-  // failure, answer from the MCP's own records plus Stripe.
+  // Business records through the invocation seat: the stage and the
+  // fulfillment state only. The tightened exposure set returns no
+  // CRM row, no shipping phone, and no internal record ids.
   const seat = await callSeat(ctx.env, "readOrderRecords", {
     orgSlug: order.orgSlug,
     contactEmail: order.contactEmail,
@@ -2058,11 +2164,17 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
 
   let stage: string;
   let fulfillment: Record<string, unknown> | null = null;
-  let crmRow: Record<string, unknown> | null = null;
   if (seat.ok && seat.body.found) {
-    crmRow = seat.body.crmRow as Record<string, unknown>;
-    stage = String(crmRow.status ?? "ready");
-    fulfillment = (seat.body.fulfillment as Record<string, unknown> | null) ?? null;
+    const crmRow = seat.body.crmRow as Record<string, unknown> | undefined;
+    stage = String(crmRow?.status ?? "ready");
+    const f = (seat.body.fulfillment as Record<string, unknown> | null) ?? null;
+    if (f) {
+      fulfillment = {
+        status: f.status ?? null,
+        ...(f.tracking ? { tracking: f.tracking } : {}),
+        ...(f.carrier ? { carrier: f.carrier } : {}),
+      };
+    }
   } else {
     stage = "received";
   }
@@ -2077,18 +2189,14 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
       username: order.orgSlug,
       note: "Your discs open your Tap.Giving address above. Sign in to the Redirect Dashboard at the login URL with that address's name as the username; your password arrives by email with your shipping notice.",
     },
-    ...(crmRow ? { crm: crmRow } : {}),
     fulfillment: fulfillment ?? { status: null, note: "No fulfillment record yet: fulfillment begins after payment and proof approval, both human steps." },
     invoice: invoiceState,
     design: order.artworkRef ? { artworkRef: order.artworkRef } : { state: "not-attached" },
     exit: order.exit,
     quantity: order.quantity,
+    size: order.size,
+    mounting: order.mounting,
   };
-  // Visual standard: surface the order's own artwork, labeled for
-  // what it is. The server stores no proof image (the final proof is
-  // emailed and lives in email), so what can be shown is the
-  // submitted artwork rendered on the disc, labeled as such. An
-  // order with no renderable artwork returns without an image.
   let image: ToolResult["image"];
   if (order.artworkRef) {
     const rec = await readArtworkRecord(ctx.env, order.artworkRef);
@@ -2104,68 +2212,15 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
       }
     }
   }
+  if (!image) image = productPhotoImages()[0];
   const text = [
     `Order ${order.orderRef}: stage ${stage}.`,
-    invoiceState ? `Invoice ${invoiceState.invoiceNumber ?? invoiceState.invoiceId}: ${invoiceState.status}. ${invoiceState.hostedInvoiceUrl}` : "No invoice on this server: a person from Tap.Giving follows up with the invoice by email.",
-    ...(order.invoice?.existing && order.invoice.existingOrderRef && order.invoice.existingOrderRef !== order.orderRef ? [`Note: invoice ${order.invoice.invoiceNumber ?? order.invoice.invoiceId} was already open from order ${order.invoice.existingOrderRef}; this order is not invoiced separately.${order.invoice.existingDifferingFields?.length ? ` ${differingFieldsSentence(order.invoice.existingDifferingFields)}` : ""}`] : []),
-    ...(image ? ["The image with this answer is your submitted artwork on the disc (a preview render, not the proof). The final proof arrives by email for approval."] : []),
+    invoiceState ? `Invoice ${invoiceState.invoiceNumber ?? invoiceState.invoiceId}: ${invoiceState.status}. Pay it on its hosted page: ${invoiceState.hostedInvoiceUrl}` : "Invoice: not minted yet; the order record carries the mint state, and the team follows up from the record.",
+    ...((structured.design as Record<string, unknown>).imageLabel ? ["The image with this answer is your submitted artwork on the disc (a preview render, not the proof). The final proof arrives by email for approval."] : ["The photo with this answer shows the disc in use: a phone tapping a disc on a chair back."]),
     fulfillment ? `Fulfillment: ${fulfillment.status}${fulfillment.tracking ? `, tracking ${fulfillment.tracking} (${fulfillment.carrier})` : ""}.` : "Fulfillment has not begun (it starts after payment and proof approval).",
     `Your discs open https://go.tap.giving/${order.orgSlug}. Redirect Dashboard: sign in at https://tap.giving/login with username ${order.orgSlug}; your password arrives by email with your shipping notice.`,
   ].join("\n");
   return { structured, text, image };
-}
-
-// ─── register_webhook ───────────────────────────────────────────────
-
-async function toolRegisterWebhook(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
-  const auth = requireKey(ctx.auth);
-  const callbackUrl = reqString(args, "callbackUrl", 500);
-  let url: URL;
-  try { url = new URL(callbackUrl); } catch { throw invalidInput("callbackUrl must be a valid URL."); }
-  if (url.protocol !== "https:") throw invalidInput("callbackUrl must be https.");
-  const eventsRaw = args.events;
-  if (!Array.isArray(eventsRaw) || eventsRaw.length === 0) {
-    throw invalidInput("events must be a non-empty array, a subset of: proof_ready, shipped.");
-  }
-  const events = eventsRaw.map((e) => String(e));
-  for (const e of events) {
-    if (e !== "proof_ready" && e !== "shipped") {
-      throw invalidInput(`Unknown event "${e}". Events: proof_ready, shipped.`);
-    }
-  }
-  const secret = `whsec_${(await sha256Hex(`${auth.record.orgSlug}:${Date.now()}:${Math.random()}`)).slice(0, 40)}`;
-  const subscription = {
-    orgSlug: auth.record.orgSlug,
-    callbackUrl,
-    events,
-    secret,
-    createdAt: new Date().toISOString(),
-    delivery: "pending",
-  };
-  await ctx.env.MCP_KEYS.put(`WEBHOOK:${auth.record.orgSlug}`, JSON.stringify(subscription));
-  await touchKey(ctx.env.MCP_KEYS, auth);
-  const structured: Record<string, unknown> = {
-    registered: true,
-    callbackUrl,
-    events,
-    subscriptionSecret: secret,
-    secretNote: "Shown once, here. Verify deliveries with it: X-TapGiving-Signature is the hex HMAC SHA-256 of the raw body under this secret.",
-    payloadContract: {
-      body: "{event, orderRef, orgSlug, occurredAt, status, detail}",
-      headers: ["X-TapGiving-Event", "X-TapGiving-Signature"],
-      detail: "proof_ready carries {proofByEmailTo}; shipped carries {carrier, trackingNumber} where the status record has them.",
-    },
-    delivery: "pending",
-    deliveryNote:
-      "Registration is live in v1; DELIVERY is pending (named v1.1): the emitters live behind business-side state, so no push fires yet. " +
-      "Until delivery lands, get_order_status is the state read. Nothing about this registration implies live push.",
-  };
-  const text = [
-    `Webhook registered for ${auth.record.orgSlug}: ${events.join(", ")} to ${callbackUrl}.`,
-    `Subscription secret (shown once): ${secret}`,
-    "Delivery is pending in v1 (it lands in v1.1); use get_order_status for state until then.",
-  ].join("\n");
-  return { structured, text };
 }
 
 // ─── registry ───────────────────────────────────────────────────────
@@ -2186,8 +2241,8 @@ export const TOOLS: ToolDef[] = [
     name: "get_discovery",
     description:
       "Start here, with the design tool. One call orients a cold agent: the builder's introduction (NFC Tap Builder by Tap.Giving), what the tool does (print-ready NFC tap artwork proofs from the published spec and design directions, yours to take to any printer), the product in plain words, " +
-      "the first choice (shape: round or square), the artwork spec summary, the per-disc price range, and the full capability list with the human gates. Ordering is the optional step after the design path. " +
-      "and get_order_questions when the questions are next (it needs no key). Discovery states the key scope up front: placing an order never requires a key; a key is optional and organization-bound, for order status and webhook registration. " +
+      "the first choice (shape: round or square), the artwork spec summary, and the full capability list with the human gates. Ordering is the optional step after the design path. " +
+      "Discovery states the access model up front: no account, key, or login at any point; order status is read with the status reference returned at placement. " +
       "The optional intent argument is echoed back as guidance; a disc count in it points at get_quote for the binding total at that count. " + GATES.payment,
     inputSchema: { type: "object", properties: { intent: { type: "string", description: "Optional free-text description of what the person wants (for example an organization type and a rough disc count). It is echoed back as guidance; a disc count in it points at get_quote for the binding total at that count." } } },
     annotations: READ,
@@ -2198,7 +2253,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "The binding quote for a prospective order (also known as get_pricing): quantity, tier, list totals as the headline, and one payable first-order total with the first-order discount scope and its 7-day renewing window explained in plain words. " +
       "add-ons, free shipping as its own line, the exact grand total, and the turnaround (2 to 3 weeks from artwork approval). No tax line: " + TAX_NOTE + " " +
-      "Quantities below the 100-disc minimum are refused by this tool itself. No key needed. Call this when the person names a quantity and wants the exact price; for product facts without a quantity, call get_product instead. The next step after a quote is get_artwork_spec for the artwork, then start_order_intent.",
+      "Quantities below the 100-disc minimum are refused by this tool itself. Call this when the person names a quantity and wants the exact price; for product facts without a quantity, call get_product instead. The next step after a quote is get_order_questions; the artwork path is get_artwork_spec and submit_artwork.",
     inputSchema: {
       type: "object",
       required: ["quantity"],
@@ -2213,7 +2268,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_product",
     description:
-      "The full product facts, with no key needed. Disc pricing here is the per-disc range only; exact totals live in get_quote. Returns one block per topic: discs (the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, the 100 mm (4 inch) round and square built-ins; every other size is a manual exception), mounting (options and the metal caveat), stands and badges (table stands and lanyard badges, from the team by email, not ordered through this server), shipping (free; 2 to 3 weeks from artwork approval), samples (there is no sample program; the guarantee and the proof stand in for it), and ordering (tax-exempt, payment, reorder, and design help), plus the free Redirect Dashboard and the destination model: per-disc pointing, two destinations, dashboard sign-in timing, and phone compatibility with the printed-code fallback. " +
+      "The full product facts. Prices are stated in the order phase (get_order_questions, get_quote, get_recap), not here. Returns one block per topic: discs (the locked tap chip, 0.85 mm double-laminated matte waterproof PVC, the 100 mm (4 inch) round and square built-ins; every other size is a manual exception), mounting (options and the metal caveat), stands and badges (table stands and lanyard badges, from the team by email, not ordered through this server), shipping (free; 2 to 3 weeks from artwork approval), samples (there is no sample program; the guarantee and the proof stand in for it), and ordering (tax-exempt, payment, reorder, and design help), plus the free Redirect Dashboard and the destination model: per-disc pointing, two destinations, dashboard sign-in timing, and phone compatibility with the printed-code fallback. " +
       "Pass the optional topic argument to return only one block. Call this for product facts alone; for a first orientation call get_discovery, and for the price at a quantity call get_quote.",
     inputSchema: {
       type: "object",
@@ -2244,7 +2299,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "Send the finished artwork back and see it on the disc as a proof. The artwork stays the organization's own: print-ready and vendor-neutral, theirs to take to any printer; submitting it obliges no order. Intake is permissive by ruling: a real image is accepted in any format and rejected only on three sanity grounds " +
       "(malicious or masquerading content, over 5 MB decoded, or not decodable as the type it claims). Production fitness is judged later in the normal proof flow, never here. " +
-      "No key and no email are needed on the cold path; a keyed submission binds to the key's organization. The file argument carries the artwork file (filename, mediaType, contentBase64); sha256 is the hex SHA-256 of those file bytes; shape optionally names the shape the artwork was designed for; orderRef optionally attaches the submission to an existing order; logo optionally carries the source logo the artwork was built from; note is free text for the team. Each call creates a separate submission: resubmitting the same file mints a new artworkRef rather than replacing the earlier one. Returns the artworkRef every later step carries, a displayUrl, and a preview of the person's own design composited on the disc (cut shape applied) for the renderable formats (SVG, PNG, JPEG, WebP, GIF); for a format this server cannot render here (for example PDF), the answer says so plainly and never promises a preview or an email at this stage. " +
+      "No email is needed on the cold path. The optional designUrl argument records the destination the design was built for (mid-to-late design phase); the optional chosenExampleRef names the delivered example the design follows, and its reproduction data rides the answer beside the verify-against-example checklist. The file argument carries the artwork file (filename, mediaType, contentBase64); sha256 is the hex SHA-256 of those file bytes; shape optionally names the shape the artwork was designed for; orderRef optionally attaches the submission to an existing order; logo optionally carries the source logo the artwork was built from; note is free text for the team. Each call creates a separate submission: resubmitting the same file mints a new artworkRef rather than replacing the earlier one. Returns the artworkRef every later step carries, a displayUrl, and a preview of the person's own design composited on the disc (cut shape applied) for the renderable formats (SVG, PNG, JPEG, WebP, GIF); for a format this server cannot render here (for example PDF), the answer says so plainly and never promises a preview or an email at this stage. " +
       GATES.designApproval,
     inputSchema: {
       type: "object",
@@ -2256,13 +2311,15 @@ export const TOOLS: ToolDef[] = [
         },
         sha256: { type: "string", description: "Hex SHA-256 of the file bytes." },
         shape: { type: "string", enum: ["round", "square"], description: "Optional: the shape the artwork was designed for; the on-disc preview uses its cut. Omit it and the preview shows both shapes." },
-        orderRef: { type: "string", description: "Optional: attach the submission to an order this key's organization already created (the orderRef create_order returned)." },
+        orderRef: { type: "string", description: "Optional: attach the submission to an order already created (the orderRef create_order returned)." },
         logo: {
           type: "object",
           properties: { filename: { type: "string" }, mediaType: { type: "string" }, contentBase64: { type: "string" } },
           description: "Optional source logo the artwork was built from; travels with the submission as source material.",
         },
         note: { type: "string", description: "Optional free-text note for the Tap.Giving team, carried with the submission." },
+        designUrl: { type: "string", description: "Optional: the URL the disc should open, entered in the design phase. The design QR code is a labeled mock built from it; production encodes the disc's Redirect Dashboard link to this same destination, and the recap confirms it." },
+        chosenExampleRef: { type: "string", description: "Optional: the delivered example this design follows (an example id or its pick-list number); its reproduction data rides the answer." },
       },
     },
     annotations: WRITE,
@@ -2292,8 +2349,8 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_order_questions",
     description:
-      "The order questions as structured data, returned in the exact order to ask them. The questions cover every field create_order requires: shape, quantity, metal count, and mounting with the picture assets. Then the link destination. Then contact name, email, and phone. The shipping address comes last. " +
-      "When the call carries a key, the result also returns the key's own organization block: the organization name and the contact email orders must use; without a key, no organization block is returned. The journey captures the contact email before this step, through start_order_intent. No key needed. Call this when the person is ready to order; for a first orientation, call get_discovery.",
+      "The order questions as structured data, returned in the exact order to ask them: the contact email first (captured through start_order_intent), then the organization name, the shipping address and phone, quantity, shape, the metal count, mounting with the picture assets, and the link destination as a confirmation of the destination carried from the design. The contact name and phone ride create_order. " +
+      "Prices are first stated here, in the order phase: the price range and the no-fees line ride this answer. Call this when the person is ready to order; for a first orientation, call get_discovery.",
     inputSchema: { type: "object", properties: {} },
     annotations: READ,
     run: toolGetOrderQuestions,
@@ -2331,11 +2388,11 @@ export const TOOLS: ToolDef[] = [
   {
     name: "create_order",
     description:
-      "Set up an order through the same front door a website order takes (an INVREQ record the hourly adoption resolves into the CRM, indistinguishable downstream). No key needed. " +
+      "The final step of the order path, labeled \"Email me my invoice and design proof.\" Set up an order through the same front door a website order takes (an INVREQ record the hourly adoption resolves into the CRM, indistinguishable downstream). " +
       "This is the lock-in write behind both recap exits; it carries the recapRef and a required idempotencyKey (a retry with the same key and payload returns the original orderRef; the same key with a different payload is a conflict naming the differing fields). " +
       "The 100-disc minimum is enforced here. Sizes other than the two built-ins return manual_exception. Returns the orderRef (the reference every later call uses), the exact quote, the chosen exit, and the next step. " +
       "Failure modes: a recap whose inputs differ from the order is refused as a conflict naming the differing fields; a reused idempotencyKey with a different payload is a conflict naming the original order. " +
-      "Routing: start_order_intent is the earlier keyless contact capture, and get_recap must run immediately before this call over the same inputs. Placing the order records it and emails the full order to the Tap.Giving team; the response confirms both, and a person from Tap.Giving follows up with the invoice. " + GATES.designApproval + " " + GATES.payment,
+      "Routing: start_order_intent is the earlier contact capture, and get_recap must run immediately before this call over the same inputs. Placing the order records it, emails the full order to the Tap.Giving team, creates the invoice at the quoted total, and emails the invoice and the design proof to the contact; the response carries each step's outcome, the settled confirmation text, and the order's status reference (shown once; it cannot be recovered). A replay with the same idempotencyKey re-attempts only the steps that did not complete. " + GATES.designApproval + " " + GATES.payment,
     inputSchema: {
       type: "object",
       required: ["contactName", "contactEmail", "contactPhone", "quantity", "size", "mounting", "shipTo", "recapRef", "idempotencyKey"],
@@ -2369,32 +2426,15 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_order_status",
     description:
-      "Where an order stands, from the records fulfillment reads: the CRM stage, the fulfillment state with tracking when present, and the invoice state with its hosted link. " +
-      "An order not yet adopted returns stage \"received\" with the adoption expectation, not an error. Key required; only the key's own organization's orders. " +
-      "Give exactly one identifier: orderRef (the reference create_order returned; the usual key for an order) or invoiceId (a Stripe invoice id, when an invoice exists and is the identifier you hold). " +
-      "Call this to check an existing order; it never changes anything. Use get_recap before an order exists and get_order_questions to gather an order's inputs.",
+      "Where an order stands, read with the order's status reference: the capability create_order returned once at placement (also carried in the customer email). No account or login exists; the reference itself is the credential, and an unknown reference answers not_found. Returns the tightened exposure set: the stage, the fulfillment state with tracking when present, the invoice state with its hosted link, the quantity, shape, and mounting, the order's own artwork preview, and the Redirect Dashboard block. It never returns the full business record, a shipping phone, or internal record ids. " +
+      "An order not yet adopted returns stage \"received\" with the adoption expectation, not an error. Call this to check an existing order; it never changes anything. Use get_recap before an order exists and get_order_questions to gather an order's inputs.",
     inputSchema: {
       type: "object",
-      properties: { orderRef: { type: "string", description: "The order reference create_order returned (begins with mcp:). The usual identifier; give this or invoiceId, not both." }, invoiceId: { type: "string", description: "A Stripe invoice id, when an invoice exists for the order. Use it when the invoice is the identifier you hold." } },
+      required: ["statusRef"],
+      properties: { statusRef: { type: "string", description: "The status reference create_order returned at placement. Shown once; it cannot be recovered if lost." } },
     },
     annotations: READ,
     run: toolGetOrderStatus,
-  },
-  {
-    name: "register_webhook",
-    description:
-      "Developer tool, optional: register (or replace) the organization's one webhook subscription for proof_ready and shipped events. Most organizations never need this; order status is read with get_order_status. The subscription secret is shown once, here. " +
-      "Registration is live in v1; delivery is pending and lands in v1.1, so until then get_order_status is the state read. Nothing about registration implies live push. Key required.",
-    inputSchema: {
-      type: "object",
-      required: ["callbackUrl", "events"],
-      properties: {
-        callbackUrl: { type: "string", description: "The https URL deliveries will POST to. It must be publicly reachable (no localhost or private addresses) and answer with a 2xx status; verify deliveries with the subscription secret shown once in the result (deliveries are signed with it). Failed deliveries are retried with backoff." },
-        events: { type: "array", items: { type: "string", enum: ["proof_ready", "shipped"] } },
-      },
-    },
-    annotations: WRITE,
-    run: toolRegisterWebhook,
   },
 ];
 
@@ -2402,15 +2442,8 @@ export function toolByName(name: string): ToolDef | undefined {
   return TOOLS.find((t) => t.name === name);
 }
 
-const WRITE_TOOLS = new Set(["submit_artwork", "start_order_intent", "create_order", "register_webhook"]);
-// P-15: the TEST MODE banner fires on the tools whose KEYED calls
-// bind the test organization (get_recap, get_order_status,
-// create_order, register_webhook). A keyless call binds nothing, so
-// it never carries the banner: the condition below also requires an
-// authenticated key, which is exactly the CEO's 2026-11-08
-// ratification logic for the keyless tier.
-const TEST_BANNER_TOOLS = new Set(["get_recap", "get_order_status", "create_order", "register_webhook"]);
-export const TEST_MODE_LINE = "TEST MODE: this call uses a test key, so no real order is placed and no charge is made.";
+const WRITE_TOOLS = new Set(["submit_artwork", "start_order_intent", "create_order"]);
+export { WRITE_TOOLS };
 
 export async function runTool(
   env: Env, request: Request, name: string, args: Record<string, unknown>,
@@ -2421,13 +2454,9 @@ export async function runTool(
 ): Promise<ToolResult> {
   const def = toolByName(name);
   if (!def) throw new ToolError("not_found", `Unknown tool: ${name}.`);
-  const auth = await authenticate(env.MCP_KEYS, request);
-  const ctx: Ctx = { env, request, auth, fetchFn };
-  const result = await def.run(ctx, args);
-  // With a test key, every write's text opens by saying so (F19), so a
-  // first user can never mistake a test order for a real one.
-  if (auth && auth.record.mode === "test" && TEST_BANNER_TOOLS.has(name)) {
-    result.text = `${TEST_MODE_LINE}\n${result.text}`;
-  }
-  return result;
+  // No keys anywhere: no credential is read, required, or honored on
+  // any call. An Authorization header, if a client sends one, is
+  // ignored identically.
+  const ctx: Ctx = { env, request, fetchFn };
+  return await def.run(ctx, args);
 }
