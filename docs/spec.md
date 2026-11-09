@@ -1361,8 +1361,8 @@ Marketing condition sets).
   {captured: true, nextStep} where nextStep tells the agent, in plain
   words, that a person at Tap.Giving now has the contact, and that
   completing an order needs an organization API key (how a human gets
-  one: by asking Ryan at ryan@tap.giving, until a later phase makes
-  issuance self-serve). An intent is a lead, with a lead's semantics:
+  one: by emailing the Tap.Giving team at hello@tap.giving, which replies
+  with the key within one business day; there is no self-serve issuance). An intent is a lead, with a lead's semantics:
   it is not an order, creates no invoice, and reserves nothing.
 - Abuse shape: an unauthenticated email capture is exactly the surface
   the website already exposes publicly; the MCP adds no new class of

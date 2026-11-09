@@ -113,9 +113,9 @@ Add-on to settle before printing: discs that go on metal surfaces need a shieldi
 
 ## Keys
 
-An organization API key looks like `tg_live_<orgslug>_<secret>` (or `tg_test_...` for the test seat) and is sent as `Authorization: Bearer <key>`. Only the SHA-256 hash of a key is stored.
+An organization API key looks like `tg_live_<orgslug>_<secret>`; a test key looks like `tg_test_<orgslug>_<secret>`. Keys are sent as `Authorization: Bearer <key>`. Only the SHA-256 hash of a key is stored.
 
-To get a key: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. If a request needs a person outside the tools, the human route is Ryan, the founder, at ryan@tap.giving.
+To get a key: email hello@tap.giving from the address you want on the order, say which organization the key is for, and the team replies with the key within one business day. Evaluating the server? A test key runs the full keyed journey with no real order and no charge. There is no self-serve signup: email hello@tap.giving and ask for a test key, and the team replies with one within one business day. If a request needs a person outside the tools, the human route is Ryan, the founder, at ryan@tap.giving.
 
 ## Human gates
 
