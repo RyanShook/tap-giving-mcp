@@ -72,12 +72,12 @@ test("product facts carry the for-agents strings", () => {
   assert.ok(PRODUCT.sizes.every((s) => s.label.includes("100 mm (4 inch)")));
 });
 
-test("the tool set is exactly the specced eleven (request_invoice retired by P-16)", () => {
+test("the tool set is exactly the specced ten (register_webhook retired 2026-11-09, request_invoice by P-16)", () => {
   const names = TOOLS.map((t) => t.name).sort();
   assert.deepEqual(names, [
     "create_order", "get_artwork_spec", "get_discovery", "get_order_questions",
     "get_order_status", "get_product", "get_quote", "get_recap",
-    "register_webhook", "start_order_intent", "submit_artwork",
+    "start_order_intent", "submit_artwork",
   ].sort());
 });
 
@@ -117,6 +117,16 @@ test("examples are the delivered proofs: one per delivered organization, round a
   for (const e of EXAMPLES_INDEX) {
     assert.ok(e.organization.length > 2, e.id);
     assert.ok(e.source.endsWith(".png") || e.source.endsWith(".svg"), e.id);
+    // The curated reproduction data (2026-11-09) rides every entry:
+    // authored from the actual delivered proofs, never guessed.
+    assert.ok(e.description.length > 10, `${e.id} description`);
+    assert.equal(e.size, "100 mm", `${e.id} size`);
+    assert.ok(Array.isArray(e.palette) && e.palette.length >= 2, `${e.id} palette entries`);
+    assert.ok(e.palette.some((p) => p.role === "background" && p.hex.startsWith("#")), `${e.id} palette background`);
+    assert.ok(e.palette.every((p) => /^#[0-9A-Fa-f]{6}$/.test(p.hex)), `${e.id} palette hexes are sRGB hex values`);
+    assert.ok(e.layout.length > 5, `${e.id} layout`);
+    assert.ok(e.iconTreatment.length > 3, `${e.id} icon treatment`);
+    assert.ok(e.logoSlot.maxWidthMm > 0 && e.logoSlot.maxHeightMm > 0, `${e.id} logo slot`);
   }
 });
 
@@ -132,8 +142,8 @@ test("photos are the labeled website set; pews3 is barred", () => {
   }
 });
 
-test("server description carries the no-fees line and the verbatim gate sentence", () => {
-  assert.ok(SERVER_DESCRIPTION.includes(NO_FEES_LINE), "no-fees statement in the server description");
-  assert.ok(SERVER_DESCRIPTION.includes("This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice."), "gate sentence verbatim in the server description");
+test("server description carries the settled protected string and no pricing lines", () => {
+  assert.ok(!SERVER_DESCRIPTION.includes(NO_FEES_LINE), "the no-fees line moved to get_order_questions; it is not in the server description");
+  assert.ok(SERVER_DESCRIPTION.includes("This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice."), "settled protected string verbatim in the server description");
   assert.equal(TAX_NOTE, "Tax, where it applies, is calculated on the invoice.");
 });

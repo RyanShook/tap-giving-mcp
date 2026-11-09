@@ -9,11 +9,10 @@ import { runTool, TOOLS } from "../src/tools.ts";
 import { setRasterizerForTests } from "../src/preview.ts";
 import { EXAMPLES_INDEX } from "../src/examples-data.ts";
 import { PHOTOS_INDEX } from "../src/photos-data.ts";
-import { BENEFITS, NO_FEES_LINE, TAX_NOTE } from "../src/facts.ts";
+import { BENEFITS, NO_FEES_LINE, PRICE_RANGE_LINE, TAX_NOTE } from "../src/facts.ts";
 import worker from "../src/index.ts";
-import { sha256Hex } from "../src/keys.ts";
+import { sha256Hex } from "../src/util.ts";
 import type { Env } from "../src/env.ts";
-import type { KeyRecord } from "../src/keys.ts";
 
 class MemoryKV {
   store = new Map<string, string>();
@@ -45,29 +44,16 @@ class MemoryKV {
   }
 }
 
-const TEST_KEY = `tg_test_mcp-acceptance-test-church_${"A".repeat(43)}`;
-const LIVE_KEY_WRONG_ORG = `tg_test_other-church_${"B".repeat(43)}`;
-
 async function makeEnv(): Promise<{ env: Env; keys: MemoryKV; artwork: MemoryKV }> {
   const keys = new MemoryKV();
   const artwork = new MemoryKV();
-  const now = new Date().toISOString();
-  const mk = async (key: string, slug: string, email: string, mode: "live" | "test") => {
-    const rec: KeyRecord = {
-      orgSlug: slug, orgName: slug, contactEmail: email, mode, scopes: ["orders"],
-      status: "active", createdAt: now, issuedTo: email, issuedBy: "test", issuedAt: now,
-    };
-    await keys.put(`KEYHASH:${await sha256Hex(key)}`, JSON.stringify(rec));
-  };
-  await mk(TEST_KEY, "mcp-acceptance-test-church", "mcp-acceptance@mcptest.org", "test");
-  await mk(LIVE_KEY_WRONG_ORG, "other-church", "other@example.com", "test");
   const env = {
     MCP_KEYS: keys as unknown as KVNamespace,
     MCP_ARTWORK: artwork as unknown as KVNamespace,
     ORDERS: new MemoryKV() as unknown as KVNamespace,
     DEV_ORDERS: new MemoryKV() as unknown as KVNamespace,
     STRIPE_API_KEY_TEST: "sk_test_stub",
-    MCP_INVOKE_SECRET: "<MASKED_SECRET_003>",
+    MCP_INVOKE_SECRET: "<redacted>",
   } as unknown as Env;
   return { env, keys, artwork };
 }
@@ -90,17 +76,6 @@ function req(key?: string): Request {
 }
 
 // A fetch stub: business doors record their calls; Stripe INVOKED
-// returns canned objects; everything else 404s.
-const LIVE_KEY = `tg_live_live-org-church_${"B".repeat(43)}`;
-async function seedLiveKey(keys: MemoryKV): Promise<void> {
-  const now = new Date().toISOString();
-  const rec: KeyRecord = {
-    orgSlug: "live-org-church", orgName: "live-org-church", contactEmail: "live@example.com",
-    mode: "live", scopes: ["orders"], status: "active", createdAt: now, issuedTo: "live@example.com", issuedBy: "test", issuedAt: now,
-  };
-  await keys.put(`KEYHASH:${await sha256Hex(LIVE_KEY)}`, JSON.stringify(rec));
-}
-
 function stubFetch(calls: Array<{ url: string; body?: string }>) {
   return async (input: unknown, init?: { method?: string; body?: string }): Promise<Response> => {
     const url = String((input as { url?: string })?.url ?? input);
@@ -111,6 +86,12 @@ function stubFetch(calls: Array<{ url: string; body?: string }>) {
       const parsed = JSON.parse(init?.body || "{}");
       if (parsed.op === "recordArtworkSubmission") return new Response(JSON.stringify({ ok: true, recordKey: "STEPCAP:1:x" }), { status: 200 });
       if (parsed.op === "notifyOrderPlaced") return new Response(JSON.stringify({ ok: true, messageId: "msg_stub_order_email" }), { status: 200 });
+      if (parsed.op === "mintOrderInvoice") {
+        const t = (parsed.input?.totals ?? {}) as Record<string, unknown>;
+        const totalCents = t.discountEligible === true ? t.firstOrderTotalCents : t.grandTotalCents;
+        return new Response(JSON.stringify({ ok: true, invoice: { id: "in_stub", number: "TEST-0001", status: "open", hostedInvoiceUrl: "https://invoice.stripe.com/i/stub", invoicePdf: "https://stripe.example/in_stub.pdf", totalCents, finalizedAt: "2026-11-09T12:00:00.000Z" } }), { status: 200 });
+      }
+      if (parsed.op === "sendOrderInvoiceProof") return new Response(JSON.stringify({ ok: true, messageId: "msg_stub_customer_email" }), { status: 200 });
       if (parsed.op === "readOrderRecords") return new Response(JSON.stringify({ ok: true, found: false, crmRow: null, fulfillment: null }), { status: 200 });
       return new Response(JSON.stringify({ ok: false }), { status: 400 });
     }
@@ -176,7 +157,7 @@ test("cold leg: discovery, quote, product, artwork spec need no key", async () =
   assert.ok(JSON.stringify(p.structured).includes("in seconds"), "dashboard changes-in-seconds claim present");
   assert.ok(JSON.stringify(d.structured).includes("30-day money-back guarantee"), "guarantee named in discovery");
   assert.ok(!JSON.stringify(d.structured).includes("WELCOME10"), "discount code absent from discovery (pricing rule 2026-11-08)");
-  assert.ok(!(d.structured.pricing as Record<string, unknown>).discount, "no discount field in discovery pricing");
+  assert.ok(!("pricing" in d.structured), "discovery carries no pricing block in the design phase");
   const a = await runTool(env, req(), "get_artwork_spec", { shape: "round" }, fetchFn);
   assert.equal((a.structured.examples as unknown[]).length, EXAMPLES_INDEX.filter((e) => e.shape === "round").length);
   assert.ok(JSON.stringify(a.structured).includes("5 MB"), "artwork spec states the 5 MB intake cap");
@@ -258,29 +239,27 @@ test("dedupe: a repeat call links a new artworkRef to the existing intent", asyn
   assert.equal(calls.filter((c) => c.url.includes("/api/lead")).length, 1, "still exactly one lead");
 });
 
-test("keyed journey: recap, create_order (idempotent, record plus order email), status", async () => {
+test("test-lane journey: recap, create_order (idempotent, record plus order email plus invoice mint), status by statusRef", async () => {
   const { env } = await makeEnv();
   const calls: Array<{ url: string; body?: string }> = [];
   const fetchFn = stubFetch(calls) as typeof fetch;
   const sha = await pngSha();
-  const art = await runTool(env, req(TEST_KEY), "submit_artwork", {
+  const art = await runTool(env, req(), "submit_artwork", {
     file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
   }, fetchFn);
   const artworkRef = art.structured.artworkRef as string;
 
   const recapArgs = {
     quantity: 250, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
-    artworkRef, contactEmail: "mcp-acceptance@mcptest.org",
+    artworkRef, contactEmail: "mcp-acceptance@mcptest.org", organizationName: "MCP Acceptance Test Church",
   };
-  const recap = await runTool(env, req(TEST_KEY), "get_recap", recapArgs, fetchFn);
+  const recap = await runTool(env, req(), "get_recap", recapArgs, fetchFn);
   assert.equal((recap.structured.cost as { grandTotalCents: number }).grandTotalCents, 100000);
   assert.deepEqual(recap.structured.notes, [
     "Shipping usually takes two to three weeks from artwork approval.",
     "We email you a final proof before anything is printed.",
   ]);
-  // F17/F18: the recap names the customer, the destination, the proof
-  // recipient, the sequence, and the conditional discount line.
-  assert.ok(recap.text.includes("coo") || recap.text.includes("mcp-acceptance@mcptest.org"), "recap names the contact");
+  assert.ok(recap.text.includes("mcp-acceptance@mcptest.org"), "recap names the contact");
   assert.ok(recap.text.includes("production waits until the final proof is approved by email"), "sequence sentence present");
   assert.ok(recap.text.includes("WELCOME10"), "conditional discount named in recap text");
   const recapRef = recap.structured.recapRef as string;
@@ -289,48 +268,68 @@ test("keyed journey: recap, create_order (idempotent, record plus order email), 
     ...recapArgs, contactName: "Test Pastor", contactPhone: "+17135550199",
     recapRef, exit: "pay_now", idempotencyKey: "acceptance-order-0001",
   };
-  const order = await runTool(env, req(TEST_KEY), "create_order", orderArgs, fetchFn);
+  const order = await runTool(env, req(), "create_order", orderArgs, fetchFn);
   const orderRef = order.structured.orderRef as string;
   assert.ok(orderRef.startsWith("mcp:mcp-acceptance-test-church:"));
-  // The test seat got the INVREQ-shaped record (DEV_ORDERS write).
+  // The test lane got the INVREQ-shaped record (DEV_ORDERS write).
   const devOrders = (env.DEV_ORDERS as unknown as MemoryKV).store;
   assert.equal([...devOrders.keys()].filter((k) => k.startsWith("INVREQ:")).length, 1);
 
   // Retry with the same key and payload returns the original, no second write.
-  const replay = await runTool(env, req(TEST_KEY), "create_order", orderArgs, fetchFn);
+  const replay = await runTool(env, req(), "create_order", orderArgs, fetchFn);
   assert.equal(replay.structured.orderRef, orderRef);
   assert.equal([...devOrders.keys()].filter((k) => k.startsWith("INVREQ:")).length, 1);
 
   // Same key, different payload: conflict naming the field.
   await assert.rejects(
-    () => runTool(env, req(TEST_KEY), "create_order", { ...orderArgs, quantity: 300 }, fetchFn),
+    () => runTool(env, req(), "create_order", { ...orderArgs, quantity: 300 }, fetchFn),
     /differing fields are: quantity/);
 
-  // P-16: placement is the record plus the full-order email. The
-  // response confirms both, and the seat saw the whole order.
-  assert.equal(order.structured.confirmation, "Your order is placed, and a person from Tap.Giving will follow up with your invoice.");
+  // The settled confirmation text, verbatim, with the contact email.
+  assert.equal(order.structured.confirmation, "Your order is placed, and your invoice and design proof are on their way to mcp-acceptance@mcptest.org. A person from Tap.Giving follows up from there; production waits for your proof approval, and the invoice is paid on its hosted page.");
   const emailState = order.structured.orderEmail as { sent: boolean; messageRef?: string };
   assert.equal(emailState.sent, true, "the order email is confirmed sent");
   assert.equal(emailState.messageRef, "msg_stub_order_email");
   const notifyCalls = calls.filter((c) => (c.body ?? "").includes("notifyOrderPlaced"));
   assert.equal(notifyCalls.length, 1, "exactly one order email for the placement");
   const notifyBody = JSON.parse(notifyCalls[0].body ?? "{}") as { input: Record<string, unknown> };
-  assert.equal(notifyBody.input.organizationName, "mcp-acceptance-test-church");
+  assert.equal(notifyBody.input.organizationName, "MCP Acceptance Test Church");
   assert.equal(notifyBody.input.contactEmail, "mcp-acceptance@mcptest.org");
   assert.equal(notifyBody.input.quantity, 250);
   assert.equal(notifyBody.input.testMode, true);
-  // The idempotent replay does not re-send the email.
   assert.equal(calls.filter((c) => (c.body ?? "").includes("notifyOrderPlaced")).length, 1, "replay does not re-send a sent email");
 
-  const status = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef }, fetchFn);
-  assert.equal(status.structured.stage, "received"); // seat says no CRM row yet
-  assert.equal(status.structured.invoice, null, "no server invoice exists under P-16 placement");
-  assert.ok(status.text.includes("a person from Tap.Giving follows up with the invoice by email"), "status states the human invoice follow-up");
+  // The final-step chain: the invoice minted through the seat, and
+  // the customer email suppressed by the test lane.
+  const mintCalls = calls.filter((c) => (c.body ?? "").includes("mintOrderInvoice"));
+  assert.equal(mintCalls.length, 1, "exactly one mint for the placement");
+  const mintBody = JSON.parse(mintCalls[0].body ?? "{}") as { input: Record<string, unknown> };
+  assert.equal(mintBody.input.testLane, true);
+  const invoice = order.structured.invoice as { id: string; totalCents: number } | null;
+  assert.ok(invoice, "the invoice is recorded on the order result");
+  assert.equal(invoice!.id, "in_stub");
+  const custEmail = order.structured.customerEmail as { sent: boolean; suppressed?: string };
+  assert.equal(custEmail.sent, false);
+  assert.ok((custEmail.suppressed ?? "").includes("test lane"), "test lane suppresses the customer email");
+  assert.equal(calls.filter((c) => (c.body ?? "").includes("sendOrderInvoiceProof")).length, 0, "no customer email seat call in the test lane");
 
-  // Another org's key reads not_found for this orderRef.
+  // Status by capability: the statusRef from placement reads the
+  // order; only its hash is stored; a fabricated reference and a
+  // garbage Authorization header both answer not_found identically.
+  const statusRef = order.structured.statusRef as string;
+  assert.ok(statusRef && statusRef.length >= 40, "the status reference is minted at placement");
+  const stored = [...(env.MCP_KEYS as unknown as MemoryKV).store.keys()].filter((k) => k.startsWith("STATUS:"));
+  assert.equal(stored.length, 1);
+  assert.ok(!stored[0].includes(statusRef), "the stored index key is the hash, never the plaintext");
+  const status = await runTool(env, req(), "get_order_status", { statusRef }, fetchFn);
+  assert.equal(status.structured.stage, "received"); // seat says no CRM row yet
+  assert.equal((status.structured.invoice as { invoiceId: string }).invoiceId, "in_stub");
   await assert.rejects(
-    () => runTool(env, req(LIVE_KEY_WRONG_ORG), "get_order_status", { orderRef }, fetchFn),
-    /not an order this key/);
+    () => runTool(env, req(), "get_order_status", { statusRef: "fabricated-reference-value" }, fetchFn),
+    (e: Error & { code?: string }) => e.code === "not_found");
+  await assert.rejects(
+    () => runTool(env, req("tg_test_whatever_garbage"), "get_order_status", { statusRef: "fabricated-reference-value" }, fetchFn),
+    (e: Error & { code?: string }) => e.code === "not_found");
 });
 
 test("create_order refuses below minimum, bad size is manual_exception, no recap is refused", async () => {
@@ -341,39 +340,31 @@ test("create_order refuses below minimum, bad size is manual_exception, no recap
     quantity: 250, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
     recapRef: "recap_missing", idempotencyKey: "acceptance-order-0002",
   };
-  await assert.rejects(() => runTool(env, req(TEST_KEY), "create_order", { ...base, quantity: 50 }, fetchFn), /minimum order is 100/);
-  await assert.rejects(() => runTool(env, req(TEST_KEY), "create_order", { ...base, size: "150mm-round" }, fetchFn),
+  await assert.rejects(() => runTool(env, req(), "create_order", { ...base, quantity: 50 }, fetchFn), /minimum order is 100/);
+  await assert.rejects(() => runTool(env, req(), "create_order", { ...base, size: "150mm-round" }, fetchFn),
     (e: Error & { code?: string }) => e.code === "manual_exception");
-  await assert.rejects(() => runTool(env, req(TEST_KEY), "create_order", base, fetchFn), /not a recap/);
-  // Email mismatch with the key's org: forbidden.
-  await assert.rejects(() => runTool(env, req(TEST_KEY), "create_order", { ...base, contactEmail: "someoneelse@example.com" }, fetchFn),
-    (e: Error & { code?: string }) => e.code === "forbidden");
+  await assert.rejects(() => runTool(env, req(), "create_order", base, fetchFn), /not a recap/);
 });
 
-test("register_webhook stores the subscription and says delivery is pending", async () => {
-  const { env, keys } = await makeEnv();
-  const r = await runTool(env, req(TEST_KEY), "register_webhook", {
-    callbackUrl: "https://example.com/hook", events: ["proof_ready", "shipped"],
-  }, stubFetch([]) as typeof fetch);
-  assert.equal(r.structured.delivery, "pending");
-  assert.ok(String(r.structured.subscriptionSecret).startsWith("whsec_"));
-  assert.ok(keys.store.has("WEBHOOK:mcp-acceptance-test-church"));
-  await assert.rejects(() => runTool(env, req(TEST_KEY), "register_webhook", {
-    callbackUrl: "http://example.com/hook", events: ["proof_ready"],
-  }, stubFetch([]) as typeof fetch), /https/);
-});
-
-test("keyed reads without a key are unauthorized; garbage keys are unauthorized", async () => {
-  // get_order_questions is keyless since the 2026-11-08 F3 amendment;
-  // the keyed reads (get_recap, get_order_status) carry this probe now.
-  // The full 12-tool enforcement matrix lives in
-  // test/discovery-key-honesty.test.ts.
+test("register_webhook no longer exists as a tool (retired from v1)", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
-  await assert.rejects(() => runTool(env, req(), "get_order_status", { orderRef: "mcp:none:probe" }, fetchFn),
-    (e: Error & { code?: string }) => e.code === "unauthorized");
-  await assert.rejects(() => runTool(env, req("tg_test_nope_short"), "get_order_status", { orderRef: "mcp:none:probe" }, fetchFn),
-    (e: Error & { code?: string }) => e.code === "unauthorized");
+  assert.equal(TOOLS.some((t) => t.name === "register_webhook"), false, "the tool is not registered");
+  assert.equal(TOOLS.length, 10, "the v1 surface is ten tools");
+  await assert.rejects(
+    () => runTool(env, req(), "register_webhook", { callbackUrl: "https://example.com/hook", events: ["proof_ready"] }, fetchFn),
+    (e: Error & { code?: string }) => e.code === "not_found");
+});
+
+test("no keys anywhere: every tool runs keyless, and a garbage Authorization header is ignored identically", async () => {
+  const { env } = await makeEnv();
+  const fetchFn = stubFetch([]) as typeof fetch;
+  await assert.rejects(() => runTool(env, req(), "get_order_status", {}, fetchFn), /statusRef/);
+  await assert.rejects(
+    () => runTool(env, req("tg_live_garbage_value"), "get_order_status", { statusRef: "nope" }, fetchFn),
+    (e: Error & { code?: string }) => e.code === "not_found");
+  const d = await runTool(env, req("Bearer nonsense"), "get_discovery", {}, fetchFn);
+  assert.ok(d.structured.server, "discovery answers identically with a garbage header");
 });
 
 // ─── request_invoice: retired by P-16 (2026-11-08) ─────────────────
@@ -386,7 +377,7 @@ test("request_invoice no longer exists as a tool", async () => {
   const fetchFn = stubFetch([]) as typeof fetch;
   assert.equal(TOOLS.some((t) => t.name === "request_invoice"), false, "the tool is not registered");
   await assert.rejects(
-    () => runTool(env, req(TEST_KEY), "request_invoice", { orderRef: "mcp:x:y", idempotencyKey: "gone-0001" }, fetchFn),
+    () => runTool(env, req(), "request_invoice", { orderRef: "mcp:x:y", idempotencyKey: "gone-0001" }, fetchFn),
     (e: unknown) => {
       assert.equal((e as { code?: string }).code, "not_found");
       return true;
@@ -404,12 +395,14 @@ test("get_artwork_spec: full delivered set in the structured index, bounded inli
     assert.ok(expected.length >= 2, "each shape carries several delivered examples");
     // The structured index carries the full set for the shape, in
     // index order, each with its display URL.
-    const exs = r.structured.examples as Array<{ id: string; organization: string; shape: string; displayUrl: string }>;
+    const exs = r.structured.examples as Array<{ id: string; organization: string; shape: string; displayUrl: string; description: string; size: string }>;
     assert.deepEqual(exs.map((e) => e.id), expected.map((e) => e.id));
     for (const [i, e] of exs.entries()) {
       assert.equal(e.organization, expected[i].organization);
       assert.equal(e.shape, shape);
       assert.ok(e.displayUrl.endsWith(`/mcp/examples/${e.id}.png`), "displayUrl intact");
+      assert.equal(e.description, expected[i].description, "curated description rides with the entry");
+      assert.equal(e.size, expected[i].size, "curated size rides with the entry");
     }
     // Inline images are bounded: the first 6 examples for the shape,
     // then the two mounting photos.
@@ -424,11 +417,15 @@ test("get_artwork_spec: full delivered set in the structured index, bounded inli
     }
     // Numbered pick list covers the inline subset, in order, one line
     // per shown image.
+    // Pick list: full-set numbering across the whole set, the
+    // brief's line format with the curated description and size.
+    const fullSet = EXAMPLES_INDEX;
     let lastIdx = -1;
-    for (const [i, e] of expected.slice(0, 6).entries()) {
-      const line = `${i + 1}. ${e.organization} (${e.shape}): the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`;
+    for (const e of expected.slice(0, 6)) {
+      const n = fullSet.findIndex((x) => x.id === e.id) + 1;
+      const line = `${n}. ${e.description}, ${e.shape}, ${e.size}: the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`;
       const idx = r.text.indexOf(line);
-      assert.ok(idx > lastIdx, `pick list entry ${i + 1} present and in order`);
+      assert.ok(idx > lastIdx, `pick list entry ${n} present and in order`);
       lastIdx = idx;
     }
     // Honest framing: real delivered designs, full count stated, an
@@ -480,51 +477,43 @@ test("GET self-description carries the connect guidance", async () => {
   assert.ok(text.includes('"type": "http"'), "http transport in the config block");
   assert.ok(text.includes('"url": "https://tap.giving/mcp"'), "endpoint in the config block");
   assert.ok(text.includes("claude mcp add --transport http tap-giving https://tap.giving/mcp"), "Claude Code one-liner present");
-  assert.ok(text.includes("and the order questions need no key"), "keyless-reads note present, order questions named");
+  assert.ok(text.includes("No account, key, or login at any point"), "no-credentials note present");
+  assert.ok(text.includes("This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice."), "settled protected string present");
+  assert.ok(!/tg_live_|tg_test_|API key/i.test(text), "no key framing anywhere in the GET text");
 });
 
-test("get_discovery: sectioned first presentation with the no-fees lead line", async () => {
+test("get_discovery: sectioned first presentation, design first, no pricing anywhere", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
   // Headed sections, in order. The design path ("How it works")
-  // now walks before the Why and Pricing sections (flow rule,
-  // Ryan 2026-11-08): tool first, selling last and light.
+  // walks before the Why section (flow rule, Ryan 2026-11-08), and
+  // phase one carries NO pricing section at all (2026-11-09 spec):
+  // pricing first appears at get_order_questions.
   let lastIdx = -1;
-  for (const h of ["What it is", "How it works: the design path first", "Why Tap.Giving", "Pricing", "Gates"]) {
+  for (const h of ["What it is", "How it works: the design path first", "Why Tap.Giving", "Gates"]) {
     const idx = d.text.indexOf(`\n${h}\n`);
     assert.ok(idx > lastIdx, `section heading present and in order: ${h}`);
     lastIdx = idx;
   }
-  // The Why section leads with the no-fees line, before the benefits
-  // bullets; all six benefits appear as bullets, unchanged.
+  assert.ok(!d.text.includes("Pricing"), "no Pricing section in discovery text");
+  assert.ok(!("pricing" in d.structured), "no structured pricing on discovery");
+  assert.ok(!d.text.includes(PRICE_RANGE_LINE) && !d.text.includes(NO_FEES_LINE), "neither pricing line appears in phase one");
+  assert.ok(!/\$\d/.test(d.text), "no dollar figure anywhere in discovery text");
+  assert.ok(!/minimum/i.test(d.text), "minimum not named anywhere in discovery text");
+  // All six benefits appear as bullets in the Why section.
   const whyIdx = d.text.indexOf("Why Tap.Giving");
-  const leadIdx = d.text.indexOf(NO_FEES_LINE, whyIdx);
-  assert.ok(leadIdx > whyIdx, "no-fees lead line sits inside the Why section");
   for (const b of BENEFITS) {
     const bi = d.text.indexOf(`- ${b}`);
-    assert.ok(bi > leadIdx, `benefit bullet present after the lead line: ${b}`);
+    assert.ok(bi > whyIdx, `benefit bullet present in the Why section: ${b}`);
   }
   assert.deepEqual(d.structured.capabilities && (d.structured.capabilities as { benefits: string[] }).benefits, BENEFITS, "structured benefits unchanged");
-  // Pricing is the range line only, in text AND structured
-  // content (Ryan 2026-11-07 for the text; extended to structured
-  // content 2026-11-08): no tiers, no minimum, no discount, no
-  // worked totals on this opening surface. The full guard is
-  // test/pricing-presentation.test.ts.
-  assert.ok(d.text.includes("Price range of $3.50 - $5.00 per disc depending on quantity."), "range line verbatim in discovery text");
-  assert.ok(!d.text.includes("100-199 discs at $5.00 each"), "tier list absent from discovery text");
-  assert.ok(!/minimum/i.test(d.text), "minimum not named anywhere in discovery text");
-  const pricing = d.structured.pricing as Record<string, unknown>;
-  assert.equal(pricing.range, "Price range of $3.50 - $5.00 per disc depending on quantity.", "structured pricing carries the range line");
-  assert.ok(!("tiers" in pricing) && !("minimumQuantity" in pricing) && !("discount" in pricing), "no tiers, minimum, or discount in structured pricing");
-  // Pricing still carries the guarantee and the new tax note.
   assert.ok(d.text.includes("30-day money-back guarantee"));
   assert.equal(TAX_NOTE, "Tax, where it applies, is calculated on the invoice.");
-  assert.ok(d.text.includes(TAX_NOTE), "new tax sentence present in discovery text");
-  // No affirmative checkout claim anywhere in the discovery text.
+  assert.ok(d.text.includes(TAX_NOTE), "tax sentence present in discovery text");
   assert.ok(!/checkout/i.test(d.text), "no checkout claim in discovery text");
-  // The payment gate sentence stands verbatim.
-  assert.ok(d.text.includes("This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice."), "gate sentence verbatim");
+  // The settled protected string stands verbatim in the Gates section.
+  assert.ok(d.text.includes("This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice."), "settled protected string verbatim");
   // How it works walks the design path first, ordering last and
   // framed as optional (flow rule, Ryan 2026-11-08).
   assert.ok(d.text.includes("Get the artwork spec and the design directions for that shape from get_artwork_spec."));
@@ -532,32 +521,32 @@ test("get_discovery: sectioned first presentation with the no-fees lead line", a
   const proofIdx = d.text.indexOf("see it on the disc as a proof");
   const orderIdx = d.text.indexOf("Optional, only if you want the discs made");
   assert.ok(orderIdx > proofIdx, "ordering step presented after the proof step, framed optional");
+  assert.ok(d.text.includes("Email me my invoice and design proof"), "the final step carries its settled label");
 });
 
 // ─── first-user round 1 fixes ─────────────────────────────────────
 
-test("F19: live-mode writes carry no TEST MODE line, test-mode reads neither", async () => {
-  const { env, keys } = await makeEnv();
-  await seedLiveKey(keys);
-  (env as unknown as Record<string, unknown>).STRIPE_API_KEY_LIVE = "sk_live_stub";
+test("no TEST MODE banner exists anywhere: writes and reads carry no test banner", async () => {
+  const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
-  const d = await runTool(env, req(TEST_KEY), "get_discovery", {}, fetchFn);
+  const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
   assert.ok(!d.text.startsWith("TEST MODE"), "reads are unprefixed");
+  assert.ok(!JSON.stringify(d.structured).includes("TEST MODE"), "no banner in structured content");
 });
 
 test("F3 + F1: discovery classifies reads honestly and carries the product photos", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
-  const caps = d.structured.capabilities as { readTools: string[]; keyedReadTools: string[] };
-  // P-15 (2026-11-08): the published classification presents
-  // placement as keyless ahead of the persona pass's enforcement
-  // change; the empirical split itself is asserted in
-  // test/discovery-key-honesty.test.ts, which that pass updates.
-  assert.deepEqual(caps.readTools, ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap"]);
-  assert.deepEqual(caps.keyedReadTools, ["get_order_status"]);
+  const caps = d.structured.capabilities as { readTools: string[]; writeTools: string[] };
+  // The no-keys classification (2026-11-09): every tool runs with no
+  // credential; the split itself is asserted in
+  // test/discovery-key-honesty.test.ts.
+  assert.deepEqual(caps.readTools, ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap", "get_order_status"]);
+  assert.deepEqual(caps.writeTools, ["submit_artwork", "start_order_intent", "create_order"]);
+  assert.ok(!("keyedReadTools" in caps) && !("howToGetAKey" in caps), "no keyed classification survives");
   assert.ok(d.images && d.images.length === 1, "discovery returns the product photo inline");
-  assert.ok(d.text.includes("Placing an order needs no key"));
+  assert.ok(d.text.includes("no account, key, or login"));
   assert.ok(!/ask Ryan/.test(d.text), "no first-name key ask in discovery text");
   const p = await runTool(env, req(), "get_product", {}, fetchFn);
   assert.ok(p.images && p.images.length === 1, "product returns the product photo inline");
@@ -611,12 +600,12 @@ test("F13/F16: an SVG submission returns its design on the disc; the recap embed
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 106"><rect width="106" height="106" fill="#1e4634"/><text x="53" y="55">CEDAR HOLLOW</text></svg>`;
     const svgB64 = Buffer.from(svg).toString("base64");
     const sha = await sha256HexBytes(new Uint8Array(Buffer.from(svg)));
-    const sub = await runTool(env, req(TEST_KEY), "submit_artwork", {
+    const sub = await runTool(env, req(), "submit_artwork", {
       file: { filename: "cedar.svg", mediaType: "image/svg+xml", contentBase64: svgB64 }, sha256: sha, shape: "round",
     }, fetchFn);
     assert.equal((sub.structured.preview as { kind: string }).kind, "on-disc");
     assert.ok(sub.images && sub.images.length === 1, "one disc render for the chosen shape");
-    const recap = await runTool(env, req(TEST_KEY), "get_recap", {
+    const recap = await runTool(env, req(), "get_recap", {
       quantity: 150, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
       artworkRef: sub.structured.artworkRef as string, contactEmail: "mcp-acceptance@mcptest.org",
       linkDestination: "https://give.example.com/cedar",
@@ -629,71 +618,76 @@ test("F13/F16: an SVG submission returns its design on the disc; the recap embed
   }
 });
 
-test("F4 + F15: order questions carry the whoami block and every required field; the forbidden error names the allowed email", async () => {
+test("order questions carry every field in the settled order, with the pricing block", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
-  const q = await runTool(env, req(TEST_KEY), "get_order_questions", {}, fetchFn);
-  const org = q.structured.organization as { name: string; contactEmail: string };
-  assert.equal(org.contactEmail, "mcp-acceptance@mcptest.org");
+  const q = await runTool(env, req(), "get_order_questions", {}, fetchFn);
+  // Ryan's settled collection order (2026-11-09): contactEmail,
+  // organizationName, shipTo (contactPhone inside the ship-to
+  // block), quantity, size, antiMetalCount, mounting,
+  // linkDestination as the confirmation entry, contactName.
   const fields = (q.structured.questions as Array<{ field: string }>).map((x) => x.field);
-  assert.deepEqual(fields, ["size", "quantity", "antiMetalCount", "mounting", "linkDestination", "contactName", "contactEmail", "contactPhone", "shipTo"]);
-  assert.ok(q.text.includes("never left going nowhere") || q.text.includes("never"), "blank destination default is stated");
-  await assert.rejects(
-    () => runTool(env, req(TEST_KEY), "get_recap", {
-      quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO, contactEmail: "pastor.dana@cedarhollow.example",
-    }, fetchFn),
-    (e: Error & { code?: string; details?: Record<string, unknown> }) => {
-      assert.equal(e.code, "forbidden");
-      assert.ok(/mcp-acceptance@mcptest\.org/.test(e.message), "the error names the allowed email");
-      assert.equal(e.details?.contactEmail, "mcp-acceptance@mcptest.org");
-      return true;
-    });
+  assert.deepEqual(fields, ["contactEmail", "organizationName", "shipTo", "quantity", "size", "antiMetalCount", "mounting", "linkDestination", "contactName"]);
+  const shipQ = (q.structured.questions as Array<{ field: string; question?: string; prompt?: string; note?: string }>).find((x) => x.field === "shipTo");
+  assert.ok(shipQ && /phone/i.test(`${shipQ.question ?? ""} ${shipQ.prompt ?? ""} ${shipQ.note ?? ""}`), "the ship-to block collects the phone");
+  const destQ = (q.structured.questions as Array<{ field: string; question?: string; confirmation?: boolean }>).find((x) => x.field === "linkDestination");
+  assert.ok(destQ && destQ.confirmation === true && /confirm/i.test(destQ.question ?? ""), "the destination is asked as a confirmation");
+  assert.ok(q.text.includes("never left going nowhere"), "blank destination default is stated");
+  // Pricing lives here and only here in the opening flow.
+  const pricing = q.structured.pricing as { range: string; noFees: string };
+  assert.equal(pricing.range, PRICE_RANGE_LINE);
+  assert.equal(pricing.noFees, NO_FEES_LINE);
+  assert.ok(q.text.includes(PRICE_RANGE_LINE) && q.text.includes(NO_FEES_LINE), "both pricing lines in the questions text");
 });
 
-test("F14: intent with a key skips the get-a-key line, returns intentRef, links artwork", async () => {
+test("F14: an intent returns intentRef, links artwork, and carries no key language anywhere", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const sha = await pngSha();
-  const art = await runTool(env, req(TEST_KEY), "submit_artwork", {
+  const art = await runTool(env, req(), "submit_artwork", {
     file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
   }, fetchFn);
-  const keyed = await runTool(env, req(TEST_KEY), "start_order_intent", {
+  const intent = await runTool(env, req(), "start_order_intent", {
     email: "mcp-acceptance@mcptest.org", organizationName: "MCP Acceptance Test Organization", artworkRef: art.structured.artworkRef as string,
   }, fetchFn);
-  assert.ok(String(keyed.structured.intentRef).startsWith("intent_"));
-  assert.equal(keyed.structured.artworkLinked, true);
-  assert.ok(!/ask Ryan|get a key|needs an organization API key/.test(keyed.text), "no get-a-key line when a key is present");
-  assert.ok(/within one business day/.test(keyed.text), "follow-up expectation stated");
-  const keyless = await runTool(env, req(), "start_order_intent", { email: "new@mcptest.org" }, fetchFn);
-  assert.ok(/follows up with the invoice/.test(keyless.text), "keyless intent states the placement path ends at human follow-up, no key");
-  assert.ok(!/ask Ryan/.test(keyless.text));
+  assert.ok(String(intent.structured.intentRef).startsWith("intent_"));
+  assert.equal(intent.structured.artworkLinked, true);
+  assert.ok(!/ask Ryan|get a key|API key|needs an organization/.test(intent.text), "no key language in the intent text");
+  assert.ok(/within one business day/.test(intent.text), "follow-up expectation stated");
+  assert.ok(intent.text.includes("this contact capture is real"), "test-lane capture honesty in the intent text");
+  const other = await runTool(env, req(), "start_order_intent", { email: "new@mcptest.org" }, fetchFn);
+  assert.ok(!/ask Ryan/.test(other.text));
 });
 
-test("F20: order status returns the dashboard address and login hint and the P-16 invoice line", async () => {
+test("F20: order status by statusRef returns the dashboard address and the minted invoice", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const sha = await pngSha();
-  const art = await runTool(env, req(TEST_KEY), "submit_artwork", {
+  const art = await runTool(env, req(), "submit_artwork", {
     file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
   }, fetchFn);
   const recapArgs = {
     quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
     artworkRef: art.structured.artworkRef as string, contactEmail: "mcp-acceptance@mcptest.org",
+    organizationName: "MCP Acceptance Test Church",
   };
-  const recap = await runTool(env, req(TEST_KEY), "get_recap", recapArgs, fetchFn);
-  const order = await runTool(env, req(TEST_KEY), "create_order", {
+  const recap = await runTool(env, req(), "get_recap", recapArgs, fetchFn);
+  const order = await runTool(env, req(), "create_order", {
     ...recapArgs, contactName: "Test Pastor", contactPhone: "+17135550199",
     recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: "f20-status-order-0001",
   }, fetchFn);
-  assert.ok(order.text.startsWith("TEST MODE"), "create_order text carries the TEST MODE line");
+  assert.ok(!order.text.includes("TEST MODE"), "no banner in the order text");
   assert.ok(!order.text.includes("adoption pass"), "no machinery voice in the order text");
-  const orderRef = order.structured.orderRef as string;
-  const status = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef }, fetchFn);
+  const statusRef = order.structured.statusRef as string;
+  const status = await runTool(env, req(), "get_order_status", { statusRef }, fetchFn);
   const dash = status.structured.dashboard as { tapAddress: string; loginUrl: string; username: string };
   assert.equal(dash.tapAddress, "https://go.tap.giving/mcp-acceptance-test-church");
   assert.equal(dash.loginUrl, "https://tap.giving/login");
-  assert.equal(status.structured.invoice, null, "a P-16 order carries no server invoice");
-  assert.ok(status.text.includes("No invoice on this server: a person from Tap.Giving follows up with the invoice by email"), "the P-16 invoice line in status text");
+  // The final step minted the invoice through the seat: status
+  // carries it (the P-16 no-invoice posture is retired).
+  const inv = status.structured.invoice as { invoiceId: string; invoiceNumber: string } | null;
+  assert.ok(inv && inv.invoiceId === "in_stub" && inv.invoiceNumber === "TEST-0001", "the minted invoice rides the status read");
+  assert.ok(status.text.includes("Invoice TEST-0001"), "the invoice line in status text");
 });
 
 test("F12 routes: the template SVG and the product photos are served", async () => {
@@ -749,26 +743,26 @@ test("R2 F5: customer text drops the chip jargon; the fact stays structured", as
   assert.ok(((p.structured.discs as { chip: string }).chip.includes("NTAG213")), "the chip fact stays in structured data");
 });
 
-test("R2 F15/F19: order questions carry the mounting photos inline and plain closing; the keyed recap carries the banner", async () => {
+test("R2 F15/F19: order questions carry the mounting photos inline and plain closing; no banner anywhere", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
-  const q = await runTool(env, req(TEST_KEY), "get_order_questions", {}, fetchFn);
+  const q = await runTool(env, req(), "get_order_questions", {}, fetchFn);
   assert.ok(q.images && q.images.length === 2, "both mounting photos inline");
   assert.ok(!q.text.includes("idempotencyKey"), "no agent plumbing in the closing line");
   assert.ok(q.text.includes("keep the recap reference it returns"), "plain closing line");
-  assert.ok(!q.text.startsWith("TEST MODE:"), "order questions are a keyless read since the F3 amendment: no banner");
-  const recap = await runTool(env, req(TEST_KEY), "get_recap", {
+  assert.ok(!q.text.startsWith("TEST MODE:"), "no banner on the questions");
+  const recap = await runTool(env, req(), "get_recap", {
     quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO, contactEmail: "mcp-acceptance@mcptest.org",
   }, fetchFn);
-  assert.ok(recap.text.startsWith("TEST MODE:"), "recap carries the banner");
-  assert.ok(recap.text.includes("We email you a final proof before anything is printed."), "F24 line in recap text");
+  assert.ok(!recap.text.startsWith("TEST MODE:"), "no banner on the recap either: the banner is retired");
+  assert.ok(recap.text.includes("emails the invoice and the design proof to the contact;"), "the settled final-step proof line in recap text");
   assert.ok(!recap.text.includes("before any order is placed"), "old proof line gone");
 });
 
 test("R2 F17: the recap echoes a contact name and phone when given", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
-  const recap = await runTool(env, req(TEST_KEY), "get_recap", {
+  const recap = await runTool(env, req(), "get_recap", {
     quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
     contactEmail: "mcp-acceptance@mcptest.org", contactName: "Dana Whitfield", contactPhone: "+19315550142",
   }, fetchFn);
@@ -794,11 +788,11 @@ test("R2 F21: the spec warns about the hole areas; a screws recap draws the hole
   try {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 106"><rect width="106" height="106" fill="#1e4634"/></svg>`;
     const sha = await sha256HexBytes(new Uint8Array(Buffer.from(svg)));
-    const sub = await runTool(env, req(TEST_KEY), "submit_artwork", {
+    const sub = await runTool(env, req(), "submit_artwork", {
       file: { filename: "plain.svg", mediaType: "image/svg+xml", contentBase64: Buffer.from(svg).toString("base64") }, sha256: sha, shape: "round",
     }, fetchFn);
     captured = "";
-    const recap = await runTool(env, req(TEST_KEY), "get_recap", {
+    const recap = await runTool(env, req(), "get_recap", {
       quantity: 100, size: "100mm-round", mounting: "screws", shipTo: SHIP_TO,
       artworkRef: sub.structured.artworkRef as string, contactEmail: "mcp-acceptance@mcptest.org",
     }, fetchFn);
@@ -817,7 +811,7 @@ test("R2 F26: live text in an SVG submission is called out with its font familie
   try {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 106"><rect width="106" height="106" fill="#1e4634"/><text x="53" y="55" font-family="Georgia, serif" font-weight="bold">CEDAR HOLLOW</text></svg>`;
     const sha = await sha256HexBytes(new Uint8Array(Buffer.from(svg)));
-    const sub = await runTool(env, req(TEST_KEY), "submit_artwork", {
+    const sub = await runTool(env, req(), "submit_artwork", {
       file: { filename: "cedar.svg", mediaType: "image/svg+xml", contentBase64: Buffer.from(svg).toString("base64") }, sha256: sha, shape: "round",
     }, fetchFn);
     assert.ok(sub.text.includes("live text"), "the font caveat is stated");
@@ -828,45 +822,40 @@ test("R2 F26: live text in an SVG submission is called out with its font familie
   }
 });
 
-test("R2 isolation: a test-key intent says the capture is real; a test order says it stays out of the CRM", async () => {
+test("R2 isolation: a test-lane intent says the capture is real; a test order says it stays out of the CRM", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
-  const intent = await runTool(env, req(TEST_KEY), "start_order_intent", {
-    email: "pastor.dana@cedarhollowchurch.org", organizationName: "Cedar Hollow Community Organization", quantityHint: 150,
+  const intent = await runTool(env, req(), "start_order_intent", {
+    email: "pastor.dana@mcptest.org", organizationName: "Cedar Hollow Community Organization", quantityHint: 150,
   }, fetchFn);
   assert.ok(intent.text.includes("this contact capture is real"), "capture honesty in intent text");
-  assert.ok(intent.text.includes("lead list"), "the lead list is named");
+  assert.ok(intent.text.includes("stay out of the production CRM"), "the isolation is named");
+  const live = await runTool(env, req(), "start_order_intent", {
+    email: "pastor.dana@cedarhollowchurch.org", organizationName: "Cedar Hollow Community Organization", quantityHint: 150,
+  }, fetchFn);
+  assert.ok(!live.text.includes("test-lane"), "a live-lane intent carries no test framing");
 });
 
-test("R2 F22: a second order is discount-ineligible, and a reused invoice is named in plain text", async () => {
+test("R2 F22: a second order is discount-ineligible once the first carries an invoice; status exposure is tightened", async () => {
   const { env } = await makeEnv();
   const calls: Array<{ url: string; body?: string }> = [];
   const fresh = stubFetch(calls) as typeof fetch;
   const shipArgs = { size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO, contactEmail: "mcp-acceptance@mcptest.org" };
 
-  const recap1 = await runTool(env, req(TEST_KEY), "get_recap", { ...shipArgs, quantity: 150 }, fresh);
-  const order1 = await runTool(env, req(TEST_KEY), "create_order", {
+  const recap1 = await runTool(env, req(), "get_recap", { ...shipArgs, quantity: 150 }, fresh);
+  const order1 = await runTool(env, req(), "create_order", {
     ...shipArgs, quantity: 150, contactName: "Test Pastor", contactPhone: "+17135550199",
     recapRef: recap1.structured.recapRef as string, exit: "pay_now", idempotencyKey: "r2-order-0001",
   }, fresh);
   const orderRef1 = order1.structured.orderRef as string;
   const devRecs = () => [...(env.DEV_ORDERS as unknown as MemoryKV).store.values()].map((v) => JSON.parse(v) as { mcpOrderRef: string; discountEligible: boolean });
   assert.equal(devRecs().find((r) => r.mcpOrderRef === orderRef1)?.discountEligible, true, "the first order is discount-eligible");
-  // P-16: no invoice is minted by this server anymore. Order 1
-  // later carries an invoice on its record (the human follow-up,
-  // recorded back), and carrying one is what spends the eligibility.
-  const keysStore = (env.MCP_KEYS as unknown as MemoryKV).store;
-  const seedInvoice = (ref: string, invoice: Record<string, unknown>) => {
-    const raw = keysStore.get(`ORDER:${ref}`);
-    assert.ok(raw, `order record exists for ${ref}`);
-    const rec = JSON.parse(raw as string) as Record<string, unknown>;
-    rec.invoice = invoice;
-    keysStore.set(`ORDER:${ref}`, JSON.stringify(rec));
-  };
-  seedInvoice(orderRef1, { invoiceId: "in_prior", invoiceNumber: "PRIOR-0001", status: "open", hostedInvoiceUrl: "https://invoice.stripe.com/i/prior", totalCents: 67500 });
+  // The final step minted an invoice onto order 1's record through
+  // the seat; carrying one is what spends the eligibility.
+  assert.ok(order1.structured.invoice, "order 1 carries its minted invoice");
 
-  const recap2 = await runTool(env, req(TEST_KEY), "get_recap", { ...shipArgs, quantity: 200 }, fresh);
-  const order2 = await runTool(env, req(TEST_KEY), "create_order", {
+  const recap2 = await runTool(env, req(), "get_recap", { ...shipArgs, quantity: 200 }, fresh);
+  const order2 = await runTool(env, req(), "create_order", {
     ...shipArgs, quantity: 200, contactName: "Test Pastor", contactPhone: "+17135550199",
     recapRef: recap2.structured.recapRef as string, exit: "pay_now", idempotencyKey: "r2-order-0002",
   }, fresh);
@@ -874,92 +863,44 @@ test("R2 F22: a second order is discount-ineligible, and a reused invoice is nam
   assert.equal(devRecs().find((r) => r.mcpOrderRef === orderRef2)?.discountEligible, false, "the second order is NOT discount-eligible once the first carries an invoice");
   assert.ok(String(order2.structured.crmExpectation).includes("does NOT enter the production CRM"), "test order states its isolation");
 
-  // The reused-invoice naming survives as a stored record fact: an
-  // order whose invoice block records the shared invoice and the
-  // mint-time comparison is named by get_order_status in plain text,
-  // read from the record, never recomputed.
-  seedInvoice(orderRef2, {
-    invoiceId: "in_prior", invoiceNumber: "PRIOR-0001", status: "open",
-    hostedInvoiceUrl: "https://invoice.stripe.com/i/prior", totalCents: 67500,
-    existing: true, existingOrderRef: orderRef1, existingDifferingFields: ["quantity"],
-  });
-  const status2 = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRef2 }, fresh);
-  assert.ok(status2.text.startsWith("TEST MODE:"), "status carries the banner");
-  assert.ok(status2.text.includes(`was already open from order ${orderRef1}`), "status names the shared invoice's order");
-  assert.ok(status2.text.includes("The earlier order differs from this order in: quantity."), "status appends the stored differing-fields line");
+  // Status is the capability read: the order's own invoice named
+  // plainly, and the tightened exposure set (no CRM row, no ship-to
+  // phone, no internal ids) holds.
+  const status2 = await runTool(env, req(), "get_order_status", { statusRef: order2.structured.statusRef as string }, fresh);
+  assert.ok(!status2.text.startsWith("TEST MODE:"), "no banner on status");
+  assert.ok(status2.text.includes("Invoice TEST-0001"), "status names the order's invoice");
+  assert.ok(!("crm" in status2.structured), "no CRM row in the status read");
+  assert.ok(!JSON.stringify(status2.structured).includes("+17135550199"), "no ship-to phone in the status read");
 });
 
 
-test("R2 F22 stored comparison: status names the recorded differing fields and never recomputes them", async () => {
+test("status never surfaces cross-order invoice comparisons (the shared-invoice naming is retired)", async () => {
   const { env, keys } = await makeEnv();
   const calls: Array<{ url: string; body?: string }> = [];
   const fresh = stubFetch(calls) as typeof fetch;
   const shipArgs = { size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO, contactEmail: "mcp-acceptance@mcptest.org" };
-
-  const artRefs: string[] = [];
-  for (const seed of ["alpha", "beta"]) {
-    const bytes = new Uint8Array(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" data-seed="${seed}"></svg>`));
-    const sub = await runTool(env, req(TEST_KEY), "submit_artwork", {
-      file: { filename: `${seed}.svg`, mediaType: "image/svg+xml", contentBase64: Buffer.from(bytes).toString("base64") },
-      sha256: await sha256HexBytes(bytes), shape: "round",
-    }, fresh);
-    artRefs.push(sub.structured.artworkRef as string);
-  }
-
-  const mkOrder = async (over: Record<string, unknown>, key: string) => {
-    const args = { ...shipArgs, quantity: 150, ...over };
-    const recap = await runTool(env, req(TEST_KEY), "get_recap", args, fresh);
-    const order = await runTool(env, req(TEST_KEY), "create_order", {
-      ...args, contactName: "Test Pastor", contactPhone: "+17135550199",
-      recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: key,
-    }, fresh);
-    return order.structured.orderRef as string;
+  const recap = await runTool(env, req(), "get_recap", { ...shipArgs, quantity: 150 }, fresh);
+  const order = await runTool(env, req(), "create_order", {
+    ...shipArgs, quantity: 150, contactName: "Test Pastor", contactPhone: "+17135550199",
+    recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: "r2c-order-0001",
+  }, fresh);
+  const orderRef = order.structured.orderRef as string;
+  // Even if a record somehow carried the retired comparison fields,
+  // the capability read does not surface them: the seat refuses
+  // shared invoices now, and the exposure set is tightened.
+  const raw = keys.store.get(`ORDER:${orderRef}`);
+  assert.ok(raw);
+  const rec = JSON.parse(raw as string) as Record<string, unknown>;
+  rec.invoice = {
+    invoiceId: "in_prior", invoiceNumber: "PRIOR-0001", status: "open",
+    hostedInvoiceUrl: "https://invoice.stripe.com/i/prior", totalCents: 67500,
+    existing: true, existingOrderRef: "mcp:other:order", existingDifferingFields: ["quantity"],
   };
-  const seedExisting = (ref: string, differing: string[], fromRef: string) => {
-    const raw = keys.store.get(`ORDER:${ref}`);
-    assert.ok(raw);
-    const rec = JSON.parse(raw as string) as Record<string, unknown>;
-    rec.invoice = {
-      invoiceId: "in_prior", invoiceNumber: "PRIOR-0001", status: "open",
-      hostedInvoiceUrl: "https://invoice.stripe.com/i/prior", totalCents: 67500,
-      existing: true, existingOrderRef: fromRef, existingDifferingFields: differing,
-    };
-    keys.store.set(`ORDER:${ref}`, JSON.stringify(rec));
-  };
-
-  const orderRef1 = await mkOrder({ artworkRef: artRefs[0] }, "r2c-order-0001");
-
-  // (a) Identical re-present: an empty stored comparison warns on nothing.
-  const orderRefSame = await mkOrder({ artworkRef: artRefs[0] }, "r2c-order-0002");
-  seedExisting(orderRefSame, [], orderRef1);
-  const statusSame = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefSame }, fresh);
-  assert.ok(statusSame.text.includes(`was already open from order ${orderRef1}`), "the shared invoice is named");
-  assert.ok(!statusSame.text.includes("differs from this order"), "status carries no warning for the identical re-present");
-
-  // (b) Different artwork in the stored comparison: status names artwork.
-  const orderRefArt = await mkOrder({ artworkRef: artRefs[1] }, "r2c-order-0003");
-  seedExisting(orderRefArt, ["artworkRef"], orderRef1);
-  const statusArt = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefArt }, fresh);
-  assert.ok(statusArt.text.includes("The earlier order differs from this order in: artwork."), "status names artwork");
-
-  // (c) Mounting only: names mounting, not artwork.
-  const orderRefMount = await mkOrder({ artworkRef: artRefs[0], mounting: "screws" }, "r2c-order-0004");
-  seedExisting(orderRefMount, ["mounting"], orderRef1);
-  const statusMount = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefMount }, fresh);
-  assert.ok(statusMount.text.includes("in: mounting."), "status names mounting");
-  assert.ok(!statusMount.text.includes("in: artwork"), "artwork is not named");
-
-  // (d) Stored, not recomputed: mutate the prior order's mounting in
-  // the record store; status for the artwork case must still report
-  // the recorded diff (artwork only, no mounting added).
-  const priorRaw = keys.store.get(`ORDER:${orderRef1}`);
-  assert.ok(priorRaw);
-  const priorRec = JSON.parse(priorRaw as string) as { mounting: string };
-  priorRec.mounting = "screws";
-  keys.store.set(`ORDER:${orderRef1}`, JSON.stringify(priorRec));
-  const statusArt2 = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: orderRefArt }, fresh);
-  assert.ok(statusArt2.text.includes("The earlier order differs from this order in: artwork."), "status still reports the recorded diff");
-  assert.ok(!statusArt2.text.includes("mounting"), "the mutated prior field does not leak into status");
+  keys.store.set(`ORDER:${orderRef}`, JSON.stringify(rec));
+  const status = await runTool(env, req(), "get_order_status", { statusRef: order.structured.statusRef as string }, fresh);
+  assert.ok(!status.text.includes("was already open from order"), "no shared-invoice naming in status");
+  assert.ok(!status.text.includes("differs from this order"), "no differing-fields line in status");
+  assert.ok(!JSON.stringify(status.structured).includes("existingDifferingFields"), "no comparison fields in structured status");
 });
 
 // ─── Pre-registry pass (2026-11-08): items 1, 3, 4, 5, 6, 8, 9 ─────
@@ -1011,22 +952,20 @@ test("item 6: get_quote states one payable first-order total, the add-on rule, t
   assert.match(q.text, /2 to 3 weeks from artwork approval/);
 });
 
-test("items 1, 4, 8, re-ruled P-15: discovery states the key scope up front, the destination model, and the turnaround", async () => {
+test("items 1, 4, 8, settled 2026-11-09: discovery states there are no keys, the destination model, and the turnaround", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const d = await runTool(env, req(), "get_discovery", {}, fetchFn);
   const caps = d.structured.capabilities as Record<string, unknown>;
-  assert.match(String(caps.howToGetAKey), /within one business day/);
-  assert.match(String(caps.howToGetAKey), /tg_test_<orgslug>_<secret>/);
-  assert.match(String(caps.keyWait), /Placing an order needs no key/);
-  assert.match(String(caps.keyWait), /follows up with the invoice/);
+  assert.ok(!("howToGetAKey" in caps) && !("keyWait" in caps), "no key-obtainment copy in capabilities");
+  assert.ok(!("testKey" in d.structured), "no testKey block in discovery");
+  assert.match(d.text, /no account, key, or login/i);
   assert.match(String(d.structured.destination), /per disc/);
   assert.match(String(d.structured.destination), /review profile/);
-  assert.match(String(d.structured.testKey), /no self-serve signup/);
   assert.equal(d.structured.turnaround, "Production and delivery run 2 to 3 weeks from artwork approval.");
-  assert.match(d.text, /within one business day/);
   assert.match(d.text, /2 to 3 weeks from artwork approval/);
   assert.match(d.text, /per disc/);
+  assert.ok(!/tg_live_|tg_test_/.test(d.text + JSON.stringify(d.structured)), "no key formats anywhere in discovery");
 });
 
 test("items 4, 7b, 9: get_product topic answers mirror the all-topics structure; stands are team-routed and unpriced in cold text", async () => {
@@ -1063,7 +1002,7 @@ test("visual standard: get_quote carries the product photo; the mounting topic c
   assert.equal(discTopic.images?.length, 1, "other topics keep the product photo only");
 });
 
-test("items 1, 2, re-ruled P-15: submit_artwork nextStep runs the keyless placement path after the capture; no artwork-stage proof email is promised", async () => {
+test("items 1, 2, settled 2026-11-09: submit_artwork nextStep runs the placement path after the capture; no artwork-stage proof email is promised", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const sha = await pngSha();
@@ -1073,17 +1012,10 @@ test("items 1, 2, re-ruled P-15: submit_artwork nextStep runs the keyless placem
   const ns = String(r.structured.nextStep);
   assert.match(ns, /start_order_intent/);
   assert.match(ns, /get_recap/);
-  assert.match(ns, /No key is needed at any step of placing the order/);
-  assert.match(ns, /follows up with the invoice/);
-  const note = String((r.structured.preview as Record<string, unknown>).note);
-  assert.match(note, /Nothing is emailed at the artwork stage/);
-  assert.doesNotMatch(r.text + " " + note, /proof we email|emailed proof shows|final proof comes by email/);
-  // No test rasterizer is installed here: the REAL rasterizer path
-  // runs (test/preview-real.test.ts pins it directly), so the PNG is
-  // composited on the disc and the nextStep truthfully directs the
-  // agent to the preview image. Before the 2026-11-08 rasterizer fix
-  // this assertion expected the submitted-file fallback, which is
-  // exactly how the fake seam masked the dead production renderer.
+  assert.match(ns, /Email me my invoice and design proof/);
+  assert.ok(!/key/i.test(ns), "no key language in the next step");
+  assert.match(r.text, /Nothing is emailed at this stage/);
+  assert.doesNotMatch(r.text, /proof we email|emailed proof shows|final proof comes by email/);
   assert.equal((r.structured.preview as { kind: string }).kind, "on-disc");
   assert.match(ns, /the preview image with this answer/);
 });
@@ -1106,18 +1038,16 @@ test("items 1, 2: with a working render, submit_artwork nextStep does direct the
   }
 });
 
-test("item 3: key error texts name both key formats", async () => {
-  // Probed on get_order_status, the read that stays keyed after
-  // P-15 (get_recap answers keyless now, by the ruling).
+test("item 3, settled: status errors name no key formats; missing and fabricated references are indistinguishable", async () => {
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   await assert.rejects(
     () => runTool(env, req(), "get_order_status", {}, fetchFn),
-    (e: Error) => /tg_test_<orgslug>_<secret>/.test(e.message),
+    (e: Error) => !/tg_test_|tg_live_|API key/.test(e.message),
   );
   await assert.rejects(
-    () => runTool(env, req("bogus"), "get_order_status", {}, fetchFn),
-    (e: Error) => /tg_test_<orgslug>_<secret>/.test(e.message),
+    () => runTool(env, req("bogus"), "get_order_status", { statusRef: "tg_test_fabricated_reference_value" }, fetchFn),
+    (e: Error & { code?: string }) => e.code === "not_found",
   );
 });
 
@@ -1131,8 +1061,7 @@ test("item 8: artwork spec geometry carries inches alongside mm", async () => {
   assert.match(a.text, /0\.24 inch/);
 });
 
-test("item 9: register_webhook is labeled developer and optional in tools/list", async () => {
-  const wh = TOOLS.find((t) => t.name === "register_webhook");
-  assert.ok(wh);
-  assert.match(wh.description, /Developer tool, optional/);
+test("item 9, settled: register_webhook is absent from tools/list and no tool description mentions a key", async () => {
+  assert.equal(TOOLS.find((t) => t.name === "register_webhook"), undefined);
+  for (const t of TOOLS) assert.ok(!/API key/i.test(t.description), `${t.name} description carries no key framing`);
 });

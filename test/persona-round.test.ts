@@ -5,10 +5,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runTool } from "../src/tools.ts";
-import { sha256Hex } from "../src/keys.ts";
+import { sha256Hex } from "../src/util.ts";
 import worker from "../src/index.ts";
 import type { Env } from "../src/env.ts";
-import type { KeyRecord } from "../src/keys.ts";
 
 class MemoryKV {
   store = new Map<string, string>();
@@ -41,7 +40,6 @@ class MemoryKV {
   }
 }
 
-const TEST_KEY = `tg_test_persona-test-church_${"E".repeat(43)}`;
 const SHIP_TO = { name: "Persona Test Church", street: "1 Test Way", city: "Spring", state: "TX", postalCode: "77380", country: "US", phone: "+17135550199" };
 
 interface Captured { url: string; body?: string }
@@ -54,6 +52,12 @@ function dispatchFetch(calls: Captured[], opts?: { failOrderEmail?: boolean }): 
       const parsed = JSON.parse(init?.body ?? "{}") as { op: string; input?: Record<string, unknown> };
       if (parsed.op === "recordArtworkSubmission") return new Response(JSON.stringify({ ok: true, recordKey: "STEPCAP:1:x" }), { status: 200 });
       if (parsed.op === "readOrderRecords") return new Response(JSON.stringify({ ok: true, found: false }), { status: 200 });
+      if (parsed.op === "mintOrderInvoice") {
+        const totals = parsed.input?.totals as { grandTotalCents: number; firstOrderTotalCents: number; discountEligible: boolean } | undefined;
+        const totalCents = totals ? (totals.discountEligible ? totals.firstOrderTotalCents : totals.grandTotalCents) : 0;
+        return new Response(JSON.stringify({ ok: true, invoice: { id: "in_persona", number: "PERSONA-0001", status: "open", hostedInvoiceUrl: "https://invoice.stripe.com/i/persona", invoicePdf: "https://pay.stripe.com/invoice/pdf/persona", totalCents, finalizedAt: "2026-11-09T00:00:00.000Z" } }), { status: 200 });
+      }
+      if (parsed.op === "sendOrderInvoiceProof") return new Response(JSON.stringify({ ok: true, messageId: "msg_persona_customer" }), { status: 200 });
       if (parsed.op === "notifyOrderPlaced") {
         if (opts?.failOrderEmail) return new Response(JSON.stringify({ ok: false, error: "stub seat failure" }), { status: 500 });
         return new Response(JSON.stringify({ ok: true, messageId: "msg_persona_1" }), { status: 200 });
@@ -69,12 +73,6 @@ function dispatchFetch(calls: Captured[], opts?: { failOrderEmail?: boolean }): 
 async function makeEnv(): Promise<{ env: Env; keys: MemoryKV; dev: MemoryKV }> {
   const keys = new MemoryKV();
   const dev = new MemoryKV();
-  const now = new Date().toISOString();
-  const rec: KeyRecord = {
-    orgSlug: "persona-test-church", orgName: "persona-test-church", contactEmail: "persona@example.com", mode: "test",
-    scopes: ["orders"], status: "active", createdAt: now, issuedTo: "persona@example.com", issuedBy: "test", issuedAt: now,
-  };
-  await keys.put(`KEYHASH:${await sha256Hex(TEST_KEY)}`, JSON.stringify(rec));
   const env = {
     MCP_KEYS: keys as unknown as KVNamespace,
     MCP_ARTWORK: new MemoryKV() as unknown as KVNamespace,
@@ -114,12 +112,13 @@ function imageCount(r: { image?: unknown; images?: unknown[] }): number {
 test("P-1/P-11: discovery carries the samples fact and the plain-language block", async () => {
   const { env } = await makeEnv();
   const d = await runTool(env, req(), "get_discovery", {}, dispatchFetch([]));
-  const s = d.structured as unknown as { samples: string; plainLanguage: { nfc: string; keys: string }; taxExempt: string };
+  const s = d.structured as unknown as { samples: string; plainLanguage: { nfc: string; status: string }; taxExempt: string };
   assert.ok(s.samples.includes("we do not offer physical samples"), "structured samples fact");
   assert.ok(s.samples.includes("30-day money-back guarantee"), "samples fact points at the guarantee");
   assert.ok(d.text.includes("Samples: we do not offer physical samples"), "samples fact in the discovery text");
   assert.ok(s.plainLanguage.nfc.includes("No app is needed"), "plain NFC line");
-  assert.ok(s.plainLanguage.keys.includes("never needs a key"), "plain key line (P-15)");
+  assert.ok(s.plainLanguage.status.includes("status reference"), "plain status-reference line (the keys entry retired with the keys)");
+  assert.ok(!("keys" in s.plainLanguage), "no plain-language keys entry remains");
   assert.ok(s.taxExempt.includes("recorded on the order"), "tax-exempt fact (P-3)");
 });
 
@@ -229,7 +228,7 @@ test("P-12: the export fetch returns the file as submitted and its PNG render, k
   }, fetchFn);
   const exp = (sub.structured as unknown as { export: { printFile: { url: string; label: string }; printRenderPng: { url: string } } }).export;
   assert.equal(exp.printFile.label, "PRINT FILE");
-  assert.ok(sub.text.includes("PRINT FILE: your submitted file itself"), "print file labeled in the submit text");
+  assert.ok(sub.text.includes("PRINT FILE: your own submitted file itself"), "print file labeled in the submit text");
   assert.ok(sub.text.includes("ON-DISC PREVIEW, a mock composite"), "preview labeled as the mock it is");
 
   const original = await worker.fetch(new Request(`https://tap.giving${new URL(exp.printFile.url).pathname}`), env);
@@ -255,7 +254,7 @@ test("P-15/P-16: a keyless placement records the order and emails the whole orde
   const fetchFn = dispatchFetch(calls);
   const artworkRef = await submitSvg(env, fetchFn);
   const intent = await runTool(env, req(), "start_order_intent", {
-    organizationName: "Keyless Test Church", email: "pastor@keylesstest.org", note: "persona round keyless placement",
+    organizationName: "Keyless Persona Church", email: "pastor@keylesstest.org", note: "persona round keyless placement",
   }, fetchFn);
   const intentRef = intent.structured.intentRef as string;
   const flow = {
@@ -269,7 +268,11 @@ test("P-15/P-16: a keyless placement records the order and emails the whole orde
     ...flow, contactName: "Pat Pastor", contactPhone: "+17135550199",
     recapRef: recap.structured.recapRef as string, intentRef, exit: "pay_now", idempotencyKey: "persona-keyless-0001",
   }, fetchFn);
-  assert.equal(order.structured.confirmation, "Your order is placed, and a person from Tap.Giving will follow up with your invoice.");
+  assert.equal(order.structured.confirmation, "Your order is placed, and your invoice and design proof are on their way to pastor@keylesstest.org. A person from Tap.Giving follows up from there; production waits for your proof approval, and the invoice is paid on its hosted page.");
+  const customerEmail = order.structured.customerEmail as { sent: boolean; messageRef?: string };
+  assert.equal(customerEmail.sent, true, "the customer email fired at placement (the order carries artwork)");
+  assert.equal(customerEmail.messageRef, "msg_persona_customer");
+  assert.ok(order.structured.statusRef, "the status reference is returned at placement");
   const emailState = order.structured.orderEmail as { sent: boolean; messageRef?: string };
   assert.equal(emailState.sent, true);
   assert.equal(emailState.messageRef, "msg_persona_1");
@@ -287,7 +290,7 @@ test("P-15/P-16: a keyless placement records the order and emails the whole orde
   const notify = calls.filter((c) => (c.body ?? "").includes("notifyOrderPlaced"));
   assert.equal(notify.length, 1);
   const input = (JSON.parse(notify[0].body ?? "{}") as { input: Record<string, unknown> }).input;
-  assert.equal(input.organizationName, "Keyless Test Church");
+  assert.equal(input.organizationName, "Keyless Persona Church");
   assert.equal(input.contactName, "Pat Pastor");
   assert.equal(input.contactEmail, "pastor@keylesstest.org");
   assert.equal(input.contactPhone, "+17135550199");
@@ -332,20 +335,19 @@ test("P-16: an order-email failure is partial success, stated plainly, never sil
   assert.ok(calls.some((c) => c.url.includes("/api/invoice-request")), "the CRM record write still happened");
 });
 
-test("P-15/P-16 test mode: a keyed test placement writes the DEV_ORDERS record and a TEST-marked email", async () => {
+test("P-15/P-16 test lane: a test-lane placement writes the DEV_ORDERS record and a TEST-marked email", async () => {
   const { env, dev } = await makeEnv();
   const calls: Captured[] = [];
   const fetchFn = dispatchFetch(calls);
   const flow = {
     quantity: 100, size: "100mm-round", mounting: "adhesive",
-    contactEmail: "persona@example.com", shipTo: SHIP_TO,
+    contactEmail: "persona@mcptest.org", shipTo: SHIP_TO,
   };
-  const recap = await runTool(env, req(TEST_KEY), "get_recap", flow, fetchFn);
-  const order = await runTool(env, req(TEST_KEY), "create_order", {
+  const recap = await runTool(env, req(), "get_recap", flow, fetchFn);
+  const order = await runTool(env, req(), "create_order", {
     ...flow, contactName: "Test Pastor", contactPhone: "+17135550199",
     recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: "persona-testmode-0001",
   }, fetchFn);
-  const orderRef = order.structured.orderRef as string;
   const devKeys = [...dev.store.keys()];
   const devRows = [...dev.store.values()].map((v) => JSON.parse(v) as { source?: string });
   assert.ok(devKeys.some((k) => k.startsWith("INVREQ:")), "the test placement lands in DEV_ORDERS under an INVREQ key");
@@ -355,6 +357,10 @@ test("P-15/P-16 test mode: a keyed test placement writes the DEV_ORDERS record a
   assert.equal(notify.length, 1, "the order email still fires for a test placement");
   const input = (JSON.parse(notify[0].body ?? "{}") as { input: Record<string, unknown> }).input;
   assert.equal(input.testMode, true, "the email payload marks the placement as TEST");
+  const mint = calls.filter((c) => (c.body ?? "").includes("mintOrderInvoice"));
+  assert.equal(mint.length, 1, "the test-lane mint still runs, against the test key at the seat");
+  assert.equal((JSON.parse(mint[0].body ?? "{}") as { input: Record<string, unknown> }).input.testLane, true);
+  assert.ok((order.structured.customerEmail as { suppressed?: string }).suppressed, "the customer email is suppressed in the test lane, with the reason recorded");
 });
 
 // ─── Visual standard: order status images ──────────────────────────
@@ -363,28 +369,28 @@ test("visual standard: status shows the submitted artwork labeled; an artwork-le
   const { env } = await makeEnv();
   const calls: Captured[] = [];
   const fetchFn = dispatchFetch(calls);
-  const artworkRef = await submitSvg(env, fetchFn, TEST_KEY);
+  const artworkRef = await submitSvg(env, fetchFn);
   const flow = {
     quantity: 100, size: "100mm-round", mounting: "adhesive", artworkRef,
     contactEmail: "persona@example.com", shipTo: SHIP_TO,
   };
-  const recap = await runTool(env, req(TEST_KEY), "get_recap", flow, fetchFn);
-  const order = await runTool(env, req(TEST_KEY), "create_order", {
+  const recap = await runTool(env, req(), "get_recap", flow, fetchFn);
+  const order = await runTool(env, req(), "create_order", {
     ...flow, contactName: "Test Pastor", contactPhone: "+17135550199",
     recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: "persona-status-img-0001",
   }, fetchFn);
-  const status = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: order.structured.orderRef as string }, fetchFn);
+  const status = await runTool(env, req(), "get_order_status", { statusRef: order.structured.statusRef as string }, fetchFn);
   assert.ok(imageCount(status) >= 1, "status carries the artwork image");
   const design = (status.structured as unknown as { design: { imageLabel: string } }).design;
   assert.ok(design.imageLabel.includes("not the proof"), "the image is labeled as submitted artwork, not the proof");
 
   const bareFlow = { quantity: 100, size: "100mm-round", mounting: "adhesive", contactEmail: "persona@example.com", shipTo: SHIP_TO };
-  const recap2 = await runTool(env, req(TEST_KEY), "get_recap", bareFlow, fetchFn);
-  const order2 = await runTool(env, req(TEST_KEY), "create_order", {
+  const recap2 = await runTool(env, req(), "get_recap", bareFlow, fetchFn);
+  const order2 = await runTool(env, req(), "create_order", {
     ...bareFlow, contactName: "Test Pastor", contactPhone: "+17135550199",
     recapRef: recap2.structured.recapRef as string, exit: "pay_now", idempotencyKey: "persona-status-bare-0001",
   }, fetchFn);
-  const status2 = await runTool(env, req(TEST_KEY), "get_order_status", { orderRef: order2.structured.orderRef as string }, fetchFn);
-  assert.equal(imageCount(status2), 0, "no image where the order carries none");
+  const status2 = await runTool(env, req(), "get_order_status", { statusRef: order2.structured.statusRef as string }, fetchFn);
+  assert.equal((status2.structured as unknown as { design: { state?: string } }).design.state, "not-attached", "the design block states not-attached where the order carries no artwork");
   assert.ok(status2.text.includes("proof"), "the text still points at the emailed proof");
 });
