@@ -353,7 +353,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `Design approval, payment, and production release stay human: a person approves the final proof by email, and a person pays the hosted invoice. This server moves no money itself: it returns a hosted invoice link for a person to pay.`,
     `Discovery, quotes, product facts, the artwork spec, and the order questions need no key. Recaps and order status are reads that use your organization key, like the writes, so plan for the key wait before the order steps: ${KEY_REQUEST_LINE} ${TEST_KEY_LINE}`,
     ...(intentTextLine ? [intentTextLine] : []),
-    `The two photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.`,
+    `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back.`,
   ].join("\n");
   return { structured, text, images: productPhotoImages() };
 }
@@ -423,7 +423,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       p.guarantee,
       `Table stands (70 x 100 mm, 120 x 140 mm) and lanyard badges (90 x 130 mm) come from the Tap.Giving team: email hello@tap.giving to add them to an order. Discs are the orderable product here.`,
       `${p.shipping.cost} ${p.shipping.terms}`,
-      `The photos with this answer show the disc in use: mounted on a seat back, and a phone tapping a disc on a chair back.`,
+      `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back.`,
     ].join("\n");
   return { structured, text, images: productPhotoImages() };
 }
