@@ -2525,3 +2525,7 @@ No generated renders anywhere: only verified existing assets, the
 delivered-proof examples, labeled website photos, or renders of
 the organization's own submitted artwork. A preview composite is
 never labeled a proof or a print file (the P-12 discipline).
+
+## 2026-11-09 Persona Loop Round 2 residual: quote eligibility line in the text channel
+
+The round 2 re-run found the P-5 eligibility sentence ("the first-order discount belongs to an organization's first order. Getting a quote does not use it up...") present in get_quote's structured discountEligibility field but absent from its text channel, which is the channel the personas read. quoteText now renders the same discountEligibility line, and the persona-round test pins both channels. No other behavior changed.

@@ -170,6 +170,7 @@ test("P-2a/P-5: quote carries delivery framing, the eligibility line, and the me
   assert.ok(q.text.includes("Delivery: production and delivery run 2 to 3 weeks from artwork approval"), "framing in the quote text");
   assert.ok(s.metalWarning.includes("cannot be added afterwards"), "metal warning when the count is unset (P-5)");
   assert.ok(s.discountEligibility.includes("does not use it up"), "eligibility in plain words at the quote step");
+  assert.ok(q.text.includes("does not use it up"), "eligibility in plain words in the quote TEXT channel too (round 2 residual: structured-only was invisible to text readers)");
   const zero = await runTool(env, req(), "get_quote", { quantity: 250, antiMetalCount: 0 }, fetchFn);
   assert.ok((zero.structured as unknown as { metalWarning?: string }).metalWarning, "metal warning when the count is zero");
   const counted = await runTool(env, req(), "get_quote", { quantity: 250, antiMetalCount: 40 }, fetchFn);

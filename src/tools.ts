@@ -141,6 +141,7 @@ function quoteText(q: Record<string, unknown>): string {
     `Discs: ${q.quantity} at ${dollars(q.unitCents as number)} list, ${dollars(q.discSubtotalCents as number)} list subtotal. First orders take 10 percent off the discs with code WELCOME10: if this is the organization's first order, the total to pay is ${dollars(q.grandTotalWithFirstOrderDiscountCents as number)}.`,
     `The discount covers the discs only; add-ons are billed at full price in both totals.`,
     DISCOUNT_WINDOW_MEANING,
+    `${q.discountEligibility}`,
     ...(cmp ? [cmp.line] : []),
     addOns ? `Add-ons:\n${addOns}` : "Add-ons: none.",
     `Shipping: Free`,
