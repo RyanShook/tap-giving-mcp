@@ -23,7 +23,8 @@ import { authenticate, requireKey, sha256Hex, touchKey, type AuthedKey } from ".
 import { DETECTED_MEDIA_TYPE, MAX_ARTWORK_BYTES, sniffArtwork } from "./sniff.ts";
 import { callSeat } from "./seat.ts";
 import { StripeCallError, mintInvoice, stripeCall } from "./stripe.ts";
-import { EXAMPLES } from "./examples.ts";
+import { EXAMPLES_INDEX, type DeliveredExample } from "./examples-data.ts";
+import { PHOTOS_INDEX } from "./photos-data.ts";
 import type { Env } from "./env.ts";
 
 const DAY = 24 * 3600;
@@ -148,10 +149,42 @@ export function productPhotoImages(): Array<{ data: string; mimeType: string }> 
 }
 
 export function productPhotoStructured(): Array<Record<string, unknown>> {
-  return PRODUCT_PHOTOS.map((p) => ({
-    id: p.id, alt: p.alt, mimeType: p.mimeType,
+  const ordered = [...PHOTOS_INDEX].sort((a, b) => (a.id === "phone-tap" ? -1 : b.id === "phone-tap" ? 1 : 0));
+  return ordered.map((p) => ({
+    id: p.id, category: p.category, title: p.title, alt: p.alt, use: p.use,
     displayUrl: `https://tap.giving/mcp/photos/${p.id}.webp`,
   }));
+}
+
+// The explainer subset of the photo set: discs in place and the
+// mounting options up close. get_artwork_spec carries it so the agent
+// can show what a mounted disc looks like while a design is built.
+export function explainerPhotos(): Array<Record<string, unknown>> {
+  const cats = new Set(["mounting explainer", "church setting", "in-use tap moment"]);
+  return productPhotoStructured().filter((p) => cats.has(p.category as string));
+}
+
+// Delivered-proof examples (2026-11-08): one real design per delivered
+// organization. Metadata is committed (src/examples-data.ts); the PNG
+// bytes live in the MCP_ARTWORK KV namespace under EXAMPLE:<id>,
+// uploaded by tools/build-assets.mjs from the delivered proof files in
+// the website asset library. Nothing here is a house template.
+export const INLINE_EXAMPLE_LIMIT = 6;
+
+export function examplesForShape(shape?: string): DeliveredExample[] {
+  return EXAMPLES_INDEX.filter((e) => !shape || e.shape === shape);
+}
+
+export function exampleEntry(e: DeliveredExample): Record<string, unknown> {
+  return {
+    id: e.id, organization: e.organization, shape: e.shape,
+    displayUrl: `https://tap.giving/mcp/examples/${e.id}.png`,
+  };
+}
+
+export async function exampleImage(env: Env, id: string): Promise<{ data: string; mimeType: string } | null> {
+  const buf = await env.MCP_ARTWORK.get(`EXAMPLE:${id}`, "arrayBuffer");
+  return buf ? { data: bytesToBase64(new Uint8Array(buf)), mimeType: "image/png" } : null;
 }
 
 // The two mounting options, from the website's own photos, returned
@@ -232,14 +265,7 @@ function artworkSpecObject(shape?: string): Record<string, unknown> {
     round: { ...g.round },
     square: { ...g.square },
   };
-  const examples = EXAMPLES
-    .filter((e) => !shape || e.shape === shape)
-    .map((e) => ({
-      id: e.id,
-      direction: e.direction,
-      shape: e.shape,
-      displayUrl: `${ENDPOINT.replace("/mcp", "")}/mcp/examples/${e.id}.png`,
-    }));
+  const examples = examplesForShape(shape).map(exampleEntry);
   return {
     sizes: "100 mm (4 inch), round or square. Every other size or shape is a manual exception handled by hand.",
     canvasMm: g.canvasMm,
@@ -265,8 +291,13 @@ function artworkSpecObject(shape?: string): Record<string, unknown> {
     guidelines: ARTWORK_GUIDELINES,
     examples,
     examplesNote:
-      "House template designs made for this purpose, generic Tap.Giving artwork, no customer artwork. " +
-      "The person picks a direction they like; the chosen direction travels with the spec as chosenExampleRef and the agent builds the artwork with its own tools.",
+      "Real designs Tap.Giving produced and delivered to the named organizations (shipped or delivered orders), shown as examples of finished work. " +
+      "An example is that organization's own design: it is never shipped to a different organization as-is. The person picks an example as a design reference; " +
+      "the choice travels with the spec as chosenExampleRef and the agent composes original artwork for the organization it is working with.",
+    explainerPhotos: explainerPhotos(),
+    explainerNote:
+      "Labeled photos from the Tap.Giving website library: discs mounted on pews and chair backs, the tap in use, and the mounting options up close. " +
+      "Show these when the person asks what a mounted disc looks like, how it reads in a room, or how mounting works, and while they are choosing mounting or placement.",
     logoAsk: {
       field: "logo",
       optional: true,
@@ -363,7 +394,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `Design approval, payment, and production release stay human: a person approves the final proof by email. This server moves no money itself and issues no invoices: a person from Tap.Giving follows up with the invoice.`,
     `Placing an order needs no key: the whole placement run is keyless (the order questions, the recap, and placing the order), and a person from Tap.Giving follows up with the invoice. Order status is the one read that uses the organization key. ${KEY_REQUEST_LINE} ${TEST_KEY_LINE}`,
     ...(intentTextLine ? [intentTextLine] : []),
-    `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back.`,
+    `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library (settings, tap moments, product details, mounting): show them whenever the person wants to see the disc in place.`,
   ].join("\n");
   return { structured, text, images: productPhotoImages() };
 }
@@ -436,7 +467,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       p.guarantee,
       `Table stands (70 x 100 mm, 120 x 140 mm) and lanyard badges (90 x 130 mm) come from the Tap.Giving team: email hello@tap.giving to add them to an order. Discs are the orderable product here.`,
       `${p.shipping.cost} ${p.shipping.terms}`,
-      `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back.`,
+      `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library (settings, tap moments, product details, mounting): show them whenever the person wants to see the disc in place.`,
     ].join("\n");
   const images = topic === "mounting"
     ? [...productPhotoImages(), ...mountingPhotoImages()]
@@ -444,28 +475,30 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
   return { structured, text, images };
 }
 
-// Resolve the caller's direction choice (F12): a pick-list number
-// within the requested shape's examples, or an example id. An unknown
-// value is refused, naming what is valid, never silently echoed.
+// Resolve the caller's example choice: an example id from the full
+// delivered set for the shape, or a pick-list number within the shown
+// inline subset. An unknown value is refused, naming what is valid,
+// never silently echoed.
 function resolveChosenExample(
   ref: string,
   shape?: string,
-): (typeof EXAMPLES)[number] {
-  const candidates = shape ? EXAMPLES.filter((e) => e.shape === shape) : EXAMPLES;
-  const byId = candidates.find((e) => e.id === ref);
+): DeliveredExample {
+  const all = examplesForShape(shape);
+  const byId = all.find((e) => e.id === ref);
   if (byId) return byId;
   if (/^\d+$/.test(ref)) {
+    const inline = all.slice(0, INLINE_EXAMPLE_LIMIT);
     const n = parseInt(ref, 10);
-    if (n >= 1 && n <= candidates.length) return candidates[n - 1];
+    if (n >= 1 && n <= inline.length) return inline[n - 1];
   }
   throw invalidInput(
-    `chosenExampleRef "${ref}" is not one of the example directions${shape ? ` for the ${shape} shape` : ""}. ` +
-    `Valid choices: ${candidates.map((e, i) => `${i + 1}. ${e.pickLabel} (${e.id})`).join("; ")}.`,
-    { validExampleIds: candidates.map((e) => e.id) },
+    `chosenExampleRef "${ref}" is not one of the delivered examples${shape ? ` for the ${shape} shape` : ""}. ` +
+    `Pick by number from the shown list (${all.slice(0, INLINE_EXAMPLE_LIMIT).map((e, i) => `${i + 1}. ${e.organization} (${e.id})`).join("; ")}) or pass any example id from the structured examples index.`,
+    { validExampleIds: all.map((e) => e.id) },
   );
 }
 
-async function toolGetArtworkSpec(_ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
+async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
   const shape = optString(args, "shape", 20);
   if (shape !== undefined && shape !== "round" && shape !== "square") {
     throw invalidInput(`shape must be "round" or "square".`);
@@ -476,26 +509,26 @@ async function toolGetArtworkSpec(_ctx: Ctx, args: Record<string, unknown>): Pro
   if (chosenExampleRef && chosen) {
     structured.chosenExampleRef = chosenExampleRef;
     structured.chosenExample = {
-      id: chosen.id, pickLabel: chosen.pickLabel, direction: chosen.direction, shape: chosen.shape,
+      id: chosen.id, organization: chosen.organization, shape: chosen.shape,
+      displayUrl: `https://tap.giving/mcp/examples/${chosen.id}.png`,
     };
   }
-  // The examples are presented as a numbered list of design directions
-  // to build from, in the same order as structured.examples and as the
-  // image content blocks that follow the text (entry N describes image
-  // block N). The PNG bytes ride along inline as image content, from
-  // the same embedded source the displayUrls serve.
-  const specExamples = structured.examples as Array<{ id: string; direction: string; shape: string }>;
-  const pickList = specExamples.map((e, i) => {
-    const def = EXAMPLES.find((x) => x.id === e.id);
-    const shapeWord = e.shape === "round" ? "Round" : "Square";
-    return `${i + 1}. ${shapeWord}, ${def ? def.pickLabel : e.direction}: ${e.direction}.`;
-  });
-  // With a direction chosen, the answer shows that design alone and
-  // confirms it by name; unchosen, all directions ride along.
-  const shownExamples = chosen ? [chosen] : specExamples
-    .map((e) => EXAMPLES.find((x) => x.id === e.id))
-    .filter((x): x is NonNullable<typeof x> => !!x);
-  const images = shownExamples.map((x) => ({ data: x.pngBase64, mimeType: "image/png" }));
+  // The structured index carries the FULL delivered set for the shape.
+  // Inline images stay bounded: the first INLINE_EXAMPLE_LIMIT examples
+  // for the shape (or the single chosen one), then the two mounting
+  // photos. The numbered pick list covers the inline subset, in the
+  // same order as the image blocks that follow the text.
+  const allForShape = examplesForShape(shape);
+  const inlineSubset = allForShape.slice(0, INLINE_EXAMPLE_LIMIT);
+  const pickList = inlineSubset.map((e, i) =>
+    `${i + 1}. ${e.organization} (${e.shape}): the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`);
+  const shown = chosen ? [chosen] : inlineSubset;
+  const images: Array<{ data: string; mimeType: string }> = [];
+  for (const e of shown) {
+    const img = await exampleImage(ctx.env, e.id);
+    if (img) images.push(img);
+  }
+  images.push(...mountingPhotoImages());
   const shapeWord = shape ?? "round and square";
   const text = [
     `Artwork spec: 106 mm (about 4.2 inch) square artboard for both shapes; the cut disc is 100 mm (4 inch).`,
@@ -508,18 +541,18 @@ async function toolGetArtworkSpec(_ctx: Ctx, args: Record<string, unknown>): Pro
     ARTWORK_GEOMETRY.background,
     ...(chosen
       ? [
-          `You picked: ${chosen.pickLabel}: ${chosen.direction}. It is shown in the image that follows.`,
-          `Compose your own artwork from that direction, adding the logo or name of the organization it is for, and submit it with submit_artwork. The example is a starting template only: an example is never ordered or shipped as-is.`,
+          `You picked the design delivered to ${chosen.organization}. It is shown in the first image that follows; the two after it show the mounting options.`,
+          `Use it as a reference for layout and finish, then compose original artwork for the organization you are working with, adding its logo or name, and submit it with submit_artwork. This design belongs to ${chosen.organization}: an example is never shipped to a different organization as-is.`,
           `The artwork you compose is yours: print-ready and vendor-neutral, yours to take to any printer. Nothing in this spec or the proof obliges an order from Tap.Giving.`,
         ]
       : [
-          `Example design directions (starting templates to build from, shown in the images that follow):`,
+          `Delivered examples: ${allForShape.length} real ${shapeWord} designs that Tap.Giving produced and delivered to organizations. The full set is in the structured examples index with a display URL for each; the first ${inlineSubset.length} ride along in the images that follow, then the two mounting photos.`,
           ...pickList,
-          `Tell me the number of the direction you want to build from. Then compose your own artwork from that direction, adding the logo or name of the organization it is for, and submit it with submit_artwork. The examples are starting templates only: an example is never ordered or shipped as-is.`,
+          `Tell me the number of an example from the list above, or pass any example id from the structured index as chosenExampleRef. Then compose original artwork for the organization you are working with, using the example as a reference, and submit it with submit_artwork. An example is a real organization's delivered design: it is never shipped to a different organization as-is.`,
           `The artwork you compose is yours: print-ready and vendor-neutral, yours to take to any printer. Nothing in this spec or the proof obliges an order from Tap.Giving.`,
         ]),
+    `While designing, the structured explainerPhotos show discs mounted on pews and chair backs, the tap in use, and the mounting options up close: show them when the person asks what a mounted disc looks like or how mounting works.`,
   ].join("\n");
-  void shapeWord;
   return { structured, text, images };
 }
 
@@ -1883,14 +1916,14 @@ export const TOOLS: ToolDef[] = [
     name: "get_artwork_spec",
     description:
       "The production artwork spec for the chosen shape: 106 mm artboard, cut, bleed, and safe-zone geometry as structured millimetre data plus plain guidelines, " +
-      "the format wanted back (vector, SVG preferred), house template examples to react to, and the optional logo ask. The agent builds the artwork with its own tools; " +
+      "the format wanted back (vector, SVG preferred), delivered example designs to react to (real organizations' finished discs, indexed in full with a bounded set shown inline), labeled explainer photos of discs in place, and the optional logo ask. The agent builds the artwork with its own tools; " +
       "this server has no design-generation tool. The artwork composed from this spec is the organization's own, vendor-neutral and print-ready to take to any printer. No key needed. Choose the shape first (the discovery call names it the first choice), then call this for that shape; call get_discovery instead when the person has not chosen yet, and submit_artwork once the artwork file exists. " +
-      "The shape argument selects round or square geometry; chosenExampleRef carries the house example direction the person picked, from the examples this tool returns.",
+      "The shape argument selects round or square geometry; chosenExampleRef carries the delivered example the person picked, from the examples this tool returns.",
     inputSchema: {
       type: "object",
       properties: {
         shape: { type: "string", enum: ["round", "square"], description: "The disc shape to return geometry for: round or square. Omit it to return both shapes." },
-        chosenExampleRef: { type: "string", description: "The house example the person picked: an example id from a previous call, or its pick-list number within the chosen shape. It is carried with the spec as the design direction." },
+        chosenExampleRef: { type: "string", description: "The delivered example the person picked: any example id from the structured examples index, or its pick-list number within the shown subset for the chosen shape. It is carried with the spec as the design reference." },
       },
     },
     annotations: READ,

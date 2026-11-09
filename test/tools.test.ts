@@ -7,7 +7,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runTool, TOOLS } from "../src/tools.ts";
 import { setRasterizerForTests } from "../src/preview.ts";
-import { EXAMPLES } from "../src/examples.ts";
+import { EXAMPLES_INDEX } from "../src/examples-data.ts";
+import { PHOTOS_INDEX } from "../src/photos-data.ts";
 import { BENEFITS, NO_FEES_LINE, TAX_NOTE } from "../src/facts.ts";
 import worker from "../src/index.ts";
 import { sha256Hex } from "../src/keys.ts";
@@ -47,8 +48,9 @@ class MemoryKV {
 const TEST_KEY = `tg_test_mcp-acceptance-test-church_${"A".repeat(43)}`;
 const LIVE_KEY_WRONG_ORG = `tg_test_other-church_${"B".repeat(43)}`;
 
-async function makeEnv(): Promise<{ env: Env; keys: MemoryKV }> {
+async function makeEnv(): Promise<{ env: Env; keys: MemoryKV; artwork: MemoryKV }> {
   const keys = new MemoryKV();
+  const artwork = new MemoryKV();
   const now = new Date().toISOString();
   const mk = async (key: string, slug: string, email: string, mode: "live" | "test") => {
     const rec: KeyRecord = {
@@ -61,13 +63,23 @@ async function makeEnv(): Promise<{ env: Env; keys: MemoryKV }> {
   await mk(LIVE_KEY_WRONG_ORG, "other-church", "other@example.com", "test");
   const env = {
     MCP_KEYS: keys as unknown as KVNamespace,
-    MCP_ARTWORK: new MemoryKV() as unknown as KVNamespace,
+    MCP_ARTWORK: artwork as unknown as KVNamespace,
     ORDERS: new MemoryKV() as unknown as KVNamespace,
     DEV_ORDERS: new MemoryKV() as unknown as KVNamespace,
     STRIPE_API_KEY_TEST: "sk_test_stub",
     MCP_INVOKE_SECRET: "<MASKED_SECRET_003>",
   } as unknown as Env;
-  return { env, keys };
+  return { env, keys, artwork };
+}
+
+// Seed the KV-backed example and photo bytes (a real PNG payload for
+// every id in the committed indexes), so route and inline-image tests
+// exercise the same KV path production uses.
+async function seedExamples(artwork: MemoryKV): Promise<void> {
+  const png = Buffer.from(PNG_B64, "base64");
+  const bytes = png.buffer.slice(png.byteOffset, png.byteOffset + png.byteLength) as ArrayBuffer;
+  for (const e of EXAMPLES_INDEX) await artwork.put(`EXAMPLE:${e.id}`, bytes);
+  for (const p of PHOTOS_INDEX) await artwork.put(`PHOTO:${p.id}`, bytes);
 }
 
 function req(key?: string): Request {
@@ -155,7 +167,7 @@ test("cold leg: discovery, quote, product, artwork spec need no key", async () =
   assert.ok(!JSON.stringify(d.structured).includes("WELCOME10"), "discount code absent from discovery (pricing rule 2026-11-08)");
   assert.ok(!(d.structured.pricing as Record<string, unknown>).discount, "no discount field in discovery pricing");
   const a = await runTool(env, req(), "get_artwork_spec", { shape: "round" }, fetchFn);
-  assert.equal((a.structured.examples as unknown[]).length, 3);
+  assert.equal((a.structured.examples as unknown[]).length, EXAMPLES_INDEX.filter((e) => e.shape === "round").length);
   assert.ok(JSON.stringify(a.structured).includes("5 MB"), "artwork spec states the 5 MB intake cap");
   assert.ok(!JSON.stringify(a.structured).includes("never raster"), "intake wording is permissive, no raster refusal");
   await assert.rejects(() => runTool(env, req(), "get_quote", { quantity: 99 }, fetchFn), /minimum order is 100/);
@@ -402,72 +414,80 @@ test("request_invoice in test mode still stops at stripe_unavailable while no te
   assert.equal(calls.filter((c) => c.url.includes("api.stripe.com")).length, 0);
 });
 
-test("get_artwork_spec: inline example images and numbered build-from pick list, both shapes", async () => {
-  const { env } = await makeEnv();
+test("get_artwork_spec: full delivered set in the structured index, bounded inline images, numbered pick list", async () => {
+  const { env, artwork } = await makeEnv();
+  await seedExamples(artwork);
   const fetchFn = stubFetch([]) as typeof fetch;
   for (const shape of ["round", "square"] as const) {
     const r = await runTool(env, req(), "get_artwork_spec", { shape }, fetchFn);
-    const expected = EXAMPLES.filter((e) => e.shape === shape);
-    assert.equal(expected.length, 3);
-    // structuredContent unchanged: the examples array and its
-    // displayUrls are intact, in the established order.
-    const exs = r.structured.examples as Array<{ id: string; direction: string; shape: string; displayUrl: string }>;
+    const expected = EXAMPLES_INDEX.filter((e) => e.shape === shape);
+    assert.ok(expected.length >= 2, "each shape carries several delivered examples");
+    // The structured index carries the full set for the shape, in
+    // index order, each with its display URL.
+    const exs = r.structured.examples as Array<{ id: string; organization: string; shape: string; displayUrl: string }>;
     assert.deepEqual(exs.map((e) => e.id), expected.map((e) => e.id));
     for (const [i, e] of exs.entries()) {
-      assert.equal(e.direction, expected[i].direction);
+      assert.equal(e.organization, expected[i].organization);
       assert.equal(e.shape, shape);
-      assert.ok(e.displayUrl.endsWith(`/mcp/examples/${e.id}.png`), "displayUrl fallback intact");
+      assert.ok(e.displayUrl.endsWith(`/mcp/examples/${e.id}.png`), "displayUrl intact");
     }
-    // The result carries exactly one text block (r.text) plus three
-    // image blocks (r.images), and no single-image field.
+    // Inline images are bounded: the first 6 examples for the shape,
+    // then the two mounting photos.
     assert.equal(typeof r.text, "string");
     assert.equal(r.image, undefined);
     assert.ok(r.images);
-    assert.equal(r.images.length, 3);
-    for (const [i, img] of r.images.entries()) {
+    const inlineCount = Math.min(6, expected.length);
+    assert.equal(r.images.length, inlineCount + 2);
+    for (const img of r.images.slice(0, inlineCount)) {
       assert.equal(img.mimeType, "image/png");
-      // Byte equality against the source files the displayUrls serve.
-      assert.equal(img.data, expected[i].pngBase64);
-      const bytes = Buffer.from(img.data, "base64");
-      assert.ok(bytes.equals(Buffer.from(expected[i].pngBase64, "base64")));
-      assert.equal(bytes.subarray(0, 8).toString("hex"), "89504e470d0a1a0a", "real PNG magic");
+      assert.equal(Buffer.from(img.data, "base64").subarray(0, 8).toString("hex"), "89504e470d0a1a0a", "real PNG magic");
     }
-    // Numbered pick list: entries correspond one-to-one and in order
-    // with structuredContent.examples and with the image blocks
-    // (entry N describes image block N).
+    // Numbered pick list covers the inline subset, in order, one line
+    // per shown image.
     let lastIdx = -1;
-    for (const [i, e] of exs.entries()) {
-      const line = `${i + 1}. ${shape === "round" ? "Round" : "Square"}, ${expected[i].pickLabel}: ${e.direction}.`;
+    for (const [i, e] of expected.slice(0, 6).entries()) {
+      const line = `${i + 1}. ${e.organization} (${e.shape}): the design delivered to ${e.organization}, at https://tap.giving/mcp/examples/${e.id}.png.`;
       const idx = r.text.indexOf(line);
       assert.ok(idx > lastIdx, `pick list entry ${i + 1} present and in order`);
       lastIdx = idx;
     }
-    // Build-from framing: directions are starting templates for the
-    // caller's own artwork, submitted via submit_artwork; the closing
-    // ask is a number selection of a direction.
-    assert.ok(r.text.includes("starting templates to build from"), "frames examples as build-from templates");
-    assert.ok(r.text.includes("Tell me the number of the direction you want to build from"), "closing ask: number of a direction");
-    assert.ok(r.text.includes("compose your own artwork"), "compose step is explicit");
+    // Honest framing: real delivered designs, full count stated, an
+    // example is never shipped to a different organization as-is.
+    assert.ok(r.text.includes(`${expected.length} real ${shape} designs`), "states the full-set count");
+    assert.ok(r.text.includes("never shipped to a different organization as-is"), "no example is presented as shippable to another organization");
     assert.ok(r.text.includes("submit_artwork"), "names the submission path");
-    assert.ok(r.text.includes("never ordered or shipped as-is"), "no example is presented as shippable as-is");
-    assert.ok(!/\b(pick|choose) (one|it|the|your)\b/i.test(r.text), "no bare pick/choose phrasing");
+    assert.ok(!/house/i.test(r.text), "no house-template framing");
+    const explainer = r.structured.explainerPhotos as Array<{ category: string }>;
+    assert.ok(explainer.length > 0 && explainer.every((p) => ["mounting explainer", "church setting", "in-use tap moment"].includes(p.category)), "explainer set rides with the spec");
   }
 });
 
-test("example display routes: HEAD returns the GET headers with no body", async () => {
-  const { env } = await makeEnv();
-  for (const ex of [EXAMPLES[0], EXAMPLES[1]]) {
+test("example display routes: KV bytes served, HEAD mirrors GET, retired house ids 404", async () => {
+  const { env, artwork } = await makeEnv();
+  await seedExamples(artwork);
+  for (const ex of [EXAMPLES_INDEX[0], EXAMPLES_INDEX[1]]) {
     const url = `https://tap.giving/mcp/examples/${ex.id}.png`;
     const get = await worker.fetch(new Request(url), env);
     assert.equal(get.status, 200);
     const getBytes = Buffer.from(await get.arrayBuffer());
-    assert.ok(getBytes.equals(Buffer.from(ex.pngBase64, "base64")), "GET serves the source bytes");
+    assert.ok(getBytes.equals(Buffer.from(PNG_B64, "base64")), "GET serves the KV bytes");
     const head = await worker.fetch(new Request(url, { method: "HEAD" }), env);
     assert.equal(head.status, 200);
     assert.equal(head.headers.get("Content-Type"), "image/png");
     assert.equal(head.headers.get("Content-Length"), String(getBytes.length));
     assert.equal((await head.arrayBuffer()).byteLength, 0, "HEAD has no body");
   }
+  for (const old of ["ex-navy-round", "ex-forest-round", "ex-slate-round", "ex-cream-square", "ex-burgundy-square", "ex-sand-square"]) {
+    const res = await worker.fetch(new Request(`https://tap.giving/mcp/examples/${old}.png`), env);
+    assert.equal(res.status, 404, `retired ${old} 404s`);
+    const resSvg = await worker.fetch(new Request(`https://tap.giving/mcp/examples/${old}.svg`), env);
+    assert.equal(resSvg.status, 404, `retired ${old} svg 404s`);
+  }
+  const photo = await worker.fetch(new Request("https://tap.giving/mcp/photos/cafe-table-disc.webp"), env);
+  assert.equal(photo.status, 200, "KV-backed photo served");
+  assert.equal(photo.headers.get("Content-Type"), "image/webp");
+  const barred = await worker.fetch(new Request("https://tap.giving/mcp/photos/pews3.webp"), env);
+  assert.equal(barred.status, 404, "pews3 is not served");
 });
 
 test("GET self-description carries the connect guidance", async () => {
@@ -577,17 +597,22 @@ test("F7 + F9 + F6: quote cliff line, helpful minimum, no source paths in text",
     /smallest order is 100 discs for \$500\.00 list/);
 });
 
-test("F12: chosenExampleRef resolves by number and by id, confirms by name, refuses unknown", async () => {
-  const { env } = await makeEnv();
+test("F12: chosenExampleRef resolves by subset number and by any set id, confirms by organization, refuses unknown", async () => {
+  const { env, artwork } = await makeEnv();
+  await seedExamples(artwork);
   const fetchFn = stubFetch([]) as typeof fetch;
+  const round = EXAMPLES_INDEX.filter((e) => e.shape === "round");
   const byNum = await runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: "2" }, fetchFn);
-  assert.ok(byNum.text.includes("You picked: Deep Green & Gold Leaf"), "pick confirmed by name");
-  assert.equal(byNum.images!.length, 1, "only the chosen design is shown");
-  assert.equal((byNum.structured.chosenExample as { id: string }).id, "ex-forest-round");
-  const byId = await runTool(env, req(), "get_artwork_spec", { shape: "square", chosenExampleRef: "ex-sand-square" }, fetchFn);
-  assert.ok(byId.text.includes("You picked: Soft Sand, Stacked Serif"));
-  await assert.rejects(() => runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: "9" }, fetchFn),
-    /not one of the example directions/);
+  assert.ok(byNum.text.includes(`You picked the design delivered to ${round[1].organization}`), "pick confirmed by organization");
+  assert.equal((byNum.structured.chosenExample as { id: string }).id, round[1].id);
+  assert.equal(byNum.images!.length, 3, "the chosen design plus the two mounting photos");
+  const lastRound = round[round.length - 1];
+  const byId = await runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: lastRound.id }, fetchFn);
+  assert.equal((byId.structured.chosenExample as { id: string }).id, lastRound.id, "any id in the full set resolves, not just the inline subset");
+  await assert.rejects(() => runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: "not-a-real-example" }, fetchFn),
+    /not one of the delivered examples/);
+  await assert.rejects(() => runTool(env, req(), "get_artwork_spec", { shape: "round", chosenExampleRef: "ex-navy-round" }, fetchFn),
+    /not one of the delivered examples/, "retired house ids are refused");
   const spec = await runTool(env, req(), "get_artwork_spec", { shape: "round" }, fetchFn);
   assert.ok(JSON.stringify(spec.structured).includes("disc-template-round.svg"), "template linked from the spec");
   assert.ok(JSON.stringify(spec.structured).includes("43.25"), "screw-hole positions stated in the spec");
@@ -1061,7 +1086,7 @@ test("items 4, 7b, 9: get_product topic answers mirror the all-topics structure;
   const block = topic.structured.discs as Record<string, unknown>;
   assert.ok(block && typeof block === "object", "the topic block sits under its topic name");
   assert.match(String(block.destination), /per disc/);
-  assert.equal((topic.structured.photos as unknown[]).length, 1);
+  assert.equal((topic.structured.photos as unknown[]).length, PHOTOS_INDEX.length);
   assert.match(String(topic.structured.destination), /per disc/);
   assert.equal(topic.images?.length, 1);
   const shipping = await runTool(env, req(), "get_product", { topic: "shipping" }, fetchFn);

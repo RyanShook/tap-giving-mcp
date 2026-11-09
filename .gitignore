@@ -10,3 +10,4 @@ dist/
 # Generated example render intermediates (the .png.ts modules are the committed form)
 src/example-assets/*.png
 !src/example-assets/*.png.ts
+build/

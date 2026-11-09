@@ -5,8 +5,9 @@
 // accepted and ignored. The endpoint is POST https://tap.giving/mcp;
 // a plain GET on it returns the human-and-agent readable
 // self-description, GET /mcp/artwork/<ref> serves stored submission
-// bytes at a capability URL, and GET /mcp/examples/<id>.png serves
-// the house template examples.
+// bytes at a capability URL, GET /mcp/examples/<id>.png serves the
+// delivered-proof examples (bytes in the MCP_ARTWORK KV namespace),
+// and GET /mcp/photos/<id>.webp serves the labeled photo set.
 //
 // Spec: documentation/mcp-connector-surface-spec-2026-11-06.md in the
 // business repo; the published copy is docs/spec.md in this repo.
@@ -17,7 +18,8 @@ import { PRODUCT_PHOTOS, TOOLS, artworkBytesKey, readArtworkRecord, runTool } fr
 import { buildTemplateSvg } from "./preview.ts";
 import { ToolError, isRecord } from "./errors.ts";
 import { DETECTED_MEDIA_TYPE } from "./sniff.ts";
-import { EXAMPLES, exampleById } from "./examples.ts";
+import { EXAMPLES_INDEX } from "./examples-data.ts";
+import { PHOTOS_INDEX } from "./photos-data.ts";
 
 const PROTOCOL_VERSION = "2025-03-26";
 const UNAUTH_LIMIT = 120; // per IP per 10 minutes on the keyless surface
@@ -220,25 +222,22 @@ export default {
       return new Response("Method not allowed. POST JSON-RPC to this endpoint; GET returns its description.", { status: 405 });
     }
 
-    // House template examples, served for display.
+    // Delivered-proof examples, served for display. Bytes live in
+    // the MCP_ARTWORK KV namespace (EXAMPLE:<id>), uploaded from the
+    // delivered proof files by tools/build-assets.mjs; the metadata
+    // index is src/examples-data.ts. Unknown ids, including the six
+    // retired house templates, return 404.
     const exMatch = /^\/mcp\/examples\/([a-z0-9-]+)\.png$/.exec(url.pathname);
     if (exMatch && (request.method === "GET" || request.method === "HEAD")) {
-      const ex = exampleById(exMatch[1]);
-      if (!ex) return new Response("not found", { status: 404 });
-      const bytes = Uint8Array.from(atob(ex.pngBase64), (c) => c.charCodeAt(0));
+      if (!EXAMPLES_INDEX.some((e) => e.id === exMatch[1])) return new Response("not found", { status: 404 });
+      const buf = await env.MCP_ARTWORK.get(`EXAMPLE:${exMatch[1]}`, "arrayBuffer");
+      if (!buf) return new Response("not found", { status: 404 });
+      const bytes = new Uint8Array(buf);
       const headers = { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400", "Content-Length": String(bytes.length) };
       if (request.method === "HEAD") return new Response(null, { status: 200, headers });
       return new Response(bytes as unknown as BodyInit, { status: 200, headers });
     }
-    const exSvgMatch = /^\/mcp\/examples\/([a-z0-9-]+)\.svg$/.exec(url.pathname);
-    if (exSvgMatch && (request.method === "GET" || request.method === "HEAD")) {
-      const ex = exampleById(exSvgMatch[1]);
-      if (!ex) return new Response("not found", { status: 404 });
-      const headers = { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=86400", "Content-Length": String(new TextEncoder().encode(ex.svgText).length) };
-      if (request.method === "HEAD") return new Response(null, { status: 200, headers });
-      return new Response(ex.svgText, { status: 200, headers });
-    }
-    void EXAMPLES;
+
 
     // The artwork template, with guide layers (F12).
     const tplMatch = /^\/mcp\/templates\/disc-template-(round|square)\.svg$/.exec(url.pathname);
@@ -254,7 +253,17 @@ export default {
     const photoMatch = /^\/mcp\/photos\/([a-z0-9-]+)\.webp$/.exec(url.pathname);
     if (photoMatch && (request.method === "GET" || request.method === "HEAD")) {
       const photo = PRODUCT_PHOTOS.find((x) => x.id === photoMatch[1]);
-      if (!photo) return new Response("not found", { status: 404 });
+      if (!photo) {
+        // The labeled photo set beyond the embedded phone-tap photo is
+        // served from the MCP_ARTWORK KV namespace (PHOTO:<id>).
+        if (!PHOTOS_INDEX.some((p) => p.id === photoMatch[1])) return new Response("not found", { status: 404 });
+        const buf = await env.MCP_ARTWORK.get(`PHOTO:${photoMatch[1]}`, "arrayBuffer");
+        if (!buf) return new Response("not found", { status: 404 });
+        const kvBytes = new Uint8Array(buf);
+        const kvHeaders = { "Content-Type": "image/webp", "Cache-Control": "public, max-age=86400", "Content-Length": String(kvBytes.length) };
+        if (request.method === "HEAD") return new Response(null, { status: 200, headers: kvHeaders });
+        return new Response(kvBytes as unknown as BodyInit, { status: 200, headers: kvHeaders });
+      }
       const bytes = Uint8Array.from(atob(photo.data), (c) => c.charCodeAt(0));
       const headers = { "Content-Type": "image/webp", "Cache-Control": "public, max-age=86400", "Content-Length": String(bytes.length) };
       if (request.method === "HEAD") return new Response(null, { status: 200, headers });

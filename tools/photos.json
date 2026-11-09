@@ -1,0 +1,186 @@
+[
+  {
+    "alt": "Rows of wooden pews in an empty sanctuary, each pew back carrying a small dark tap disc",
+    "category": "church setting",
+    "id": "pews-discs-on-pews",
+    "source": "pews2.webp",
+    "title": "Real installation photo: discs mounted on wooden pew backs in a sanctuary (customer not named)",
+    "use": "Shows what a full pew installation looks like when someone asks how discs read at room scale."
+  },
+  {
+    "alt": "Side view down rows of wooden pews with tap discs on the pew backs in a bright sanctuary",
+    "category": "church setting",
+    "id": "pews-sanctuary-wide",
+    "source": "pews4.webp",
+    "title": "Real installation photo: pew rows with discs, viewed from the side aisle (customer not named)",
+    "use": "Shows pew-back placement from the aisle when someone is picturing their own sanctuary."
+  },
+  {
+    "alt": "Auditorium chairs with white tap discs on the seat backs, congregation standing near the stage",
+    "category": "church setting",
+    "id": "auditorium-chairs-service",
+    "source": "nfc-giving-plates-church-auditorium.webp",
+    "title": "Real installation photo: discs on auditorium chair backs during a service (customer not named)",
+    "use": "Shows discs in place on stacking chairs while a service is running."
+  },
+  {
+    "alt": "Rows of auditorium chairs with tap discs on the backs, people gathered near a stage with screens",
+    "category": "church setting",
+    "id": "auditorium-service-view",
+    "source": "nfc-giving-church-service.webp",
+    "title": "Real installation photo: rows of auditorium chairs with discs, facing the stage (customer not named)",
+    "use": "Shows the chair-back layout across a whole seating section."
+  },
+  {
+    "alt": "Close-up of a white oval disc screwed to an auditorium chair back; the design reads TAP YOUR PHONE HERE with a QR code and Woodlands Church printed on it",
+    "category": "church setting",
+    "id": "chair-back-disc-closeup",
+    "source": "tap-to-give-plate-chair-closeup.webp",
+    "title": "Close-up of a delivered disc on a chair back at Woodlands Church (the design names Woodlands Church)",
+    "use": "The clearest shot of how a finished disc looks mounted on a chair back, including the two screws."
+  },
+  {
+    "alt": "A cafe table with a coffee mug; a small navy sample disc with a QR code is stuck to the table edge",
+    "category": "cafe-restaurant setting",
+    "id": "cafe-table-disc",
+    "source": "stock-restaurants-table-tap.webp",
+    "title": "Setting image (stock photo): a Tap.Giving sample design disc on a cafe table",
+    "use": "Shows table placement for a cafe or restaurant: the disc sits flat on the table where a guest can tap it."
+  },
+  {
+    "alt": "A wooden cafe table with a latte; a small navy sample disc is stuck to the table corner",
+    "category": "cafe-restaurant setting",
+    "id": "cafe-counter-disc",
+    "source": "stock-restaurants-cafe-counter.webp",
+    "title": "Setting image (stock photo): a Tap.Giving sample design disc on a wooden cafe table",
+    "use": "Shows a disc on a cafe table at drink height, for counter and table service conversations."
+  },
+  {
+    "alt": "A hand holding a phone against a navy tap disc fixed to the back of a chair",
+    "category": "in-use tap moment",
+    "id": "phone-tap",
+    "source": "repo:src/product-assets/phone-tap.webp",
+    "title": "A phone tapping a disc mounted on a chair back",
+    "use": "The basic explainer: this is the tap itself, phone to disc, no app and no camera needed."
+  },
+  {
+    "alt": "From a seated position, a hand holds a phone showing a giving page against a white disc on the chair back ahead, congregation and stage beyond",
+    "category": "in-use tap moment",
+    "id": "tap-chair-service",
+    "source": "tap-to-give-tapping-phone-to-plate-chair.webp",
+    "title": "Tap.Giving product photography: tapping a chair-back disc during a service, giving page open on the phone",
+    "use": "Shows the full moment: disc, phone, and the giving page it opens. Staged product photography, not a customer photo."
+  },
+  {
+    "alt": "A woman seated in a pew holds her phone, showing a giving page, against a black disc on the pew back in front of her",
+    "category": "in-use tap moment",
+    "id": "tap-pew-service",
+    "source": "tap-to-give-tapping-phone-to-plate-pew.webp",
+    "title": "Tap.Giving product photography: tapping a pew-back disc mid-service",
+    "use": "Shows the pew version of the tap, from the giver's point of view. Staged product photography, not a customer photo."
+  },
+  {
+    "alt": "Over a seated man's shoulder, a hand holds a phone against a blue disc on the chair back ahead during a service",
+    "category": "in-use tap moment",
+    "id": "tap-chairback-service",
+    "source": "tap-to-give-plate-on-chair-back-service.webp",
+    "title": "Tap.Giving product photography: phone held to a chair-back disc, congregation facing the stage",
+    "use": "Shows the disc at reading distance on a chair back in a filled room. Staged product photography, not a customer photo."
+  },
+  {
+    "alt": "Wide view across rows of auditorium chairs, each carrying a disc; a hand holds a phone to the nearest disc",
+    "category": "in-use tap moment",
+    "id": "tap-chair-rows-wide",
+    "source": "tap-to-give-chair-rows-tap-wide.webp",
+    "title": "Wide shot: rows of auditorium chairs with a disc on every seat back, one being tapped",
+    "use": "Shows density: what one disc per seat looks like across a room, with a tap in progress."
+  },
+  {
+    "alt": "Wide auditorium shot with discs on the seat backs and one person tapping a disc with a phone",
+    "category": "in-use tap moment",
+    "id": "tap-auditorium-wide",
+    "source": "tap-to-give-auditorium-chairs-tap.webp",
+    "title": "Tap.Giving product photography: wide auditorium, discs on seat backs, a congregant tapping",
+    "use": "Shows a large-room installation in use. Staged product photography, not a customer photo."
+  },
+  {
+    "alt": "A congregation standing in worship while one seated person taps a chair-back disc with a phone",
+    "category": "in-use tap moment",
+    "id": "tap-during-worship",
+    "source": "tap-to-give-giving-during-worship-service.webp",
+    "title": "Tap.Giving product photography: a seated congregant taps during standing worship",
+    "use": "Shows that a tap takes a second and happens without leaving the seat. Staged product photography, not a customer photo."
+  },
+  {
+    "alt": "Looking along occupied pews toward a speaker; a tap disc is fixed to the pew back in the foreground",
+    "category": "in-use tap moment",
+    "id": "tap-pew-during-service",
+    "source": "tap-to-give-pew-plate-during-service.webp",
+    "title": "Tap.Giving product photography: a pew disc with occupied pews and a speaker ahead",
+    "use": "Shows a pew disc in context during a service. Staged product photography, not a customer photo."
+  },
+  {
+    "alt": "Two blue sample discs on a dark surface: one face up reading TAP TO CONNECT and TAP TO GIVE, one showing the white 3M adhesive backing",
+    "category": "product detail",
+    "id": "disc-front-and-back",
+    "source": "tap-front-back.webp",
+    "title": "Photo of a sample disc front and its 3M adhesive back",
+    "use": "Shows both sides of the physical product: printed face and peel-and-stick back."
+  },
+  {
+    "alt": "A navy sample disc reading TAP YOUR PHONE HERE with an NFC wave and QR code above a printed spec card listing size, mounting, chip and destination",
+    "category": "product detail",
+    "id": "sample-disc-spec",
+    "source": "tap-giving-sample-disc.webp",
+    "title": "The Tap.Giving supplier sample disc with its spec card",
+    "use": "Shows the standard sample design and the physical spec (4 in round, 3M adhesive, NTAG213) in one frame."
+  },
+  {
+    "alt": "A dark navy disc made for Visible Church: TAP YOUR PHONE HERE, an NFC wave, a QR code and the Visible Church wordmark",
+    "category": "product detail",
+    "id": "visible-church-disc",
+    "source": "plate-hero-visible-church.webp",
+    "title": "The real disc design delivered to Visible Church, shown as delivered",
+    "use": "A named customer's finished disc, for showing the print quality and layout of a real order."
+  },
+  {
+    "alt": "A small black disc reading TAP HERE with two visible screw holes, lying on light wood",
+    "category": "product detail",
+    "id": "disc-on-wood",
+    "source": "product/tap-plate-black-on-wood.webp",
+    "title": "Photo of a black disc with screw holes lying on a wood surface",
+    "use": "Shows the screw-mount variant at rest: the holes are part of the disc, nothing else to attach."
+  },
+  {
+    "alt": "A hand holding a thick stack of blue sample discs reading TAP TO CONNECT and TAP TO GIVE",
+    "category": "product detail",
+    "id": "discs-stacked-production",
+    "source": "product/tap-plates-stacked-blue.jpg",
+    "title": "Production photo: a hand holding a stack of finished sample discs",
+    "use": "Shows the discs are thin, light and stackable, straight from production."
+  },
+  {
+    "alt": "Close-up of the white 3M 9448A adhesive backing covering the back of a disc",
+    "category": "mounting explainer",
+    "id": "mount-adhesive-photo",
+    "source": "mount-adhesive.webp",
+    "title": "Mounting explainer: the 3M adhesive backing, close up",
+    "use": "Answers how the no-screw mount works: peel the backing and press the disc onto a clean, smooth surface."
+  },
+  {
+    "alt": "Close-up of a black disc reading TAP PHONE HERE with a small screw hole at each side",
+    "category": "mounting explainer",
+    "id": "mount-screws-photo",
+    "source": "mount-screws.webp",
+    "title": "Mounting explainer: a disc face showing the two screw holes",
+    "use": "Answers where the screws go on the screw-mount variant: one hole at each side of the disc."
+  },
+  {
+    "alt": "A black disc reading TAP PHONE HERE lying on wood, a pre-drilled hole at each side",
+    "category": "mounting explainer",
+    "id": "plate-with-holes",
+    "source": "example-plate-with-holes.webp",
+    "title": "Mounting explainer: a screw-mount disc on wood, both holes visible",
+    "use": "Shows the screw-mount disc flat against a wooden surface, the way it sits once fixed."
+  }
+]

@@ -9,7 +9,8 @@ import assert from "node:assert/strict";
 import { quoteFor, tierForQuantity, PRICING_TIERS } from "../src/pricing.ts";
 import { ARTWORK_GEOMETRY, NO_FEES_LINE, PRODUCT, SERVER_DESCRIPTION, TAX_NOTE } from "../src/facts.ts";
 import { TOOLS, toolByName } from "../src/tools.ts";
-import { EXAMPLES } from "../src/examples.ts";
+import { EXAMPLES_INDEX } from "../src/examples-data.ts";
+import { PHOTOS_INDEX } from "../src/photos-data.ts";
 
 // llms.txt (business repo, website/llms.txt): "100-199 discs: $5.00 per
 // disc; 200-399: $4.00; 400+: $3.50; Minimum order: 100 discs".
@@ -104,14 +105,30 @@ test("get_quote's description carries the get_pricing alias", () => {
   assert.ok(toolByName("get_quote")!.description.includes("get_pricing"));
 });
 
-test("examples are a house set of six, round and square across it", () => {
-  assert.equal(EXAMPLES.length, 6);
-  assert.ok(EXAMPLES.some((e) => e.shape === "round"));
-  assert.ok(EXAMPLES.some((e) => e.shape === "square"));
-  for (const e of EXAMPLES) {
-    assert.ok(e.svgText.includes("<svg"), e.id);
-    assert.ok(e.pngBase64.length > 1000, e.id);
-    assert.ok(e.direction.length > 10, e.id);
+test("examples are the delivered proofs: one per delivered organization, round and square across the set", () => {
+  assert.equal(EXAMPLES_INDEX.length, 27);
+  assert.ok(EXAMPLES_INDEX.some((e) => e.shape === "round"));
+  assert.ok(EXAMPLES_INDEX.some((e) => e.shape === "square"));
+  const ids = new Set(EXAMPLES_INDEX.map((e) => e.id));
+  assert.equal(ids.size, EXAMPLES_INDEX.length, "ids unique");
+  for (const old of ["ex-navy-round", "ex-forest-round", "ex-slate-round", "ex-cream-square", "ex-burgundy-square", "ex-sand-square"]) {
+    assert.ok(!ids.has(old), `retired house example ${old} is gone`);
+  }
+  for (const e of EXAMPLES_INDEX) {
+    assert.ok(e.organization.length > 2, e.id);
+    assert.ok(e.source.endsWith(".png") || e.source.endsWith(".svg"), e.id);
+  }
+});
+
+test("photos are the labeled website set; pews3 is barred", () => {
+  assert.equal(PHOTOS_INDEX.length, 23);
+  const cats = new Set(PHOTOS_INDEX.map((p) => p.category));
+  for (const c of ["church setting", "cafe-restaurant setting", "in-use tap moment", "product detail", "mounting explainer"]) {
+    assert.ok(cats.has(c), c);
+  }
+  for (const p of PHOTOS_INDEX) {
+    assert.ok(p.title.length > 10 && p.alt.length > 10 && p.use.length > 10, p.id);
+    assert.ok(!p.source.includes("pews3"), "pews3 never enters the set");
   }
 });
 

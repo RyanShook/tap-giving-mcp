@@ -1,5 +1,68 @@
 # NFC Tap Builder by Tap.Giving: MCP v1 spec
 
+## Landing note (2026-11-08): examples are delivered proofs; labeled photo set added
+
+Ryan's ruling of 2026-11-08 supersedes every earlier passage in this
+spec that describes the examples as house templates or generic sample
+artwork (the examples passages in 2.6, the ruling record in 4.1, the
+acceptance summary in 6.3, and the Nov 6 build runbook among them):
+"check out website assets and only use assets from there. Delete all
+existing /examples and put all existing delivered proofs into
+/examples instead (compress if needed)."
+
+What shipped the same day:
+
+- The six house examples (ex-navy-round, ex-forest-round,
+  ex-slate-round, ex-cream-square, ex-burgundy-square, ex-sand-square)
+  are deleted: source SVGs, generated modules, and the generator that
+  built them. Their URLs return 404.
+- /mcp/examples/<org-slug>.png now serves one proof per DELIVERED
+  organization: 27 organizations, 25 round and 2 square. Delivered
+  was determined from the business records, not the proofs folder:
+  accounting/orders/_manifest.json (41 paid orders) joined to
+  accounting/orders/_status.json (36 shipped or delivered entries)
+  and CRM/deals.csv (36 unique won organizations) gives 32 unique
+  organizations at shipped or delivered stage. Of those, 27 have a
+  proof asset in website/assets/proofs/; five (Christ Community
+  Church, Encounter Church, Endurance Church, Glory City Church,
+  Unionville Alliance Church) have none and so have no example.
+  Where an organization had several proof files, the CRM deals
+  record's proof pointer names the delivered design; duplicate and
+  option files collapsed (14 extra files collapsed, byte-identical
+  copies first). One SVG-only proof (Lakewood Park Baptist Church)
+  was rendered to PNG. The folder's other proof files are lead
+  proofs for organizations that never ordered, in-production or
+  queued orders, a voided phantom order, test entries, and
+  email-derived working files: none is an example. The manifest is
+  tools/delivered-examples.json, with its evidence per organization.
+- Serving: proofs are resized to at most 424x424 PNG and uploaded to
+  the MCP_ARTWORK KV namespace as EXAMPLE:<id> by
+  tools/build-assets.mjs (npm run assets, then a wrangler kv bulk
+  put). No image bytes enter the Worker bundle; the committed index
+  (src/examples-data.ts) is metadata only. The same build produces
+  the photo set below.
+- get_artwork_spec returns the full delivered set for the requested
+  shape in structuredContent.examples (id, organization, shape,
+  displayUrl), inlines the first 6 example images for the shape plus
+  the two mounting photos, and accepts any set id as
+  chosenExampleRef (a number picks from the shown subset). Copy is
+  honest: an example is a real organization's delivered design and is
+  never shipped to a different organization as-is.
+- Photos: 23 labeled photos from website/assets/ (outside proofs/)
+  are served at /mcp/photos/<id>.webp from the same KV namespace
+  (PHOTO:<id>), returned by get_discovery and get_product in
+  structuredContent with category, title, alt and use labels, and by
+  get_artwork_spec as an explainer subset (mounted and in-place
+  photos plus the mounting images). Labeling follows the business
+  repo's documentation/visual-assets.md: real installation photos
+  stay unnamed (naming permission pending), stock scenes carry the
+  Tap.Giving sample design and are labeled as setting images, staged
+  scenes are labeled Tap.Giving product photography, and the one
+  close-up whose design is legible names the organization printed
+  on it (Woodlands Church). pews3 is barred and not included;
+  neither is any asset whose legible real customer design cannot be
+  labeled accurately. The stock pew scene (stock-church-pew-disc) is also excluded: Ryan ordered it deleted from the website assets and every surface the same day. The manifest is tools/photos.json.
+
 The published design spec for the Tap.Giving MCP server, "NFC Tap
 Builder by Tap.Giving" (repo: github.com/RyanShook/tap-giving-mcp,
 endpoint: POST https://tap.giving/mcp). This is the contract the v1
@@ -618,7 +681,7 @@ across it; it does not block the build: if polished examples lag the
 server work, v1 ships with the examples element returning the set we
 have, its count stated honestly in the launch report. No example asset
 is invented in this spec; the lawful source is new house artwork made
-for this purpose.
+for this purpose. (Superseded 2026-11-08 by the delivered-proofs landing note at the top of this spec.)
 LOGO ASK (Ryan): the design step also carries `logoAsk`, an optional
 input the client presents at the design step: the person may provide
 their logo for the agent to build from. Optional by construction
@@ -1755,7 +1818,7 @@ upfront in quote and recap, and no tax line in the MCP quote (2.3);
 first choice, the examples element, the optional logo ask, sections
 2.2.1, 2.6, 2.11) and the examples open item was CLOSED by Ryan's
 house-template ruling: the set is generic Tap.Giving house artwork, no
-customer designs, produced in the build without blocking it.
+customer designs, produced in the build without blocking it. (Superseded 2026-11-08 by the delivered-proofs landing note at the top of this spec.)
 enforced by the MCP's own tools (2.3, 2.5), free shipping listed
 upfront in quote and recap, and no tax line in the MCP quote (2.3).
 

@@ -40,7 +40,7 @@ Placing an order needs no key and no header. For the organization-bound surfaces
 
 1. Call `get_discovery` first. It orients a cold start in one call: the product, the first choice (shape: round or square), the per-disc price range, the artwork summary, and how an organization gets a key.
 2. Call `get_quote` for the binding quote at an exact quantity, and `get_product` for full product facts.
-3. Call `get_artwork_spec` for the production geometry of the chosen shape, build the artwork from its house example directions, and send it back with `submit_artwork`.
+3. Call `get_artwork_spec` for the production geometry of the chosen shape, build the artwork using the delivered examples in get_artwork_spec as references, and send it back with `submit_artwork`.
 4. To register interest before any key exists, call `start_order_intent` with a contact email. It captures the email through the same public capture endpoint the website uses.
 5. Call `get_order_questions` (no key needed) and ask its questions in the order given, then call `get_recap` (no key needed) to show the person the full order (artwork, quantity, shipping address, exact cost) before anything is locked in.
 6. Call `create_order` with the recap reference to place the order. A person from Tap.Giving follows up with the invoice; the person pays it when it arrives.
@@ -55,7 +55,7 @@ Keyless reads (no key, no email, nothing asked):
 | `get_discovery` | One-call orientation: product, shapes, the per-disc price range, artwork summary, capabilities, key route. | `server`, `introduction`, `pricing`, `capabilities` |
 | `get_quote` (alias `get_pricing`) | The binding quote at an exact quantity. Quantities under the 100-disc minimum are refused with the minimum stated. Maximum 7000. | `discUnitCents`, `discSubtotalCents`, `grandTotalCents`, `discount` (conditional line), `shippingLine`, `taxNote` |
 | `get_product` | Full product facts: discs, stands, badges, mounting, shipping terms. | `discs`, `stands`, `badges`, `shipping` |
-| `get_artwork_spec` | Production artwork geometry as structured millimetre data, plain guidelines, house template examples, and the optional logo ask. | geometry per shape, `guidelines`, `examples`, `logoAsk` |
+| `get_artwork_spec` | Production artwork geometry as structured millimetre data, plain guidelines, delivered example designs, and the optional logo ask. | geometry per shape, `guidelines`, `examples`, `logoAsk` |
 | `get_order_questions` | The order questions as structured data, in the exact order to ask them: shape, quantity, metal count, mounting with picture options, the link destination, contact name, email, and phone, and the shipping address last. With a key the answer also carries the key's organization block; without one, none is returned. | `questions` in order |
 
 Keyless or optional-key writes:

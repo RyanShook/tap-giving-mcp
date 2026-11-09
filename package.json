@@ -1,23 +1,24 @@
 {
-	"name": "tap-mcp",
-	"version": "1.0.0",
-	"private": true,
-	"description": "NFC Tap Builder by Tap.Giving: the public MCP server for Tap.Giving. Build and order custom NFC tap discs and tap tags for organizations of every kind: churches, nonprofits, restaurants, coffee shops, and local businesses. This server moves no money itself: it returns a hosted invoice link for a person to pay.",
-	"type": "module",
-	"scripts": {
-		"dev": "wrangler dev",
-		"deploy": "wrangler deploy",
-		"typecheck": "tsc --noEmit",
-		"test": "node --experimental-strip-types --test test/*.test.ts",
-		"test:preview-live": "node tools/preview-smoke.mjs"
-	},
-	"devDependencies": {
-		"@cloudflare/workers-types": "5.20260829.1",
-		"@types/node": "^22.0.0",
-		"typescript": "^7.0.2",
-		"wrangler": "4.127.1"
-	},
-	"dependencies": {
-		"@resvg/resvg-wasm": "^2.6.2"
-	}
+  "name": "tap-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NFC Tap Builder by Tap.Giving: the public MCP server for Tap.Giving. Build and order custom NFC tap discs and tap tags for organizations of every kind: churches, nonprofits, restaurants, coffee shops, and local businesses. This server moves no money itself: it returns a hosted invoice link for a person to pay.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "test:preview-live": "node tools/preview-smoke.mjs",
+    "assets": "node tools/build-assets.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260829.1",
+    "@types/node": "^22.0.0",
+    "typescript": "^7.0.2",
+    "wrangler": "4.127.1"
+  },
+  "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2"
+  }
 }
