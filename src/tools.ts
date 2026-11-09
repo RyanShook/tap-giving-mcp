@@ -12,7 +12,6 @@ import {
   SERVER_DESCRIPTION, SERVER_NAME, PRESENTATION_SYNONYMS, TAX_NOTE, PRICE_RANGE_LINE } from "./facts.ts";
 import { PRICING_TIERS } from "./pricing.ts";
 import { renderArtworkOnDisc, bytesToBase64, SCREW_HOLES } from "./preview.ts";
-import pewDiscPhoto from "./product-assets/pew-disc.webp.ts";
 import phoneTapPhoto from "./product-assets/phone-tap.webp.ts";
 import mountAdhesivePhoto from "./product-assets/mount-adhesive.webp.ts";
 import mountScrewsPhoto from "./product-assets/mount-screws.webp.ts";
@@ -136,10 +135,11 @@ function quoteText(q: Record<string, unknown>): string {
 }
 
 // The product in use, from the website's own assets (F1): the first
-// presentation shows the disc, not just words. Both ride inline as
-// image content and at display URLs served by this Worker.
+// presentation shows the disc, not just words. It rides inline as
+// image content and at a display URL served by this Worker. (The
+// pew-disc photo was removed 2026-11-08 on Ryan's directive: a
+// generated lifestyle render, deleted from the materials.)
 export const PRODUCT_PHOTOS = [
-  { id: "pew-disc", alt: "A Tap.Giving disc mounted on a seat back", data: pewDiscPhoto, mimeType: "image/webp" },
   { id: "phone-tap", alt: "A phone tapping a Tap.Giving disc on a chair back, opening the organization's page", data: phoneTapPhoto, mimeType: "image/webp" },
 ] as const;
 
@@ -722,7 +722,7 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
     benefits: BENEFITS,
     preview: {
       kind: previewKind,
-      ...(previewKind === "on-disc" ? { shapes: previewShapes, note: "Your design on the disc, cut shape applied. This preview render is the design check at this stage; nothing is emailed at the artwork stage, because no contact is captured yet. The emailed final proof belongs to the order stage, after order setup." } : {}),
+      ...(previewKind === "on-disc" ? { shapes: previewShapes, note: "Your design on the disc, cut shape applied. This preview render is the design check at this stage. Nothing is emailed at the artwork stage, because no contact is captured yet. The emailed final proof belongs to the order stage, after order setup." } : {}),
       ...(previewKind === "submitted-file" ? { note: "The on-disc render was unavailable in this call, so the submitted file itself is shown. Nothing is emailed at the artwork stage, because no contact is captured yet; the emailed final proof belongs to the order stage." } : {}),
       ...(previewKind === "unavailable" ? { note: "This file could not be rendered to an image here; it is on record. Nothing is emailed at the artwork stage, because no contact is captured yet; the emailed final proof belongs to the order stage." } : {}),
     },
@@ -1833,7 +1833,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "Send the finished artwork back. Intake is permissive by ruling: a real image is accepted in any format and rejected only on three sanity grounds " +
       "(malicious or masquerading content, over 5 MB decoded, or not decodable as the type it claims). Production fitness is judged later in the normal proof flow, never here. " +
-      "No key and no email are needed on the cold path; a keyed submission binds to the key's organization. The file argument carries the artwork file (filename, mediaType, contentBase64); sha256 is the hex SHA-256 of those file bytes; shape optionally names the shape the artwork was designed for; orderRef optionally attaches the submission to an existing order; logo optionally carries the source logo the artwork was built from; note is free text for the team. Each call creates a separate submission: resubmitting the same file mints a new artworkRef rather than replacing the earlier one. Returns the artworkRef every later step carries, a displayUrl, and, where this server can render the file, a preview of the person's own design composited on the disc (cut shape applied); where it cannot render the file, the answer says so plainly and never promises a preview or an email at this stage. " +
+      "No key and no email are needed on the cold path; a keyed submission binds to the key's organization. The file argument carries the artwork file (filename, mediaType, contentBase64); sha256 is the hex SHA-256 of those file bytes; shape optionally names the shape the artwork was designed for; orderRef optionally attaches the submission to an existing order; logo optionally carries the source logo the artwork was built from; note is free text for the team. Each call creates a separate submission: resubmitting the same file mints a new artworkRef rather than replacing the earlier one. Returns the artworkRef every later step carries, a displayUrl, and a preview of the person's own design composited on the disc (cut shape applied) for the renderable formats (SVG, PNG, JPEG, WebP, GIF); for a format this server cannot render here (for example PDF), the answer says so plainly and never promises a preview or an email at this stage. " +
       GATES.designApproval,
     inputSchema: {
       type: "object",

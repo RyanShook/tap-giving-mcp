@@ -146,7 +146,6 @@ Response, structured content (abbreviated):
   },
   "artworkSpec": {"summary": "106 mm square artboard; 100 mm cut (round or square); 3 mm bleed; vector artwork back (SVG preferred).", "tool": "get_artwork_spec"},
   "photos": [
-    {"id": "pew-disc", "alt": "A Tap.Giving disc mounted on a seat back", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/pew-disc.webp"},
     {"id": "phone-tap", "alt": "A phone tapping a Tap.Giving disc on a chair back, opening the organization's page", "mimeType": "image/webp", "displayUrl": "https://tap.giving/mcp/photos/phone-tap.webp"}
   ],
   "capabilities": {

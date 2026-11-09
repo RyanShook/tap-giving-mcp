@@ -510,11 +510,11 @@ test("F3 + F1: discovery classifies reads honestly and carries the product photo
   const caps = d.structured.capabilities as { readTools: string[]; keyedReadTools: string[] };
   assert.deepEqual(caps.readTools, ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions"]);
   assert.deepEqual(caps.keyedReadTools, ["get_recap", "get_order_status"]);
-  assert.ok(d.images && d.images.length === 2, "discovery returns the two product photos inline");
+  assert.ok(d.images && d.images.length === 1, "discovery returns the product photo inline");
   assert.ok(d.text.includes("Recaps and order status are reads that use your organization key"));
   assert.ok(!/ask Ryan/.test(d.text), "no first-name key ask in discovery text");
   const p = await runTool(env, req(), "get_product", {}, fetchFn);
-  assert.ok(p.images && p.images.length === 2, "product returns the two photos inline");
+  assert.ok(p.images && p.images.length === 1, "product returns the product photo inline");
   assert.ok(!/rides a later phase/.test(JSON.stringify(p.structured)), "no phase jargon in product facts");
 });
 
@@ -652,7 +652,7 @@ test("F12 routes: the template SVG and the product photos are served", async () 
   const tplText = await tpl.text();
   assert.ok(tplText.includes('id="screw-hole-guides"'), "template carries the hole guides");
   assert.ok(tplText.includes('id="cut-guide"') && tplText.includes('id="safe-guide"') && tplText.includes('id="bleed-guide"'));
-  const photo = await worker.fetch(new Request("https://tap.giving/mcp/photos/pew-disc.webp"), env);
+  const photo = await worker.fetch(new Request("https://tap.giving/mcp/photos/phone-tap.webp"), env);
   assert.equal(photo.status, 200);
   assert.equal(photo.headers.get("Content-Type"), "image/webp");
 });
@@ -1012,9 +1012,9 @@ test("items 4, 7b, 9: get_product topic answers mirror the all-topics structure;
   const block = topic.structured.discs as Record<string, unknown>;
   assert.ok(block && typeof block === "object", "the topic block sits under its topic name");
   assert.match(String(block.destination), /per disc/);
-  assert.equal((topic.structured.photos as unknown[]).length, 2);
+  assert.equal((topic.structured.photos as unknown[]).length, 1);
   assert.match(String(topic.structured.destination), /per disc/);
-  assert.equal(topic.images?.length, 2);
+  assert.equal(topic.images?.length, 1);
   const shipping = await runTool(env, req(), "get_product", { topic: "shipping" }, fetchFn);
   assert.ok((shipping.structured.shipping as Record<string, unknown>).terms);
   const all = await runTool(env, req(), "get_product", {}, fetchFn);
@@ -1038,10 +1038,14 @@ test("items 1, 2: submit_artwork nextStep sequences the key after the capture; n
   const note = String((r.structured.preview as Record<string, unknown>).note);
   assert.match(note, /Nothing is emailed at the artwork stage/);
   assert.doesNotMatch(r.text + " " + note, /proof we email|emailed proof shows|final proof comes by email/);
-  // No test rasterizer here, so the PNG rides as the submitted file and
-  // the nextStep must not claim an on-disc preview image exists.
-  assert.match(ns, /could not render it on the disc/);
-  assert.doesNotMatch(ns, /the preview image with this answer/);
+  // No test rasterizer is installed here: the REAL rasterizer path
+  // runs (test/preview-real.test.ts pins it directly), so the PNG is
+  // composited on the disc and the nextStep truthfully directs the
+  // agent to the preview image. Before the 2026-11-08 rasterizer fix
+  // this assertion expected the submitted-file fallback, which is
+  // exactly how the fake seam masked the dead production renderer.
+  assert.equal((r.structured.preview as { kind: string }).kind, "on-disc");
+  assert.match(ns, /the preview image with this answer/);
 });
 
 test("items 1, 2: with a working render, submit_artwork nextStep does direct the agent to the preview image", async () => {
