@@ -48,9 +48,8 @@ export const SERVER_DESCRIPTION =
 export const PRESENTATION_SYNONYMS = ["tap discs", "tap plates", "tap tags", "NFC tap discs"];
 export const ENDPOINT = "https://tap.giving/mcp";
 export const REPO_URL = "https://github.com/RyanShook/tap-giving-mcp";
-// How a person gets a key (F2): a role and an address, never a first
-// name, plus the turnaround and what to say. hello@tap.giving is the
-// published contact address (it is on the website's own emails).
+// The published contact address (it is on the website's own
+// emails). No key exists anywhere in this server (Ryan, 2026-11-09).
 export const TEAM_EMAIL = "hello@tap.giving";
 
 // The standing differentiators (llms.txt and for-agents fact set),
