@@ -350,7 +350,7 @@ test("register_webhook no longer exists as a tool (retired from v1)", async () =
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   assert.equal(TOOLS.some((t) => t.name === "register_webhook"), false, "the tool is not registered");
-  assert.equal(TOOLS.length, 10, "the v1 surface is ten tools");
+  assert.equal(TOOLS.length, 11, "the v1 surface is eleven tools (get_examples added, SPEC mcp-examples-spec)");
   await assert.rejects(
     () => runTool(env, req(), "register_webhook", { callbackUrl: "https://example.com/hook", events: ["proof_ready"] }, fetchFn),
     (e: Error & { code?: string }) => e.code === "not_found");
@@ -543,7 +543,7 @@ test("F3 + F1: discovery classifies reads honestly and carries the product photo
   // The no-keys classification (2026-11-09): every tool runs with no
   // credential; the split itself is asserted in
   // test/discovery-key-honesty.test.ts.
-  assert.deepEqual(caps.readTools, ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap", "get_order_status"]);
+  assert.deepEqual(caps.readTools, ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_examples", "get_order_questions", "get_recap", "get_order_status"]);
   assert.deepEqual(caps.writeTools, ["submit_artwork", "start_order_intent", "create_order"]);
   assert.ok(!("keyedReadTools" in caps) && !("howToGetAKey" in caps), "no keyed classification survives");
   assert.ok(d.images && d.images.length === 1, "discovery returns the product photo inline");

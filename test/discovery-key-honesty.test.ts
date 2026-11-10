@@ -73,6 +73,7 @@ const PROBE_ARGS: Record<string, Record<string, unknown>> = {
   get_quote: { quantity: 250 },
   get_product: {},
   get_artwork_spec: { shape: "round" },
+  get_examples: {},
   get_order_questions: {},
   get_recap: {},
   get_order_status: {},
@@ -81,7 +82,7 @@ const PROBE_ARGS: Record<string, Record<string, unknown>> = {
   create_order: {},
 };
 
-const READS = ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap", "get_order_status"];
+const READS = ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_examples", "get_order_questions", "get_recap", "get_order_status"];
 const WRITES = ["submit_artwork", "start_order_intent", "create_order"];
 
 const SETTLED_PROTECTED = "This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice.";
@@ -98,7 +99,7 @@ async function probe(env: Env, name: string, key?: string): Promise<string> {
 test("every tool runs keyless, and a garbage Authorization header is ignored identically", async () => {
   setRasterizerForTests(null);
   const env = makeEnv();
-  assert.equal(TOOLS.length, 10, "the tool set is ten tools after the register_webhook retirement");
+  assert.equal(TOOLS.length, 11, "the tool set is eleven tools after the register_webhook retirement and the get_examples addition (SPEC mcp-examples-spec)");
   for (const t of TOOLS) assert.ok(t.name in PROBE_ARGS, `probe args exist for ${t.name}`);
   assert.equal(TOOLS.find((t) => t.name === "register_webhook"), undefined, "register_webhook is not a tool");
 
@@ -113,13 +114,13 @@ test("every tool runs keyless, and a garbage Authorization header is ignored ide
   // each tool in exactly one set, and no key vocabulary at all.
   const d = await runTool(env, req(), "get_discovery", {}, (async () => new Response("nope", { status: 404 })) as typeof fetch);
   const caps = d.structured.capabilities as Record<string, unknown>;
-  assert.deepEqual([...(caps.readTools as string[])].sort(), [...READS].sort(), "readTools is exactly the seven reads, get_order_status among them");
+  assert.deepEqual([...(caps.readTools as string[])].sort(), [...READS].sort(), "readTools is exactly the eight reads, get_order_status among them");
   assert.deepEqual([...(caps.writeTools as string[])].sort(), [...WRITES].sort(), "writeTools is exactly the three writes");
   for (const absent of ["howToGetAKey", "keyedReadTools", "keyWait", "testKey"]) {
     assert.ok(!(absent in caps) && !(absent in d.structured), `${absent} appears nowhere in discovery`);
   }
   const all = [...(caps.readTools as string[]), ...(caps.writeTools as string[])];
-  assert.equal(new Set(all).size, 10, "each tool appears in exactly one discovery set");
+  assert.equal(new Set(all).size, 11, "each tool appears in exactly one discovery set");
   assert.ok(!all.includes("register_webhook") && !all.includes("request_invoice"), "retired tools appear in no set");
   assert.ok(caps.artworkExport === undefined || String(caps.artworkExport).includes("capability"), "the artwork export is described as the capability read it is");
 

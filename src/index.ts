@@ -247,13 +247,22 @@ async function handleRpc(env: Env, request: Request): Promise<Response> {
     }
     try {
       const result = await runTool(env, request, name, args);
-      const content: Array<Record<string, unknown>> = [{ type: "text", text: result.text }];
-      if (result.image) {
-        content.push({ type: "image", data: result.image.data, mimeType: result.image.mimeType });
-      }
-      if (result.images) {
-        for (const img of result.images) {
-          content.push({ type: "image", data: img.data, mimeType: img.mimeType });
+      const content: Array<Record<string, unknown>> = [];
+      if (result.blocks) {
+        // The tool composed the exact content (get_examples: each
+        // label directly above its image); serve it in that order.
+        for (const b of result.blocks) {
+          content.push(b.type === "text" ? { type: "text", text: b.text } : { type: "image", data: b.data, mimeType: b.mimeType });
+        }
+      } else {
+        content.push({ type: "text", text: result.text });
+        if (result.image) {
+          content.push({ type: "image", data: result.image.data, mimeType: result.image.mimeType });
+        }
+        if (result.images) {
+          for (const img of result.images) {
+            content.push({ type: "image", data: img.data, mimeType: img.mimeType });
+          }
         }
       }
       return json({

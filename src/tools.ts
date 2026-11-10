@@ -39,11 +39,21 @@ const RECAP_TTL = 7 * DAY;
 
 // ─── shared shapes ──────────────────────────────────────────────────
 
+export type ContentBlock =
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string };
+
 export interface ToolResult {
   structured: Record<string, unknown>;
   text: string;
   image?: { data: string; mimeType: string };
   images?: Array<{ data: string; mimeType: string }>;
+  // When an answer interleaves text and images (get_examples: each
+  // example's label directly above its image), the tool returns the
+  // exact content blocks here and the serializer serves them in
+  // this order instead of the default text-then-images assembly.
+  // `text` and `images` still carry the same content in flat form.
+  blocks?: ContentBlock[];
 }
 
 interface Ctx {
@@ -234,6 +244,20 @@ export function exampleEntry(e: DeliveredExample): Record<string, unknown> {
 export async function exampleImage(env: Env, id: string): Promise<{ data: string; mimeType: string } | null> {
   const buf = await env.MCP_ARTWORK.get(`EXAMPLE:${id}`, "arrayBuffer");
   return buf ? { data: bytesToBase64(new Uint8Array(buf)), mimeType: "image/png" } : null;
+}
+
+// The one-line pointer at the delivered examples (SPEC
+// mcp-examples-spec): discovery's journey steps and the samples
+// paragraph in discovery and product name get_examples, the
+// surface that shows the finished discs, so a person who asks to
+// see real work is sent to it. The counts come from the delivered
+// index itself, never from a second copy of the numbers.
+export function finishedExamplesPointer(): string {
+  return `Finished examples: call get_examples to see real discs we have designed and delivered (${examplesForShape("round").length} round, ${examplesForShape("square").length} square), then pick a direction from them.`;
+}
+
+function samplesLine(): string {
+  return `${SAMPLES_LINE} ${finishedExamplesPointer()}`;
 }
 
 // The two mounting options, from the website's own photos, returned
@@ -506,7 +530,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     },
     destination: DESTINATION_MODEL,
     turnaround: TURNAROUND,
-    samples: SAMPLES_LINE,
+    samples: samplesLine(),
     taxExempt: TAX_EXEMPT_LINE,
     plainLanguage: {
       nfc: PLAIN_NFC_LINE,
@@ -519,7 +543,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     },
     photos: productPhotoStructured(),
     capabilities: {
-      readTools: ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap", "get_order_status"],
+      readTools: ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_examples", "get_order_questions", "get_recap", "get_order_status"],
       writeTools: ["submit_artwork", "start_order_intent", "create_order"],
       artworkExport: "After submit_artwork, the submitted file stays fetchable at its displayUrl: the PRINT FILE, exactly the file the agent submitted (the agent produces the print-ready PDF from the spec; this server never builds or returns one). The same address with .png on the end returns a full-resolution PNG rendered from the submitted file. The fetch is a capability read: the artwork reference itself is the capability, within 30 days of submission. The on-disc preview is a mock composite, labeled a preview, never the print file.",
       gates: [GATES.designApproval, GATES.payment, GATES.production],
@@ -541,7 +565,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     ``,
     `How it works: the design path first`,
     `1. Start with the shape, round or square.`,
-    `2. Get the artwork spec and the design directions for that shape from get_artwork_spec.`,
+    `2. Get the artwork spec and the design directions for that shape from get_artwork_spec. ${finishedExamplesPointer()}`,
     `3. Build the artwork from a direction with your own tools, adding the organization's logo or name.`,
     `4. Submit the finished file with submit_artwork and see it on the disc as a proof. The artwork is yours from here: take it to any printer, or order the discs from Tap.Giving.`,
     `5. Optional, only if you want the discs made: get the binding quote from get_quote.`,
@@ -552,7 +576,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `Why Tap.Giving`,
     ...BENEFITS.map((b) => `- ${b}`),
     `${TAX_NOTE} Production and delivery run 2 to 3 weeks from artwork approval.`,
-    SAMPLES_LINE,
+    samplesLine(),
     ``,
     `Gates`,
     `Design approval, payment, and production release stay human: a person approves the final proof by email. ${PROTECTED_STRING}`,
@@ -610,7 +634,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
     badges: { products: p.badges, ordering: "Badges come from the Tap.Giving team, not through this server: email hello@tap.giving to add them to an order. Discs are the orderable product here." },
     mounting: { options: MOUNTING_OPTIONS.map((o) => ({ value: o.value, text: o.text })), detail: p.mountingDetail, surfaceGuide: MOUNTING_SURFACE_GUIDE, metalCaveat: p.metalCaveat },
     shipping: { terms: p.shipping.terms },
-    samples: { samples: SAMPLES_LINE },
+    samples: { samples: samplesLine() },
     ordering: {
       taxExempt: TAX_EXEMPT_LINE,
       payment: PAYMENT_GUIDANCE_LINE,
@@ -656,7 +680,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       `The two explainer photos with this answer show the adhesive backing and the pre-drilled screw holes up close.`,
     ].join("\n"),
     shipping: `${p.shipping.terms}`,
-    samples: SAMPLES_LINE,
+    samples: samplesLine(),
     ordering: [
       TAX_EXEMPT_LINE,
       PAYMENT_GUIDANCE_LINE,
@@ -671,7 +695,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       topicText.stands,
       topicText.badges,
       `Mounting: ${p.mountingDetail} ${p.metalCaveat}`,
-      SAMPLES_LINE,
+      samplesLine(),
       `${p.shipping.terms}`,
       `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library (settings, tap moments, product details, mounting): show them whenever the person wants to see the disc in place.`,
     ].join("\n");
@@ -781,6 +805,7 @@ async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Prom
         ]
       : [
           `Delivered examples: ${allForShape.length} real ${shapeWord} designs that Tap.Giving produced and delivered to organizations. The numbered pick list below covers the full set; the first ${inlineSubset.length} ride along in the images that follow, then the two mounting photos, and every entry is in the structured examples index with its reproduction data (description, size, palette, layout, icon treatment, logo slot).`,
+          `To see every delivered design as images, call get_examples; it pages through the full set, 9 at a time.`,
           ...pickList,
           `Tell me the number of an example from the list above, pass any example id from the structured index, or name the example by its description words, as chosenExampleRef. Then compose original artwork for the organization you are working with, using the example as a reference, and submit it with submit_artwork. An example is a real organization's delivered design: it is never shipped to a different organization as-is.`,
           `The artwork you compose is yours: print-ready and vendor-neutral, yours to take to any printer. Nothing in this spec or the proof obliges an order from Tap.Giving.`,
@@ -790,6 +815,69 @@ async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Prom
     `While designing, the structured explainerPhotos show discs mounted on pews and chair backs, the tap in use, and the mounting options up close: show them when the person asks what a mounted disc looks like or how mounting works.`,
   ].join("\n");
   return { structured, text, images };
+}
+
+// get_examples (SPEC mcp-examples-spec): the surface that SHOWS
+// the delivered designs, early and completely. The spec step
+// carries the full set as a text pick list plus a bounded inline
+// subset; this tool pages the same delivered set as labeled
+// images, at most nine at a time, round first then square, each
+// label carrying the per-shape pick number get_artwork_spec
+// prints and accepts. Phase one: no pricing anywhere in it.
+export const EXAMPLES_PAGE_SIZE = 9;
+
+async function toolGetExamples(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
+  const shapeArg = optString(args, "shape", 20) ?? "all";
+  if (shapeArg !== "round" && shapeArg !== "square" && shapeArg !== "all") {
+    throw invalidInput(`shape must be "round", "square", or "all".`);
+  }
+  const offset = optInt(args, "offset") ?? 0;
+  if (offset < 0) throw invalidInput(`offset must be 0 or greater.`);
+  const countArg = optInt(args, "count") ?? EXAMPLES_PAGE_SIZE;
+  if (countArg < 1) throw invalidInput(`count must be at least 1.`);
+  const count = Math.min(countArg, EXAMPLES_PAGE_SIZE);
+  const round = examplesForShape("round");
+  const square = examplesForShape("square");
+  const totalByShape = { round: round.length, square: square.length };
+  const list = shapeArg === "round" ? round : shapeArg === "square" ? square : [...round, ...square];
+  const batch = list.slice(offset, offset + count);
+  const consumed = offset + batch.length;
+  const nextOffset = consumed < list.length ? consumed : null;
+  const entries = batch.map(exampleEntry);
+  const intro =
+    `Delivered examples: Tap.Giving produced and delivered ${totalByShape.round + totalByShape.square} real designs: ${totalByShape.round} round and ${totalByShape.square} square. ` +
+    `Every design in this answer is a real disc Tap.Giving designed and delivered to the organization named under it.` +
+    (batch.length === 0
+      ? ` This page is empty: offset ${offset} is past the ${list.length} ${shapeArg === "all" ? "delivered designs" : `${shapeArg} designs`}; start again at offset 0.`
+      : ` This page shows ${batch.length} of the ${list.length} ${shapeArg === "all" ? "delivered designs" : `${shapeArg} designs`}.`) +
+    (nextOffset !== null ? ` More remain: call get_examples again with offset ${nextOffset} to see the next page.` : ``);
+  const closing =
+    `To pick a direction, name an example by its shape and number (for example, round 14), pass any example id from the structured examples index, or name it by its description words: the same picks get_artwork_spec accepts as chosenExampleRef. ` +
+    `Then call get_artwork_spec for your shape and compose your own artwork from that direction. An example is a real organization's delivered design: it is never shipped to a different organization as-is.`;
+  const blocks: ContentBlock[] = [{ type: "text", text: intro }];
+  const images: Array<{ data: string; mimeType: string }> = [];
+  const labelLines: string[] = [];
+  for (const [i, e] of batch.entries()) {
+    const shapeWord = e.shape === "round" ? "Round" : "Square";
+    const shapeTotal = e.shape === "round" ? totalByShape.round : totalByShape.square;
+    const line = `${shapeWord} ${entries[i].pickNumber} of ${shapeTotal}: ${e.description}, the design delivered to ${e.organization}, ${e.size}`;
+    labelLines.push(line);
+    blocks.push({ type: "text", text: line });
+    const img = await exampleImage(ctx.env, e.id);
+    if (img) {
+      images.push(img);
+      blocks.push({ type: "image", data: img.data, mimeType: img.mimeType });
+    }
+  }
+  blocks.push({ type: "text", text: closing });
+  const structured: Record<string, unknown> = {
+    totalByShape,
+    examples: entries,
+    nextOffset,
+    returned: batch.length,
+  };
+  const text = [intro, ...labelLines, closing].join("\n");
+  return { structured, text, images, blocks };
 }
 
 // ─── artwork submission ─────────────────────────────────────────────
@@ -2474,6 +2562,24 @@ export const TOOLS: ToolDef[] = [
     },
     annotations: READ,
     run: toolGetArtworkSpec,
+  },
+  {
+    name: "get_examples",
+    description:
+      "Show the finished discs: the real designs Tap.Giving produced and delivered to organizations, as labeled images, paged nine at a time, round first then square. " +
+      "Each example is labeled with its shape and pick number (the same numbers get_artwork_spec prints and accepts as chosenExampleRef), its description, and the organization it was delivered to. " +
+      "Filter by shape, or page the full set with offset; the structured content names the totals by shape and the next page's offset when more remain. " +
+      "Call this whenever the person asks to see examples or finished work, at any point in the journey; then pick a direction and call get_artwork_spec to design theirs. No key needed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        shape: { type: "string", enum: ["round", "square", "all"], description: "Optional: only this shape's delivered designs, or all of them (round first, then square). Defaults to all." },
+        offset: { type: "integer", minimum: 0, description: "Optional: how many examples to skip before this page. Defaults to 0; the answer's nextOffset names the next page's offset when more remain." },
+        count: { type: "integer", minimum: 1, maximum: 9, description: "Optional: how many examples to show on this page, at most 9. Defaults to 9." },
+      },
+    },
+    annotations: READ,
+    run: toolGetExamples,
   },
   {
     name: "submit_artwork",

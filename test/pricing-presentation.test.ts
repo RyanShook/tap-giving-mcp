@@ -160,7 +160,7 @@ test("phase one carries zero pricing; pricing first appears at the order questio
     body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} }),
   }), env);
   const list = await listRes.json() as { result: { tools: Array<{ name: string; description: string }> } };
-  assert.equal(list.result.tools.length, 10, "tools/list carries exactly ten tools");
+  assert.equal(list.result.tools.length, 11, "tools/list carries exactly eleven tools (get_examples added, SPEC mcp-examples-spec)");
   for (const t of list.result.tools) {
     const first = t.description.split(". ")[0] + ".";
     assert.ok(!first.includes("WELCOME10") && !/\$\d/.test(first) && !/minimum order/i.test(first), `tools/list first sentence for ${t.name}: no pricing pattern`);
@@ -234,4 +234,14 @@ test("phase one carries zero pricing; pricing first appears at the order questio
   assert.equal(q.structured.firstOrderTotalCents, 47000, "first-order payable total intact at the quote step");
   assert.equal((q.structured.discount as { code: string }).code, "WELCOME10", "discount detail intact at the quote step");
   await assert.rejects(() => runTool(env, req(), "get_quote", { quantity: 99 }, fetchFn), /minimum order is 100/, "minimum enforcement intact at the quote step");
+});
+
+test("get_examples carries zero pricing (phase-one scan, SPEC mcp-examples-spec)", async () => {
+  const env = makeEnv();
+  const all = await runTool(env, req(), "get_examples", {}, fetchFn);
+  scanPhaseOne("get_examples", all.text, JSON.stringify(all.structured));
+  const squarePage = await runTool(env, req(), "get_examples", { shape: "square" }, fetchFn);
+  scanPhaseOne("get_examples square page", squarePage.text, JSON.stringify(squarePage.structured));
+  const lastPage = await runTool(env, req(), "get_examples", { offset: 18 }, fetchFn);
+  scanPhaseOne("get_examples last page", lastPage.text, JSON.stringify(lastPage.structured));
 });

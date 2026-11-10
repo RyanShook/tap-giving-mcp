@@ -72,10 +72,10 @@ test("product facts carry the for-agents strings", () => {
   assert.ok(PRODUCT.sizes.every((s) => s.label.includes("100 mm (4 inch)")));
 });
 
-test("the tool set is exactly the specced ten (register_webhook retired 2026-11-09, request_invoice by P-16)", () => {
+test("the tool set is exactly the specced eleven (register_webhook retired 2026-11-09, request_invoice by P-16, get_examples added by SPEC mcp-examples-spec)", () => {
   const names = TOOLS.map((t) => t.name).sort();
   assert.deepEqual(names, [
-    "create_order", "get_artwork_spec", "get_discovery", "get_order_questions",
+    "create_order", "get_artwork_spec", "get_discovery", "get_examples", "get_order_questions",
     "get_order_status", "get_product", "get_quote", "get_recap",
     "start_order_intent", "submit_artwork",
   ].sort());
@@ -83,7 +83,7 @@ test("the tool set is exactly the specced ten (register_webhook retired 2026-11-
 
 test("annotations are honest: reads are read-only, writes never are", () => {
   for (const t of TOOLS) {
-    const reads = ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_order_questions", "get_recap", "get_order_status"];
+    const reads = ["get_discovery", "get_quote", "get_product", "get_artwork_spec", "get_examples", "get_order_questions", "get_recap", "get_order_status"];
     if (reads.includes(t.name)) {
       assert.equal(t.annotations.readOnlyHint, true, t.name);
     } else {

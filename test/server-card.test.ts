@@ -47,6 +47,7 @@ const LIVE_TOOL_NAMES = [
   "get_quote",
   "get_product",
   "get_artwork_spec",
+  "get_examples",
   "submit_artwork",
   "start_order_intent",
   "get_order_questions",
