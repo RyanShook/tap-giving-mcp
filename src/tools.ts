@@ -12,7 +12,7 @@ import {
   SERVER_DESCRIPTION, SERVER_NAME, POSITIONING_LINE, PRESENTATION_SYNONYMS, TAX_NOTE, PRICE_RANGE_LINE,
   SAMPLES_LINE, SAMPLES_GUIDANCE_LINE, TAX_EXEMPT_LINE, TAX_EXEMPT_GUIDANCE_LINE, PAYMENT_GUIDANCE_LINE,
   PLAIN_NFC_LINE, QR_CONDITIONAL_LINE, VERSUS_PRINTED_CODES_LINE, DURABILITY_LINE, MOUNTING_SURFACE_GUIDE,
-  PROTECTED_STRING, confirmationText, DESIGN_SHAPES, DESIGN_SHAPES_NOTE, COLOR_SPACE_STATEMENT,
+  PROTECTED_STRING, confirmationText, confirmationTextInvoicePending, confirmationTextInvoiceHeld, confirmationTextProofPending, confirmationTextCustomerEmailFailed, DESIGN_SHAPES, DESIGN_SHAPES_NOTE, COLOR_SPACE_STATEMENT,
   AGENT_PDF_CHECKLIST, QR_DESIGN_RULES, LOGO_RULES, GEOMETRY_GLOSSARY,
   VERIFY_AGAINST_EXAMPLE, VERIFY_AGAINST_EXAMPLE_TEXT } from "./facts.ts";
 import { EXPLAINER_TOPICS, explainerResourceUri } from "./explainer.ts";
@@ -2214,6 +2214,37 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     else if (order.customerEmail?.suppressed) partialStates.push("customer_email_suppressed: test lane placements never email the customer");
     else if (order.customerEmail) partialStates.push("customer_email_failed: the invoice stands and the failure is recorded on the order; a replay with the same idempotencyKey re-attempts only this email");
   }
+  // The confirmation is conditional on the chain's outcome: the
+  // settled sentence asserts the invoice and design proof are on
+  // their way, which is true only when the invoice was minted and
+  // the customer email went out (or stands suppressed by the test
+  // lane's rule, where placement completes without one). Every
+  // partial state carries its own plain-words confirmation instead,
+  // so a response never contradicts its own partial-state lines
+  // (the E2E contradiction, fixed 2026-11-09).
+  const proofPending = order.customerEmail?.proofPending === true;
+  const deliveryComplete = !!order.invoice && !order.invoiceHeld && !proofPending &&
+    (order.customerEmail?.sent === true || order.customerEmail?.suppressed !== undefined);
+  const confirmation = order.invoiceHeld
+    ? confirmationTextInvoiceHeld(order.contactEmail)
+    : !order.invoice
+      ? confirmationTextInvoicePending(order.contactEmail)
+      : proofPending
+        ? confirmationTextProofPending(order.contactEmail)
+        : !deliveryComplete
+          ? confirmationTextCustomerEmailFailed(order.contactEmail)
+          : confirmationText(order.contactEmail);
+  const nextStep = deliveryComplete
+    ? order.exit === "pay_now"
+      ? "The order is placed and the invoice and design proof are on their way to the contact email. The person pays the hosted invoice when it arrives; production waits for the proof approval by email."
+      : "The order is placed and the invoice and design proof are on their way to the contact email, for the person to pay when they choose. A person approves the final proof by email before anything is printed."
+    : order.invoiceHeld
+      ? "The order is placed. A person from Tap.Giving resolves the invoice hold first; the invoice and design proof email follows once the hold clears, and production waits for the proof approval by email."
+      : !order.invoice
+        ? "The order is placed. The invoice step is retried from the order record (a replay with the same idempotencyKey re-attempts only the mint), and the invoice and design proof email follows once the invoice is issued; production waits for the proof approval by email."
+        : proofPending
+          ? "The order is placed. The invoice and design proof email is sent once the design proof is published; a person approves the final proof by email before anything is printed."
+          : "The order is placed. The invoice and design proof email is re-attempted from the order record (a replay with the same idempotencyKey re-attempts only this email); production waits for the proof approval by email.";
   const structured: Record<string, unknown> = {
     orderRef: order.orderRef,
     ...(replayed ? { replayed: true, note: "This idempotencyKey already created this order; the original orderRef is returned and no second order was written." } : {}),
@@ -2223,7 +2254,7 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     invreqKey: order.invreqKey,
     quote: quoteObj,
     exit: order.exit,
-    confirmation: confirmationText(order.contactEmail),
+    confirmation,
     orderEmail: order.orderEmail ?? { sent: false, seat: ORDER_EMAIL_SEAT },
     invoice: order.invoice
       ? { id: order.invoice.invoiceId, number: order.invoice.invoiceNumber, status: order.invoice.status, hostedInvoiceUrl: order.invoice.hostedInvoiceUrl, totalCents: order.invoice.totalCents, ...(order.invoice.finalizedAt ? { finalizedAt: order.invoice.finalizedAt } : {}) }
@@ -2237,13 +2268,11 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
       ? "Test lane: this order record stays in the test lane and does NOT enter the production CRM or fulfillment. The order email is marked TEST and goes only to the team's alert inboxes. Only the contact capture in start_order_intent touches the real lead list."
       : "The business record appears within about an hour under the organization's name, at stage \"ready\", " +
         "through the same process that handles website invoice requests. Source is distinguishable as the MCP; nothing else differs.",
-    nextStep: order.exit === "pay_now"
-      ? "The order is placed and the invoice and design proof are on their way to the contact email. The person pays the hosted invoice when it arrives; production waits for the proof approval by email."
-      : "The order is placed and the invoice and design proof are on their way to the contact email, for the person to pay when they choose. A person approves the final proof by email before anything is printed.",
+    nextStep,
   };
   const text = [
     `Order placed: ${order.orderRef}.`,
-    confirmationText(order.contactEmail),
+    confirmation,
     `Total: ${dollars(order.quote.grandTotalCents)} for ${order.quantity} discs. Shipping: Free.`,
     emailLine,
     order.invoice

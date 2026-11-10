@@ -9,7 +9,7 @@ import { runTool, TOOLS } from "../src/tools.ts";
 import { setRasterizerForTests } from "../src/preview.ts";
 import { EXAMPLES_INDEX } from "../src/examples-data.ts";
 import { PHOTOS_INDEX } from "../src/photos-data.ts";
-import { BENEFITS, NO_FEES_LINE, PRICE_RANGE_LINE, TAX_NOTE } from "../src/facts.ts";
+import { BENEFITS, NO_FEES_LINE, PRICE_RANGE_LINE, TAX_NOTE, confirmationText, confirmationTextInvoicePending, confirmationTextInvoiceHeld, confirmationTextProofPending, confirmationTextCustomerEmailFailed } from "../src/facts.ts";
 import worker from "../src/index.ts";
 import { sha256Hex } from "../src/util.ts";
 import type { Env } from "../src/env.ts";
@@ -1139,6 +1139,26 @@ test("final-step chain: a failed mint still records the test-lane suppression on
   }, fetchFn);
   assert.equal(order.structured.invoice, null, "no invoice when the mint fails");
   assert.ok((order.structured.partialStates as string[]).some((p) => p.startsWith("invoice_pending")), "the partial state names the pending invoice");
+  // The E2E contradiction, pinned (2026-11-09): the confirmation
+  // must not claim the invoice and proof are on their way in the
+  // same response that states the invoice was not minted. The
+  // pending confirmation names the incomplete step and what
+  // happens next, in the structured field, the text, and the
+  // closing next-step line alike.
+  assert.equal(order.structured.confirmation, confirmationTextInvoicePending("mintfail@mcptest.org"), "the pending confirmation states the incomplete step plainly");
+  assert.ok(!(order.structured.confirmation as string).includes("are on their way"), "the pending confirmation makes no on-their-way claim");
+  assert.ok(order.text.includes(confirmationTextInvoicePending("mintfail@mcptest.org")), "the response text carries the pending confirmation");
+  assert.ok(!order.text.includes("on their way to the contact email"), "no line of the response claims delivery is on its way");
+  assert.ok((order.structured.nextStep as string).includes("re-attempts only the mint"), "the next step names the retry, not a delivery");
+  // The same order at the other exit: the pending wording does not
+  // borrow the pay-now framing either.
+  const recap2 = await runTool(env, req(), "get_recap", flowArgs, fetchFn);
+  const order2 = await runTool(env, req(), "create_order", {
+    ...flowArgs, contactName: "Test Pastor", contactPhone: "+17135550199",
+    recapRef: recap2.structured.recapRef as string, exit: "lock_in", idempotencyKey: "mintfail-order-0002",
+  }, fetchFn);
+  assert.equal(order2.structured.confirmation, confirmationTextInvoicePending("mintfail@mcptest.org"), "the lock-in exit carries the same pending confirmation");
+  assert.ok(!(order2.structured.nextStep as string).includes("on their way"), "the lock-in next step makes no delivery claim");
   const stored = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as { invoiceAttempt?: { error: string }; customerEmail?: { suppressed?: string } };
   assert.equal(stored.invoiceAttempt?.error, "stripe key not configured for the test lane", "the seat error is recorded on the order");
   assert.ok(stored.customerEmail?.suppressed, "the test-lane suppression is recorded on the order even though the mint failed");
@@ -1209,6 +1229,13 @@ test("invoice_held: the seat hold is a first-class state, the team is notified, 
   assert.ok(states.some((p) => p.startsWith("invoice_held:")), "the response states the hold");
   assert.ok(!states.some((p) => p.startsWith("invoice_pending")), "the hold is never stated as a pending mint");
   assert.ok(order.text.includes("held for review"), "the response text states the hold in plain words");
+  // The held confirmation is conditional too (2026-11-09): it
+  // states the hold and makes no on-their-way claim, in the
+  // structured field, the text, and the next-step line.
+  assert.equal(order.structured.confirmation, confirmationTextInvoiceHeld("held@mcptest.org"), "the held confirmation states the hold plainly");
+  assert.ok(!(order.structured.confirmation as string).includes("are on their way"), "the held confirmation makes no on-their-way claim");
+  assert.ok(!order.text.includes("on their way to the contact email"), "no line of the held response claims delivery is on its way");
+  assert.ok((order.structured.nextStep as string).includes("resolves the invoice hold first"), "the held next step names the resolution, not a delivery");
   const stored = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as {
     invoiceAttempt?: unknown;
     invoiceHeld?: { reason: string; differingFields?: string[]; existingInvoiceId?: string; existingOrderRef?: string | null; existingTotalCents?: number; notify?: { sent: boolean; messageRef?: string } };
@@ -1247,6 +1274,11 @@ test("invoice_held: a replay never re-mints and re-attempts only a failed notifi
   const states = order.structured.partialStates as string[];
   assert.ok(states.some((p) => p.startsWith("invoice_held:")), "the response states the hold");
   assert.ok(states.some((p) => p.startsWith("invoice_held_notify_failed:")), "the failed notification is its own partial state");
+  // A failed team notification does not change the confirmation:
+  // the held wording already states that nothing has been emailed,
+  // so the notify failure adds its partial state and nothing else.
+  assert.equal(order.structured.confirmation, confirmationTextInvoiceHeld("heldreplay@mcptest.org"), "the notify-failed response keeps the held confirmation");
+  assert.ok(!(order.structured.confirmation as string).includes("are on their way"), "the notify-failed confirmation makes no on-their-way claim");
   const storedAfterFirst = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as {
     invoiceHeld?: { notify?: { sent: boolean; error?: string } };
   };
@@ -1266,4 +1298,82 @@ test("invoice_held: a replay never re-mints and re-attempts only a failed notifi
   assert.equal(replay2.structured.orderRef, order.structured.orderRef);
   assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"notifyInvoiceHeld"')).length, 3, "a sent notification is never duplicated");
   assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"sendOrderInvoiceProof"')).length, 0, "still no customer email after replays");
+});
+
+// ─── conditional placement confirmations (2026-11-09) ──────────────
+// The settled confirmation sentence is CEO-approved verbatim for
+// the success path only. Each partial state carries its own
+// plain-words confirmation; the two live-lane states below complete
+// the set the test lane cannot reach (proof_pending needs a minted
+// invoice with no artwork; customer_email_failed needs a failed
+// customer-email seat call behind a minted invoice).
+
+test("proof_pending: a minted no-artwork order confirms the pending proof email, never a delivery", async () => {
+  const { env, keys } = await makeEnv();
+  const calls: Array<{ url: string; body?: string }> = [];
+  const fetchFn = stubFetch(calls) as typeof fetch;
+  const flowArgs = {
+    quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
+    contactEmail: "pastor@proofpending.example.org", organizationName: "Proof Pending Church",
+  };
+  const recap = await runTool(env, req(), "get_recap", flowArgs, fetchFn);
+  const order = await runTool(env, req(), "create_order", {
+    ...flowArgs, contactName: "Real Pastor", contactPhone: "+17135550199",
+    recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: "proofpending-order-0001",
+  }, fetchFn);
+  assert.ok(order.structured.invoice, "the invoice mints on a no-artwork order");
+  assert.ok((order.structured.partialStates as string[]).some((p) => p.startsWith("proof_pending")), "the partial state names the pending proof email");
+  assert.equal(order.structured.confirmation, confirmationTextProofPending("pastor@proofpending.example.org"), "the proof-pending confirmation states the pending email plainly");
+  assert.ok(!(order.structured.confirmation as string).includes("are on their way"), "the proof-pending confirmation makes no on-their-way claim");
+  assert.ok(!order.text.includes("on their way to the contact email"), "no line of the response claims delivery is on its way");
+  assert.ok((order.structured.nextStep as string).includes("once the design proof is published"), "the next step names the publish trigger");
+  assert.equal(calls.filter((c) => (c.body ?? "").includes('"op":"sendOrderInvoiceProof"')).length, 0, "no customer email seat call while the proof is pending");
+  const stored = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as { customerEmail?: { sent: boolean; proofPending?: boolean } };
+  assert.equal(stored.customerEmail?.proofPending, true, "the pending state is recorded on the order");
+});
+
+test("customer_email_failed: a failed customer email behind a minted invoice confirms the failure, never a delivery", async () => {
+  const { env, keys } = await makeEnv();
+  const base = stubFetch([]);
+  const fetchFn = (async (input: unknown, init?: { body?: string }) => {
+    const url = String(input);
+    if (url.includes("/api/mcp-invoke") && (init?.body ?? "").includes('"op":"sendOrderInvoiceProof"')) {
+      return new Response(JSON.stringify({ ok: false, error: "customer email seat down" }), { status: 502 });
+    }
+    return (base as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init);
+  }) as typeof fetch;
+  const sha = await pngSha();
+  const art = await runTool(env, req(), "submit_artwork", {
+    file: { filename: "disc.png", mediaType: "image/png", contentBase64: PNG_B64 }, sha256: sha,
+  }, fetchFn);
+  const flowArgs = {
+    quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
+    artworkRef: art.structured.artworkRef as string,
+    contactEmail: "pastor@emailfail.example.org", organizationName: "Email Fail Church",
+  };
+  const recap = await runTool(env, req(), "get_recap", flowArgs, fetchFn);
+  const order = await runTool(env, req(), "create_order", {
+    ...flowArgs, contactName: "Real Pastor", contactPhone: "+17135550199",
+    recapRef: recap.structured.recapRef as string, exit: "pay_now", idempotencyKey: "emailfail-order-0001",
+  }, fetchFn);
+  assert.ok(order.structured.invoice, "the invoice stands behind the failed email");
+  assert.ok((order.structured.partialStates as string[]).some((p) => p.startsWith("customer_email_failed")), "the partial state names the failed email");
+  assert.equal(order.structured.confirmation, confirmationTextCustomerEmailFailed("pastor@emailfail.example.org"), "the failed-email confirmation states the failure plainly");
+  assert.ok(!(order.structured.confirmation as string).includes("are on their way"), "the failed-email confirmation makes no on-their-way claim");
+  assert.ok(!order.text.includes("on their way to the contact email"), "no line of the response claims delivery is on its way");
+  const stored = JSON.parse(keys.store.get(`ORDER:${order.structured.orderRef as string}`) ?? "{}") as { customerEmail?: { sent: boolean; error?: string } };
+  assert.equal(stored.customerEmail?.error, "customer email seat down", "the seat error is recorded on the order");
+});
+
+test("the settled success confirmation stays byte-identical, and only the success path carries it", async () => {
+  // The verbatim pin, stated once here against the facts module so
+  // every journey test above and below inherits the same contract:
+  // the settled sentence is the CEO-approved text, unchanged.
+  assert.equal(
+    confirmationText("someone@example.org"),
+    "Your order is placed, and your invoice and design proof are on their way to someone@example.org. A person from Tap.Giving follows up from there; production waits for your proof approval, and the invoice is paid on its hosted page.",
+  );
+  for (const variant of [confirmationTextInvoicePending, confirmationTextInvoiceHeld, confirmationTextProofPending, confirmationTextCustomerEmailFailed]) {
+    assert.ok(!variant("someone@example.org").includes("are on their way to someone@example.org"), "no partial-state confirmation borrows the settled claim");
+  }
 });

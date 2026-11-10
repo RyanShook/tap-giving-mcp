@@ -3015,3 +3015,36 @@ whole pattern class in phase one. Section 2.6's benefits-block
 contract element moves with them: the phase-one block is the
 three functional differentiators, and the full set rides the
 order questions.
+
+Landing note (2026-11-09, conditional confirmation fix): the
+end-to-end user run against the live build (test-lane identity
+e2e-20261109@e2echecktest.org, order
+mcp:test-mcp-e2e-do-not-contact:57ec265bf7b559a2) found one
+defect, copy-level. In the invoice_pending partial state the
+create_order response contradicted itself: the settled
+confirmation sentence ("Your order is placed, and your invoice
+and design proof are on their way to <email>. ...") appeared in
+the same response as "Invoice: not minted yet" and the
+invoice_pending partial-state line. The settled confirmation is
+now conditional on the chain's outcome. It stays byte-identical
+on the success path (invoice minted, and the customer email
+sent, or suppressed by the test lane's standing rule, where
+placement completes without one). Every partial state carries
+its own plain-words confirmation instead, in the structured
+confirmation field, the response text, and the closing
+next-step line: invoice_pending states the invoice step did not
+complete and the follow-up runs from the order record;
+invoice_held states the hold and its resolution (a failed team
+notification keeps the same held wording); proof_pending states
+the invoice is issued and the invoice and proof email is sent
+once the design proof is published; customer_email_failed
+states the send failure behind a standing invoice. No partial
+confirmation claims an invoice or a proof email is on its way.
+Regression tests pin both branches: the settled sentence
+verbatim for success, and each partial wording with no
+on-their-way claim anywhere in its response. get_order_status
+was read and needed no change: its invoice line already states
+the recorded mint state ("Invoice: not minted yet; the order
+record carries the mint state, and the team follows up from the
+record."). Chain behavior is unchanged: mint, email, record,
+and replay semantics are untouched; this is presentation only.

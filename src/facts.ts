@@ -40,6 +40,37 @@ export function confirmationText(contactEmail: string): string {
     "A person from Tap.Giving follows up from there; production waits for your proof approval, and the invoice is paid on its hosted page."
   );
 }
+// The placement confirmations for the partial states, stated in
+// plain words in the same register as the settled confirmation
+// above. Each names what did not complete and what happens next;
+// none of them claims an invoice or a proof email is on its way
+// when it is not (the E2E contradiction, fixed 2026-11-09: the
+// invoice_pending response carried the settled sentence verbatim
+// alongside its own "Invoice: not minted yet" line).
+export function confirmationTextInvoicePending(contactEmail: string): string {
+  return (
+    "Your order is placed, but the invoice step did not complete, so no invoice or design proof has been emailed to " + contactEmail + " yet. " +
+    "The failure is recorded on the order, and a person from Tap.Giving follows up from the order record; production waits for your proof approval, and the invoice is paid on its hosted page once it is issued."
+  );
+}
+export function confirmationTextInvoiceHeld(contactEmail: string): string {
+  return (
+    "Your order is placed, but its invoice is held for review by the Tap.Giving team, so no invoice or design proof has been emailed to " + contactEmail + " yet. " +
+    "A person from Tap.Giving resolves the hold first; production waits for your proof approval, and the invoice is paid on its hosted page once it is issued."
+  );
+}
+export function confirmationTextProofPending(contactEmail: string): string {
+  return (
+    "Your order is placed, and your invoice is issued, but no artwork is attached to this order, so the email carrying your invoice and design proof has not been sent to " + contactEmail + " yet. " +
+    "It is sent once the design proof is published; a person from Tap.Giving follows up from there, and production waits for your proof approval."
+  );
+}
+export function confirmationTextCustomerEmailFailed(contactEmail: string): string {
+  return (
+    "Your order is placed, and your invoice is issued, but the email carrying your invoice and design proof did not send to " + contactEmail + ". " +
+    "The failure is recorded on the order, and a person from Tap.Giving follows up from the order record; production waits for your proof approval, and the invoice is paid on its hosted page."
+  );
+}
 export const SERVER_DESCRIPTION =
   POSITIONING_LINE + " " +
   "The discs themselves are custom NFC tap discs and tap tags for organizations of every kind: " +
