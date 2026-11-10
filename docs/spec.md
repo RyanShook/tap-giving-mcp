@@ -3048,3 +3048,30 @@ the recorded mint state ("Invoice: not minted yet; the order
 record carries the mint state, and the team follows up from the
 record."). Chain behavior is unchanged: mint, email, record,
 and replay semantics are untouched; this is presentation only.
+Landing note (2026-11-09, SEP-2127 server card on the server
+itself): GET /mcp/server-card now serves this server's SEP-2127
+server card from tap-mcp. The seat previously returned 404, so
+an agent probing the card on the server's own origin found
+nothing, while the well-known seat (site Worker, business repo
+worker/site/src/discovery.js) already served the corrected
+card. The two seats cannot share a module (separate repos and
+Workers, no build step joins them, and this public repo cannot
+import the business repo's file at deploy time), so the card
+here is derived from this server's own canonical sources
+rather than copied: the tool list is the live TOOLS registry
+tools/list serves, the endpoint, repository, and title are the
+facts module's constants, and the protocol version is the one
+initialize negotiates. Card metadata with no runtime source in
+this server (the registry name, the card description, the
+schema URL, the website and guide URLs, the version string) is
+constant in src/server-card.ts and pinned by tests, the name
+and version against server.json. The access statement is the
+facts module's ACCESS_STATEMENT, the settled no-keys sentence
+the well-known card serves verbatim. The card carries the flat
+10 tools with no keyed or keyless split, and the retired names
+request_invoice and register_webhook appear nowhere in it.
+Regression tests pin the route (status, content type, HEAD
+parity with GET), the registry agreement (the card's tools
+equal the tools/list answer), the split's absence, and the
+statement verbatim. No tool behavior changed; this is a new
+read-only GET route.

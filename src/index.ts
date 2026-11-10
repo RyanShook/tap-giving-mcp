@@ -7,7 +7,9 @@
 // self-description, GET /mcp/artwork/<ref> serves stored submission
 // bytes at a capability URL, GET /mcp/examples/<id>.png serves the
 // delivered-proof examples (bytes in the MCP_ARTWORK KV namespace),
-// and GET /mcp/photos/<id>.webp serves the labeled photo set.
+// and GET /mcp/photos/<id>.webp serves the labeled photo set,
+// and GET /mcp/server-card serves this server's SEP-2127
+// server card (src/server-card.ts).
 //
 // Spec: documentation/mcp-connector-surface-spec-2026-11-06.md in the
 // business repo; the published copy is docs/spec.md in this repo.
@@ -17,6 +19,7 @@ import { ENDPOINT, GATES, POSITIONING_LINE, PROTECTED_STRING, REPO_URL, SERVER_D
 import { EXPLAINER_TOPICS, explainerResourceUri, findExplainerTopic } from "./explainer.ts";
 import { PRODUCT_PHOTOS, TOOLS, artworkBytesKey, readArtworkRecord, runTool } from "./tools.ts";
 import { buildTemplateSvg, renderArtworkFileToPng } from "./preview.ts";
+import { buildServerCard } from "./server-card.ts";
 import { ToolError, isRecord } from "./errors.ts";
 import { DETECTED_MEDIA_TYPE } from "./sniff.ts";
 import { EXAMPLES_INDEX } from "./examples-data.ts";
@@ -287,6 +290,21 @@ export default {
       }
       if (request.method === "POST") return handleRpc(env, request);
       return new Response("Method not allowed. POST JSON-RPC to this endpoint; GET returns its description.", { status: 405 });
+    }
+
+    // The SEP-2127 server card, served by the server itself (the
+    // well-known seat on the site Worker publishes the same card;
+    // see src/server-card.ts for how the two stay in agreement).
+    if (url.pathname === "/mcp/server-card" && (request.method === "GET" || request.method === "HEAD")) {
+      const body = JSON.stringify(buildServerCard(PROTOCOL_VERSION));
+      const headers = {
+        "Content-Type": "application/mcp-server-card+json",
+        "Cache-Control": "public, max-age=86400",
+        "Content-Length": String(new TextEncoder().encode(body).length),
+        "X-Content-Type-Options": "nosniff",
+      };
+      if (request.method === "HEAD") return new Response(null, { status: 200, headers });
+      return new Response(body, { status: 200, headers });
     }
 
     // Delivered-proof examples, served for display. Bytes live in

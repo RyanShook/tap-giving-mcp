@@ -34,6 +34,14 @@ export const NO_FEES_LINE =
 export const APPLICATIONS_LIST = "churches, nonprofits, restaurants, coffee shops, and local businesses";
 export const PROTECTED_STRING =
   "This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice.";
+
+// The access statement (Nov 9 no-keys ruling): the one sentence
+// every discovery surface states about access. The well-known
+// server card (business repo, worker/site/src/discovery.js) and
+// this server's own card at GET /mcp/server-card both serve it
+// verbatim; the tests pin the wording so the seats cannot drift.
+export const ACCESS_STATEMENT =
+  "Discovery, quotes, product facts, the artwork spec, artwork submission, and ordering all work with no key and no login, at any point.";
 export function confirmationText(contactEmail: string): string {
   return (
     "Your order is placed, and your invoice and design proof are on their way to " + contactEmail + ". " +
