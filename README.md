@@ -18,6 +18,7 @@ included with every order.
 - **This repo stays clean:** README, the published spec, and the
   released server code. Working notes and anything touching private
   business operations live elsewhere by design.
+- [Privacy Policy](https://tap.giving/privacy.html)
 
 ## Connect (no key anywhere)
 
