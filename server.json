@@ -3,7 +3,7 @@
   "name": "io.github.ryanshook/tap-giving-mcp",
   "description": "Design and order custom NFC tap discs. A person pays the hosted invoice; the server moves no money.",
   "repository": {
-    "url": "https://github.com/RyanShook/tap-giving-mcp",
+    "url": "https://github.com/Tap-Giving/tap-giving-mcp",
     "source": "github"
   },
   "version": "1.0.0",

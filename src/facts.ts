@@ -86,7 +86,7 @@ export const SERVER_DESCRIPTION =
   "Ordering is optional and stays behind the human payment and proof gates. " + PROTECTED_STRING;
 export const PRESENTATION_SYNONYMS = ["tap discs", "tap plates", "tap tags", "NFC tap discs"];
 export const ENDPOINT = "https://tap.giving/mcp";
-export const REPO_URL = "https://github.com/RyanShook/tap-giving-mcp";
+export const REPO_URL = "https://github.com/Tap-Giving/tap-giving-mcp";
 // The published contact address (it is on the website's own
 // emails). No key exists anywhere in this server (Ryan, 2026-11-09).
 export const TEAM_EMAIL = "hello@tap.giving";
