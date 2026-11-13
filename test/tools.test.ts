@@ -750,7 +750,7 @@ test("F20: order status by statusRef returns the dashboard address and the minte
   const status = await runTool(env, req(), "get_order_status", { statusRef }, fetchFn);
   const dash = status.structured.dashboard as { tapAddress: string; loginUrl: string; username: string };
   assert.equal(dash.tapAddress, "https://go.tap.giving/mcp-acceptance-test-church");
-  assert.equal(dash.loginUrl, "https://tap.giving/login");
+  assert.equal(dash.loginUrl, "https://go.tap.giving/dashboard/login");
   // The final step minted the invoice through the seat: status
   // carries it (the P-16 no-invoice posture is retired).
   const inv = status.structured.invoice as { invoiceId: string; invoiceNumber: string } | null;

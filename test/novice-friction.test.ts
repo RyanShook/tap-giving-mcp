@@ -276,7 +276,7 @@ test("S8: dashboard mechanics moved from discovery to the recap", async () => {
     contactEmail: "dana-novice-20261112@mcptest.org", organizationName: "TEST Grace Community Church (novice run - DO NOT CONTACT)",
     quantity: 100, size: "100mm-round", mounting: "adhesive", shipTo: SHIP_TO,
   }, noFetch);
-  assert.ok(r.text.includes("password arrives by email with the shipping notice"), "the mechanics are at the recap");
+  assert.ok(r.text.includes("password arrives by email with your shipping notice"), "the mechanics are at the recap");
   assert.ok(r.text.includes("go.tap.giving/test-grace-community-church-novice-run-do-not-contact") || r.text.includes("go.tap.giving/"), "the recap names the dashboard address");
 });
 

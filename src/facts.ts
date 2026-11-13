@@ -330,6 +330,23 @@ export const METAL_SURFACE_AID =
 export const STATUS_RECOVERY_LINE =
   "Your reference is in your invoice email; if you cannot find it, email hello@tap.giving " +
   "from the order email and the team re-sends it.";
+// The ONE canonical dashboard sign-in (post-placement spec P5,
+// 2026-11-12). Openshortlink serves the login page at
+// /dashboard/login on the go.tap.giving host (moved from /login);
+// https://tap.giving/login only redirects there, and
+// go.tap.giving/<slug> is the address the discs open, never a
+// sign-in page. Every surface states this line and no other.
+export const DASHBOARD_LOGIN_URL = "https://go.tap.giving/dashboard/login";
+export function dashboardSignInLine(slug: string): string {
+  return `Redirect Dashboard sign-in: ${DASHBOARD_LOGIN_URL}, with username ${slug}; your password arrives by email with your shipping notice.`;
+}
+// The before-arrival destination route (post-placement spec P3).
+// Destination edits sit behind dashboard sign-in, and the password
+// arrives only with the shipping notice, so before arrival the
+// order-email route to the team is the only way to set where a
+// tap goes.
+export const DESTINATION_BEFORE_ARRIVAL_LINE =
+  "To change where a tap goes before your discs arrive, email hello@tap.giving from the order email and the team sets the starting destination for you.";
 // P-13: the verify-against-example instruction (an instruction to
 // the calling agent, carried by get_artwork_spec and submit_artwork,
 // in text and as a structured field).

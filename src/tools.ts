@@ -15,7 +15,7 @@ import {
   METAL_SURFACE_AID, STATUS_RECOVERY_LINE,
   PROTECTED_STRING, confirmationText, confirmationTextInvoicePending, confirmationTextInvoiceHeld, confirmationTextProofPending, confirmationTextCustomerEmailFailed, DESIGN_SHAPES, DESIGN_SHAPES_NOTE, COLOR_SPACE_STATEMENT,
   AGENT_PDF_CHECKLIST, QR_DESIGN_RULES, LOGO_RULES, GEOMETRY_GLOSSARY,
-  VERIFY_AGAINST_EXAMPLE, VERIFY_AGAINST_EXAMPLE_TEXT } from "./facts.ts";
+  VERIFY_AGAINST_EXAMPLE, VERIFY_AGAINST_EXAMPLE_TEXT, DASHBOARD_LOGIN_URL, dashboardSignInLine, DESTINATION_BEFORE_ARRIVAL_LINE } from "./facts.ts";
 import { EXPLAINER_TOPICS, explainerResourceUri } from "./explainer.ts";
 import { PRICING_TIERS } from "./pricing.ts";
 import { renderArtworkOnDisc, renderArtworkFileToPng, bytesToBase64, SCREW_HOLES } from "./preview.ts";
@@ -1696,6 +1696,7 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
       // here, at the recap, not in discovery.
       dashboard: {
         address: `https://go.tap.giving/${orgNameBound ? slugifyOrg(orgNameBound) : "your-organization-slug"}`,
+        loginUrl: DASHBOARD_LOGIN_URL,
         username: orgNameBound ? slugifyOrg(orgNameBound) : "your organization slug",
         password: "arrives by email with the shipping notice, before your discs arrive",
       },
@@ -1726,7 +1727,7 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
     givingUrlOut
       ? `Tap destination: ${givingUrlOut}. Your discs start pointed at this page.`
       : "Tap destination: your own Tap.Giving page (your free Redirect Dashboard) until you set one; you can set or change it anytime from the dashboard.",
-    `Dashboard sign-in: go.tap.giving/${orgNameBound ? slugifyOrg(orgNameBound) : "your-organization-slug"}; the username is that slug, and the password arrives by email with the shipping notice, before your discs arrive.`,
+    `Your discs open go.tap.giving/${orgNameBound ? slugifyOrg(orgNameBound) : "your-organization-slug"}. ${dashboardSignInLine(orgNameBound ? slugifyOrg(orgNameBound) : "your-organization-slug")} The password arrives before your discs arrive.`,
     contactEmailBound
       ? `Contact: ${contactNameIn ? `${contactNameIn}, ` : ""}${contactEmailOut}${contactPhoneIn ? `, phone ${contactPhoneIn}` : ""}. The final proof is emailed to this address for approval.`
       : `Contact: none captured yet. Capture the contact email with start_order_intent so the recap can be placed: the invoice and the design proof are emailed to that address, and capturing it starts no order and sends nothing else.`,
@@ -2453,6 +2454,7 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     // the order they belong to exists.
     dashboard: {
       address: `https://go.tap.giving/${order.orgSlug}`,
+      loginUrl: DASHBOARD_LOGIN_URL,
       username: order.orgSlug,
       password: "arrives by email with the shipping notice, before your discs arrive",
     },
@@ -2476,7 +2478,7 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     `Order placed: ${order.orderRef}.`,
     confirmation,
     `Total: ${dollars(order.quote.grandTotalCents)} for ${order.quantity} discs. Shipping: Free.`,
-    `Dashboard sign-in: go.tap.giving/${order.orgSlug}; the username is that slug, and the password arrives by email with the shipping notice, before your discs arrive.`,
+    `Your discs open go.tap.giving/${order.orgSlug}. ${dashboardSignInLine(order.orgSlug)} The password arrives before your discs arrive.`,
     emailLine,
     order.invoice
       ? `Invoice ${order.invoice.invoiceNumber ?? order.invoice.invoiceId}: ${dollars(order.invoice.totalCents)}, payable on its hosted page: ${order.invoice.hostedInvoiceUrl}`
@@ -2569,9 +2571,9 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
     ...(stage === "received" ? { stageNote: "Your order is in and being prepared. The business records catch up within about an hour; that wait is normal, not a problem with your order." } : {}),
     dashboard: {
       tapAddress: `https://go.tap.giving/${order.orgSlug}`,
-      loginUrl: "https://tap.giving/login",
+      loginUrl: DASHBOARD_LOGIN_URL,
       username: order.orgSlug,
-      note: "Your discs open your Tap.Giving address above. Sign in to the Redirect Dashboard at the login URL with that address's name as the username; your password arrives by email with your shipping notice.",
+      note: "Your discs open your Tap.Giving address above. " + dashboardSignInLine(order.orgSlug) + " " + DESTINATION_BEFORE_ARRIVAL_LINE,
     },
     fulfillment: fulfillment ?? { status: null, note: "No fulfillment record yet: fulfillment begins after payment and proof approval, both human steps." },
     invoice: invoiceState,
@@ -2597,12 +2599,48 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
     }
   }
   if (!image) image = productPhotoImages()[0];
+  // P2 (post-placement spec, 2026-11-12): what happens next, derived
+  // from the order's own state. Fulfillment begins only after payment
+  // AND proof approval, so a fulfillment record proves both gates
+  // cleared; until then each gate is marked from its own signal: the
+  // live invoice state for payment, and the proof's email state for
+  // approval (a proof not yet published waits on us; a published
+  // proof awaiting the customer's reply waits on them, and this
+  // server cannot see an email reply, so it never claims approval
+  // it cannot see).
+  const proofStepState = fulfillment
+    ? "done"
+    : order.customerEmail?.proofPending
+      ? "waiting on us: the design proof is not published yet; it is emailed for approval as soon as it is ready"
+      : "waiting on you: approve the design proof in the email we sent (production cannot start without it)";
+  const payStepState = fulfillment
+    ? "done"
+    : !invoiceState
+      ? order.invoiceHeld
+        ? "waiting on us: the invoice is held for review by the Tap.Giving team"
+        : "waiting on us: the invoice has not been issued yet"
+      : invoiceState.status === "paid"
+        ? "done"
+        : `waiting on you: pay the invoice on its hosted page (it is ${invoiceState.status})`;
+  const shipStepState = fulfillment
+    ? `underway: ${fulfillment.status}${fulfillment.tracking ? `, tracking ${fulfillment.tracking} (${fulfillment.carrier})` : ""}`
+    : "after steps 1 and 2";
+  const nextSteps = [
+    { step: "Approve the design proof in the email we sent (production cannot start without it).", state: proofStepState },
+    { step: "Pay the invoice on its hosted page.", state: payStepState },
+    { step: "Production and delivery run 2 to 3 weeks from artwork approval; tracking arrives by email when the discs ship.", state: shipStepState },
+  ];
+  structured.nextSteps = nextSteps;
+  const stageNote = (structured.stageNote as string | undefined) ?? null;
   const text = [
-    `Order ${order.orderRef}: stage ${stage}.`,
+    ...(stageNote ? [stageNote] : []),
     invoiceState ? `Invoice ${invoiceState.invoiceNumber ?? invoiceState.invoiceId}: ${invoiceState.status}. Pay it on its hosted page: ${invoiceState.hostedInvoiceUrl}` : order.invoiceHeld ? "Invoice: held for review. Your order is placed; a person from Tap.Giving resolves the hold before any invoice or proof email goes out." : "Invoice: not minted yet; the order record carries the mint state, and the team follows up from the record.",
     ...((structured.design as Record<string, unknown>).imageLabel ? ["The image with this answer is your submitted artwork on the disc (a preview render, not the proof). The final proof arrives by email for approval."] : ["The photo with this answer shows the disc in use: a phone tapping a disc on a chair back."]),
     fulfillment ? `Fulfillment: ${fulfillment.status}${fulfillment.tracking ? `, tracking ${fulfillment.tracking} (${fulfillment.carrier})` : ""}.` : "Fulfillment has not begun (it starts after payment and proof approval).",
-    `Your discs open https://go.tap.giving/${order.orgSlug}. Redirect Dashboard: sign in at https://tap.giving/login with username ${order.orgSlug}; your password arrives by email with your shipping notice.`,
+    "What happens next:",
+    ...nextSteps.map((s, i) => `${i + 1}. ${s.step} [${s.state}]`),
+    `Your discs open https://go.tap.giving/${order.orgSlug}. ${dashboardSignInLine(order.orgSlug)}`,
+    DESTINATION_BEFORE_ARRIVAL_LINE,
   ].join("\n");
   return { structured, text, image };
 }
