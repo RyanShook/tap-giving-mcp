@@ -470,7 +470,7 @@ function intentAnswerLines(intent: string): string[] {
 // it. The lead carries no pricing and none of the undefined jargon
 // (print-ready, spec, vendor-neutral) the novice run flagged.
 const BUYER_INTENT_PATTERN =
-  /\bno idea what (this|it) is\b|\bwhat (is|are) (it|this|these|nfc)\b|\bhow it works\b|\bhow (does|do) (it|this|they|the discs?) work\b|\bhow (do|would|can) we (get|start|set)\b|\bget (tap|this|it) (working|going|started)\b|\bwhat would we (actually )?(have|need) to do\b|\bnever heard of\b|\bgetting started\b/i;
+  /\bno idea what (this|it) is\b|\bwhat (is|are) (it|this|these|nfc)\b|\bhow it works\b|\bhow (does|do) (it|this|they|the discs?) work\b|\bhow (do|would|can) we (get|start|set)\b|\bget (tap|this|it) (working|going|started)\b|\bwhat would we (actually )?(have|need) to do\b|\bnever heard of\b|\bgetting started\b|\bhow (do|can|would) (i|we) (buy|purchase|order)\b|\bhow to (buy|purchase|order)\b|\bwhere (can|do) (i|we) (buy|purchase)\b|\bwant to (buy|purchase|order)\b|\bbuy(ing)?\b[^.?!]*\b(tap|nfc|discs?|plates?)\b|\bpurchas(e|ing)\b[^.?!]*\b(tap|nfc|discs?|plates?)\b|\border(ing)?\b[^.?!]*\b(tap\s+)?(discs?|plates?)\b|\bplace an order\b/i;
 const DESIGN_INTENT_PATTERN =
   /\blogo\b|\bartwork\b|\bdesign\b|\bvector\b|\bsvg\b|\bpdf\b|\bprint-ready\b|\bspec\b|\bcompose\b|\btemplate\b/i;
 export const BUYER_LEAD =
@@ -2444,8 +2444,8 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     orderRef: order.orderRef,
     ...(replayed ? { replayed: true, note: "This idempotencyKey already created this order; the original orderRef is returned and no second order was written." } : {}),
     ...(statusRefPlain
-      ? { statusRef: statusRefPlain, statusRefNote: "Your status reference: shown once, here and in the customer email. Keep it with the order confirmation; it cannot be recovered if lost. get_order_status reads the order with it, and nothing else can." }
-      : { statusRefNote: "The status reference was shown once at placement and cannot be recovered; it is not stored in recoverable form." }),
+      ? { statusRef: statusRefPlain, statusRefNote: "Your status reference: keep it with the order confirmation. " + STATUS_RECOVERY_LINE + " get_order_status reads the order with it, and nothing else can." }
+      : { statusRefNote: "The status reference is not repeated on a replay. " + STATUS_RECOVERY_LINE }),
     invreqKey: order.invreqKey,
     quote: quoteObj,
     exit: order.exit,
@@ -2483,7 +2483,7 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
       : order.invoiceHeld
         ? "Invoice: held for review. The order is placed, but its invoice is held until a person from Tap.Giving reviews it; nothing was minted, and the team has been notified of the hold."
         : "Invoice: not minted yet; the failure is recorded on the order and a replay re-attempts only the mint.",
-    ...(statusRefPlain ? [`Status reference (shown once; it cannot be recovered): ${statusRefPlain}`] : []),
+    ...(statusRefPlain ? [`Status reference: ${statusRefPlain}`, STATUS_RECOVERY_LINE] : []),
     ...(partialStates.length ? partialStates.map((p) => `Partial state: ${p}.`) : []),
     structured.nextStep as string,
   ].join("\n");
@@ -2794,7 +2794,7 @@ export const TOOLS: ToolDef[] = [
       "This is the lock-in write behind both recap exits; it carries the recapRef and a required idempotencyKey (a retry with the same key and payload returns the original orderRef; the same key with a different payload is a conflict naming the differing fields). " +
       "The 100-disc minimum is enforced here. Sizes other than the two built-ins return manual_exception. Returns the orderRef (the reference every later call uses), the exact quote, the chosen exit, and the next step. " +
       "Failure modes: a recap whose inputs differ from the order is refused as a conflict naming the differing fields; a reused idempotencyKey with a different payload is a conflict naming the original order. " +
-      "Routing: start_order_intent is the earlier contact capture, and get_recap must run immediately before this call over the same inputs. Placing the order records it, emails the full order to the Tap.Giving team, creates the invoice at the quoted total, and emails the invoice and the design proof to the contact; the response carries each step's outcome, the settled confirmation text, and the order's status reference (shown once; it cannot be recovered). A replay with the same idempotencyKey re-attempts only the steps that did not complete. " + GATES.designApproval + " " + GATES.payment,
+      "Routing: start_order_intent is the earlier contact capture, and get_recap must run immediately before this call over the same inputs. Placing the order records it, emails the full order to the Tap.Giving team, creates the invoice at the quoted total, and emails the invoice and the design proof to the contact; the response carries each step's outcome, the settled confirmation text, and the order's status reference. " + STATUS_RECOVERY_LINE + " A replay with the same idempotencyKey re-attempts only the steps that did not complete. " + GATES.designApproval + " " + GATES.payment,
     inputSchema: {
       type: "object",
       required: ["contactName", "contactEmail", "contactPhone", "quantity", "size", "mounting", "shipTo", "recapRef", "idempotencyKey"],

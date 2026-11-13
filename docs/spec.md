@@ -3090,3 +3090,12 @@ Source: the Cold-User Test lane ran the production server cold as Dana, a church
 - S8: discovery keeps one dashboard line ("A free dashboard lets you re-point any disc anytime"); the credential mechanics (address, username, password by email with the shipping notice) live at the recap and the placement answer.
 
 Verification: suite 109 of 109 (15 new tests in test/novice-friction.test.ts), typecheck clean, production re-run of the Dana cold calls in the test lane recorded with the landing.
+
+## 2026-11-12 novice-friction follow-up (landing record)
+
+Two legs from the Cold-User Test lane cold re-verification of the pass above:
+
+- S5 follow-up: the create_order seats the pass did not name still carried the retired claim. The placement answer (structured statusRefNote on a fresh placement and on a replay, and the text status-reference line) and the create_order tool description now use the same STATUS_RECOVERY_LINE as the discovery and order-status surfaces. The explain_where_i_am prompt, README, and SKILL copies carried the same claim and were corrected to match. No live tool response carries the unrecoverable claim.
+- S1 follow-up: the buyer patterns missed the buying verbs. Buy-phrasings (buy, buying, purchase, order as verbs in a buying question, for example "How do I buy tap discs for my church?") now fire the buyer lead; the design-marker suppression is unchanged, so a design-led intent containing a buying word still gets no lead.
+
+Verification: suite 112 of 112 (3 new tests: buy-phrasing fires, design-led suppression with a buying word, create_order description seat; the placement and replay notes are asserted in the test-lane journey), typecheck clean, production re-verified in the test lane with the landing.

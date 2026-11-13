@@ -271,6 +271,17 @@ test("test-lane journey: recap, create_order (idempotent, record plus order emai
   const order = await runTool(env, req(), "create_order", orderArgs, fetchFn);
   const orderRef = order.structured.orderRef as string;
   assert.ok(orderRef.startsWith("mcp:mcp-acceptance-test-church:"));
+  // S5 follow-up (2026-11-12): the placement response carries the
+  // status-reference recovery line at both create_order seats (the
+  // structured note and the text line), not the retired claim that
+  // the reference cannot be recovered.
+  const orderNote = order.structured.statusRefNote as string;
+  assert.ok(orderNote.includes("Your reference is in your invoice email"), "placement statusRefNote carries the recovery line");
+  assert.ok(orderNote.includes("the team re-sends it"), "placement statusRefNote names the re-send");
+  assert.ok(!orderNote.includes("cannot be recovered"), "no unrecoverable claim in the placement note");
+  assert.ok(order.text.includes(`Status reference: ${order.structured.statusRef as string}`), "the text names the reference plainly");
+  assert.ok(order.text.includes("the team re-sends it"), "the placement text carries the recovery line");
+  assert.ok(!order.text.includes("cannot be recovered"), "no unrecoverable claim in the placement text");
   // The test lane got the INVREQ-shaped record (DEV_ORDERS write).
   const devOrders = (env.DEV_ORDERS as unknown as MemoryKV).store;
   assert.equal([...devOrders.keys()].filter((k) => k.startsWith("INVREQ:")).length, 1);
@@ -278,6 +289,9 @@ test("test-lane journey: recap, create_order (idempotent, record plus order emai
   // Retry with the same key and payload returns the original, no second write.
   const replay = await runTool(env, req(), "create_order", orderArgs, fetchFn);
   assert.equal(replay.structured.orderRef, orderRef);
+  const replayNote = replay.structured.statusRefNote as string;
+  assert.ok(replayNote.includes("the team re-sends it"), "replay statusRefNote carries the recovery line");
+  assert.ok(!replayNote.includes("cannot be recovered"), "no unrecoverable claim in the replay note");
   assert.equal([...devOrders.keys()].filter((k) => k.startsWith("INVREQ:")).length, 1);
 
   // Same key, different payload: conflict naming the field.

@@ -38,7 +38,7 @@ Any MCP client connects with this block alone:
 No account, key, or login exists anywhere in this server, for any
 tool, order status included. Order status is read with the order's
 status reference, issued at placement and carried in the order's
-email; keep it, it cannot be recovered if lost.
+email. Your reference is in your invoice email; if you cannot find it, email hello@tap.giving from the order email and the team re-sends it.
 
 Claude Code, one line:
 
@@ -174,7 +174,7 @@ Response, structured content (image data shortened):
   "taxExempt": "Tax-exempt organizations: say so when you order. Your tax-exempt state is recorded on the order, and tax is calculated on the invoice where it applies.",
   "plainLanguage": {
     "nfc": "NFC is the tap itself: a visitor holds a phone near the disc and the page opens. No app is needed, and nothing has to be installed.",
-    "status": "There is no account, key, or login at any point. Order status is read with the one-time status reference create_order returns at placement; it is shown once and cannot be recovered, so keep it with the order confirmation."
+    "status": "There is no account, key, or login at any point. Order status is read with the status reference create_order returns at placement. Your reference is in your invoice email; if you cannot find it, email hello@tap.giving from the order email and the team re-sends it."
   },
   "explainer": {
     "note": "Stuck, or explaining this to someone else? The explainer resources walk through how it works, step by step.",
@@ -462,7 +462,7 @@ Samples: we do not offer physical samples, free or paid. Instead, see the finish
 
 Gates
 Design approval, payment, and production release stay human: a person approves the final proof by email. This server moves no money itself: when an order is placed, Tap.Giving emails the invoice and the design proof, and a person pays the hosted invoice.
-There is no account, key, or login at any point in using this server. Order status is read with the status reference create_order returns at placement; it is shown once and cannot be recovered. Stuck? The explainer resources (tapgiving://explainer/how-it-works and its topics) walk through where you are.
+There is no account, key, or login at any point in using this server. Order status is read with the status reference create_order returns at placement. Your reference is in your invoice email; if you cannot find it, email hello@tap.giving from the order email and the team re-sends it. Stuck? The explainer resources (tapgiving://explainer/how-it-works and its topics) walk through where you are.
 The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library (settings, tap moments, product details, mounting): show them whenever the person wants to see the disc in place.
 ```
 
@@ -632,7 +632,7 @@ offers a key, login, or account, including placing an order and
 reading its status. Connect with the endpoint URL alone. Order
 status is read with the order's status reference, a capability
 issued at placement and carried in the order's email; only its hash
-is stored, and it cannot be recovered if lost.
+is stored. Your reference is in your invoice email; if you cannot find it, email hello@tap.giving from the order email and the team re-sends it.
 
 A registry record for this server lives in this repo as
 [`server.json`](server.json), in the official MCP Registry format:

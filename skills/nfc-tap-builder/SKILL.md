@@ -34,7 +34,7 @@ Claude Code, one line:
 claude mcp add --transport http tap-giving https://tap.giving/mcp
 ```
 
-No account, key, or login exists anywhere in this server, at any step. Order status is read with the order's status reference, issued at placement and carried in the order's email; keep it, it cannot be recovered if lost.
+No account, key, or login exists anywhere in this server, at any step. Order status is read with the order's status reference, issued at placement and carried in the order's email. Your reference is in your invoice email; if you cannot find it, email hello@tap.giving from the order email and the team re-sends it.
 
 ## The journey
 
@@ -118,7 +118,7 @@ Add-on to settle before printing: discs that go on metal surfaces need a shieldi
 
 ## No keys
 
-There are no keys. No user-facing step in this server requires or offers a key, login, or account, including placing an order and reading its status. Connect with the endpoint URL alone. Order status is read with the order's status reference, a capability issued at placement and carried in the order's email; only its hash is stored, and it cannot be recovered if lost.
+There are no keys. No user-facing step in this server requires or offers a key, login, or account, including placing an order and reading its status. Connect with the endpoint URL alone. Order status is read with the order's status reference, a capability issued at placement and carried in the order's email; only its hash is stored. Your reference is in your invoice email; if you cannot find it, email hello@tap.giving from the order email and the team re-sends it.
 
 ## Human gates
 

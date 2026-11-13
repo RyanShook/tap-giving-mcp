@@ -15,7 +15,7 @@
 // business repo; the published copy is docs/spec.md in this repo.
 
 import type { Env } from "./env.ts";
-import { ENDPOINT, GATES, POSITIONING_LINE, PROTECTED_STRING, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME } from "./facts.ts";
+import { ENDPOINT, GATES, POSITIONING_LINE, PROTECTED_STRING, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME, STATUS_RECOVERY_LINE } from "./facts.ts";
 import { EXPLAINER_TOPICS, explainerResourceUri, findExplainerTopic } from "./explainer.ts";
 import { PRODUCT_PHOTOS, TOOLS, artworkBytesKey, readArtworkRecord, runTool } from "./tools.ts";
 import { buildTemplateSvg, renderArtworkFileToPng } from "./preview.ts";
@@ -208,7 +208,7 @@ async function handleRpc(env: Env, request: Request): Promise<Response> {
       where,
       "The journey has two phases. Phase one is design and collects nothing: get_discovery orients, get_artwork_spec returns the spec and the delivered examples, the user's own agent composes the artwork and produces the print-ready PDF, and submit_artwork returns the on-disc proof. Keeping the file is a complete outcome.",
       "Phase two is the optional order: start_order_intent captures the contact email first, get_order_questions lists the order questions (prices are first stated here), get_quote gives the exact total, get_recap checks the whole order, and create_order is the final step, labeled \"Email me my invoice and design proof.\", which emails the invoice and the design proof to the contact.",
-      "After placement, get_order_status reads the order with the status reference shown once at placement.",
+      "After placement, get_order_status reads the order with the status reference issued at placement. " + STATUS_RECOVERY_LINE,
       "For the fuller walk-through, read the explainer resources: " + EXPLAINER_TOPICS.map((t) => explainerResourceUri(t.slug)).join(", ") + ".",
     ].join("\n");
     return json({

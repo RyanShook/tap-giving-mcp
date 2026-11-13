@@ -8,7 +8,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runTool, DESIGNED_FOR_YOU_LINE, BUYER_LEAD } from "../src/tools.ts";
+import { runTool, toolByName, DESIGNED_FOR_YOU_LINE, BUYER_LEAD } from "../src/tools.ts";
 import { STATUS_RECOVERY_LINE } from "../src/facts.ts";
 import type { Env } from "../src/env.ts";
 
@@ -88,6 +88,35 @@ test("S1: a design-led intent keeps the standing discovery shape", async () => {
   const s = r.structured as { buyerLead?: string };
   assert.equal(s.buyerLead, undefined, "no buyer lead for a design-led intent");
   assert.ok(!r.text.includes("Getting tap working at your organization"), "no buyer block in the text");
+});
+
+test("S1: buy-phrasings fire the buyer lead (Cold-User re-verification, 2026-11-12)", async () => {
+  const env = makeEnv();
+  for (const intent of [
+    "How do I buy tap discs for my church?",
+    "We want to purchase tap discs for our school",
+    "How can we order discs for our nonprofit?",
+    "I am buying tap discs for our church",
+    "Where can I buy these discs?",
+  ]) {
+    const r = await runTool(env, req(), "get_discovery", { intent }, noFetch);
+    const s = r.structured as { buyerLead?: string };
+    assert.equal(s.buyerLead, BUYER_LEAD, `buyer lead fires for: ${intent}`);
+    assert.ok(r.text.includes("Getting tap working at your organization"), `buyer block in the text for: ${intent}`);
+  }
+});
+
+test("S1: a design-led intent with a buying word still gets no buyer lead", async () => {
+  const env = makeEnv();
+  for (const intent of [
+    "How do I buy a template for my logo design?",
+    "I want to buy vector artwork for our discs",
+  ]) {
+    const r = await runTool(env, req(), "get_discovery", { intent }, noFetch);
+    const s = r.structured as { buyerLead?: string };
+    assert.equal(s.buyerLead, undefined, `no buyer lead for design-led: ${intent}`);
+    assert.ok(!r.text.includes("Getting tap working at your organization"), `no buyer block for: ${intent}`);
+  }
 });
 
 test("S2: the designed-for-you path tops the artwork spec, mechanism named", async () => {
@@ -201,6 +230,13 @@ test("S5: the status recovery line replaces the unrecoverable claim", async () =
   assert.ok(!d.text.includes("cannot be recovered"), "the unrecoverable claim is gone from discovery");
   await assert.rejects(() => runTool(env, req(), "get_order_status", {}, noFetch), /team re-sends it/, "the missing-reference error names the recovery");
   await assert.rejects(() => runTool(env, req(), "get_order_status", { statusRef: "bogus-reference" }, noFetch), /not one this server knows\. Your reference is in your invoice email/, "not_found appends the recovery line");
+});
+
+test("S5: the create_order description carries the recovery line (follow-up seat)", async () => {
+  const def = toolByName("create_order");
+  assert.ok(def, "create_order is defined");
+  assert.ok(def.description.includes(STATUS_RECOVERY_LINE), "the create_order description carries the recovery line");
+  assert.ok(!def.description.includes("cannot be recovered"), "no unrecoverable claim in the create_order description");
 });
 
 test("S6: overview and general alias to the full product summary", async () => {
