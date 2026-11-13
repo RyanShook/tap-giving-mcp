@@ -1,4 +1,4 @@
-import { STATUS_RECOVERY_LINE, DASHBOARD_LOGIN_URL, DESTINATION_BEFORE_ARRIVAL_LINE } from "./facts.ts";
+import { STATUS_RECOVERY_LINE, DASHBOARD_LOGIN_URL, DESTINATION_BEFORE_ARRIVAL_LINE, METAL_SURFACE_AID } from "./facts.ts";
 
 // The explainer surface (brief step 6): MCP resources, not a FAQ tool.
 // Topics carry only sourced facts. NO-COPY omissions are deliberate:
@@ -16,11 +16,16 @@ export interface ExplainerTopic {
 }
 
 export const EXPLAINER_TOPICS: ExplainerTopic[] = [
+  // E1 (explainer novice read, 2026-11-13): the designed-for-you line
+  // (S2) is carried verbatim in place of the do-it-yourself story, so
+  // the resource the stuck-user prompt points to names the done-for-you
+  // route. The line is inlined, not imported: tools.ts imports this
+  // module, and the E1 test pins it against DESIGNED_FOR_YOU_LINE.
   {
     slug: "how-it-works",
     title: "How it works",
     body:
-      "Two parts. Part 1 is design: work from the published artwork spec, look at real delivered examples, compose the artwork with your own tools, and submit the finished file to see it on the disc as a proof. The print-ready PDF is a file your own agent produces from the spec; the artwork is yours to take to any printer. Part 2, only if you want it, is ordering discs through Tap.Giving: answer the order questions, review the recap, and place the order at the final step, labeled \"Email me my invoice and design proof.\"",
+      "Two parts. Part 1 is design: work from the published artwork spec and look at real delivered examples. No logo, or no design? Give the organization name and the team designs the disc and emails a proof. Nothing to upload, nothing to compose. The artwork is yours to take to any printer. Part 2, only if you want it, is ordering discs through Tap.Giving: answer the order questions, review the recap, and place the order at the final step, labeled \"Email me my invoice and design proof.\"",
   },
   {
     slug: "what-a-tap-disc-does",
@@ -46,11 +51,15 @@ export const EXPLAINER_TOPICS: ExplainerTopic[] = [
     body:
       "Placing the order at the final step emails the invoice and the design proof to the contact email. Production waits for your proof approval by email, and the invoice is paid on its hosted page by card or ACH bank transfer; there is no check or purchase-order process. Production and delivery run 2 to 3 weeks from artwork approval, and there is no rush option. If discs are lost or damaged, the design and order history stay on the organization's orders, and a reorder uses the same design. One gap, stated plainly: how an internal approval chain inside your organization (for example a board approving while someone else pays) should be sequenced is not something this server documents; ask the Tap.Giving team at hello@tap.giving. Where a tap goes: your discs open your dashboard address. After they arrive, sign in to the Redirect Dashboard at " + DASHBOARD_LOGIN_URL + " (the username is your dashboard address's name, and the password arrives by email with your shipping notice) and re-point any disc anytime. " + DESTINATION_BEFORE_ARRIVAL_LINE + " Checking on your order: ask for its status with your status reference, the reference issued at placement. " + STATUS_RECOVERY_LINE,
   },
+  // E2 (explainer novice read, 2026-11-13): the metal decision aid
+  // (S3, METAL_SURFACE_AID, the phase-one-safe form, no price) rides
+  // with the metal warning, as it does on the mounting topic and
+  // order question 6.
   {
     slug: "materials-and-care",
     title: "Materials and care",
     body:
-      "The discs are 0.85 mm double-laminated matte waterproof PVC with a locked NTAG213 tap chip, built to be wiped down and spilled on. Every disc carries 3M adhesive backing as standard; pre-drilled screw holes (2 holes, 6 mm) are optional, discs with holes keep the adhesive too, and screws are not included. Discs do not work on metal surfaces without the anti-metal shielding layer, which is decided before printing because it cannot be added afterwards. We do not offer physical samples.",
+      "The discs are 0.85 mm double-laminated matte waterproof PVC with a locked NTAG213 tap chip, built to be wiped down and spilled on. Every disc carries 3M adhesive backing as standard; pre-drilled screw holes (2 holes, 6 mm) are optional, discs with holes keep the adhesive too, and screws are not included. Discs do not work on metal surfaces without the anti-metal shielding layer, which is decided before printing because it cannot be added afterwards. " + METAL_SURFACE_AID + " We do not offer physical samples.",
   },
 ];
 

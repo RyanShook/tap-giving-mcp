@@ -9,7 +9,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runTool, toolByName, DESIGNED_FOR_YOU_LINE, BUYER_LEAD } from "../src/tools.ts";
-import { STATUS_RECOVERY_LINE } from "../src/facts.ts";
+import { STATUS_RECOVERY_LINE, METAL_SURFACE_AID } from "../src/facts.ts";
+import { findExplainerTopic } from "../src/explainer.ts";
 import type { Env } from "../src/env.ts";
 
 class MemoryKV {
@@ -287,4 +288,27 @@ test("do not regress: no-app answer, samples answer, kind below-minimum refusal"
   assert.ok(s.plainLanguage.nfc.includes("No app is needed"), "the no-app answer stands");
   assert.ok(s.samples.includes("we do not offer physical samples"), "the samples answer stands");
   await assert.rejects(() => runTool(env, req(), "get_quote", { quantity: 50 }, noFetch), /smallest order is 100 discs/, "the below-minimum refusal stays kind and complete");
+});
+
+// Explainer novice read (2026-11-13, Cold-User Test lane): E1 the
+// how-it-works resource carries the designed-for-you route, E2 the
+// materials-and-care resource carries the metal decision aid.
+
+test("E1: the how-it-works explainer carries the designed-for-you line, homework story gone", async () => {
+  const topic = findExplainerTopic("tapgiving://explainer/how-it-works");
+  assert.ok(topic, "the how-it-works explainer exists");
+  assert.ok(topic.body.includes(DESIGNED_FOR_YOU_LINE), "the designed-for-you line is carried verbatim");
+  assert.ok(!topic.body.includes("compose the artwork with your own tools"), "the do-it-yourself compose story is gone");
+  assert.ok(!topic.body.includes("print-ready PDF is a file your own agent produces"), "the agent-produces-the-PDF story is gone");
+  assert.ok(topic.body.includes("The artwork is yours to take to any printer"), "the take-it-anywhere fact stays");
+  assert.ok(topic.body.includes("Email me my invoice and design proof"), "the final-step label still closes phase two");
+});
+
+test("E2: the materials-and-care explainer carries the magnet aid, no price", async () => {
+  const topic = findExplainerTopic("tapgiving://explainer/materials-and-care");
+  assert.ok(topic, "the materials-and-care explainer exists");
+  assert.ok(topic.body.includes(METAL_SURFACE_AID), "the metal aid is carried verbatim");
+  assert.ok(topic.body.includes("if a magnet sticks to it, it counts"), "the magnet test is in materials and care");
+  assert.ok(topic.body.includes("the team confirms the count with you before printing"), "the unknown-count net is stated");
+  assert.ok(!/\$\d/.test(topic.body), "no price in the phase-one materials topic");
 });
