@@ -88,7 +88,7 @@ function selfDescription(): string {
     `Resources (tapgiving://explainer/<topic>) explain how it works and where you are: how-it-works, what-a-tap-disc-does, nfc-vs-qr, the-two-phases, after-you-order, materials-and-care. The prompt explain_where_i_am answers a stuck user with the step they are on.`,
     ``,
     `## Access`,
-    `There are no credentials on this server. Submitted artwork is fetchable at its capability URL (/mcp/artwork/<ref>, and the same address with .png on the end for the print render): the artwork reference itself is the capability, within 30 days of submission. Order status is read with get_order_status and the order's status reference, shown once at placement and carried in the customer email; it cannot be recovered if lost.`,
+    `There are no credentials on this server. Submitted artwork is fetchable at its capability URL (/mcp/artwork/<ref>, and the same address with .png on the end for the print render): the artwork reference itself is the capability, within 30 days of submission. Order status is read with get_order_status and the order's status reference, shown at placement and carried in the invoice email; if it cannot be found, email hello@tap.giving from the order email and the team re-sends it.`,
     ``,
     `## Human gates`,
     ...Object.values(GATES).map((g) => `- ${g}`),

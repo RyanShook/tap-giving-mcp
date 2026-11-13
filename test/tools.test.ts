@@ -674,12 +674,14 @@ test("order questions carry every field in the settled order, with the pricing b
   const { env } = await makeEnv();
   const fetchFn = stubFetch([]) as typeof fetch;
   const q = await runTool(env, req(), "get_order_questions", {}, fetchFn);
-  // Ryan's settled collection order (2026-11-09): contactEmail,
+  // Ryan's settled collection order (2026-11-09; artwork answer
+  // added by the novice spec, 2026-11-12): contactEmail,
   // organizationName, shipTo (contactPhone inside the ship-to
   // block), quantity, size, antiMetalCount, mounting,
-  // linkDestination as the confirmation entry, contactName.
+  // artworkSource, linkDestination as the confirmation entry,
+  // contactName.
   const fields = (q.structured.questions as Array<{ field: string }>).map((x) => x.field);
-  assert.deepEqual(fields, ["contactEmail", "organizationName", "shipTo", "quantity", "size", "antiMetalCount", "mounting", "linkDestination", "contactName"]);
+  assert.deepEqual(fields, ["contactEmail", "organizationName", "shipTo", "quantity", "size", "antiMetalCount", "mounting", "artworkSource", "linkDestination", "contactName"]);
   const shipQ = (q.structured.questions as Array<{ field: string; question?: string; prompt?: string; note?: string }>).find((x) => x.field === "shipTo");
   assert.ok(shipQ && /phone/i.test(`${shipQ.question ?? ""} ${shipQ.prompt ?? ""} ${shipQ.note ?? ""}`), "the ship-to block collects the phone");
   const destQ = (q.structured.questions as Array<{ field: string; question?: string; confirmation?: boolean }>).find((x) => x.field === "linkDestination");

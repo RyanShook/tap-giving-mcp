@@ -240,17 +240,19 @@ export const MOUNTING_OPTIONS = [
 // change where any disc points), the whole set starts at one
 // destination, and two destinations work by splitting the set in the
 // dashboard. The printed-code fallback is stated conditionally on the
-// design carrying a code, and Dashboard login timing follows the
-// status answer's own contract (password by email with the shipping
-// notice).
+// design carrying a code. The dashboard credential mechanics (the
+// address pattern, the username, the password timing) are NOT stated
+// here (novice spec S8, 2026-11-12): discovery keeps the one
+// dashboard line below, and the mechanics live at the recap, the
+// placement answer, and the status answer, where an order exists
+// they belong to.
 export const DESTINATION_MODEL =
   "Every disc carries its own Tap.Giving address, so where a tap lands is set per disc. An order " +
   "starts with one destination for the whole set, the page you give at order setup. To run two " +
   "destinations, for example counter discs opening your menu and door discs opening your review " +
   "profile, split the set afterwards in the Redirect Dashboard: re-point any single disc, or " +
-  "any group of discs, in seconds, and re-point them again anytime. Your dashboard sign-in works " +
-  "from order setup: the address is go.tap.giving/<your-organization-slug>, the username is that " +
-  "slug, and the password arrives by email with the shipping notice, before your discs arrive. " +
+  "any group of discs, in seconds, and re-point them again anytime. A free dashboard lets you " +
+  "re-point any disc anytime. " +
   "Tapping needs no app: iPhone XS (2018) and later and most Android phones from about 2015 read " +
   "the disc automatically in the background. Where a design carries a printed QR code (your " +
   "artwork includes one, or the Tap.Giving address line on the design), a phone without NFC, or " +
@@ -308,6 +310,26 @@ export const MOUNTING_SURFACE_GUIDE = [
   "Adhesive backing: for smooth surfaces where a no-holes fixing is wanted.",
   "Screws through the pre-drilled holes: for a permanent fixing that does not rely on adhesive. Screws are not included.",
 ];
+// The metal decision aid (novice spec S3, 2026-11-12): the metal
+// question is unanswerable as posed without a way to classify the
+// reader's own furniture, and its irreversibility warning frightens
+// without one. This aid is the phase-one-safe form (classification
+// and the safety net, no price): it rides the mounting topic. The
+// order questions carry the same aid with the plain $1 framing,
+// because pricing is stated in the order phase.
+export const METAL_SURFACE_AID =
+  "What counts as metal: if a magnet sticks to it, it counts: metal chair backs, metal tables, " +
+  "appliances, metal doors. What does not count: wood, plastic, fabric, glass, and drywall. " +
+  "And nothing prints before you approve the proof: when the count is unsure, say so, and the " +
+  "team confirms the count with you before printing.";
+// The status-reference recovery line (novice spec S5, 2026-11-12):
+// the placement email carries the reference in its body (verified on
+// the 2026-11-10 live proof), so recovery exists and the copy names
+// it, replacing the retired "shown once and cannot be recovered"
+// claim on the discovery and order-status surfaces.
+export const STATUS_RECOVERY_LINE =
+  "Your reference is in your invoice email; if you cannot find it, email hello@tap.giving " +
+  "from the order email and the team re-sends it.";
 // P-13: the verify-against-example instruction (an instruction to
 // the calling agent, carried by get_artwork_spec and submit_artwork,
 // in text and as a structured field).

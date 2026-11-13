@@ -3075,3 +3075,18 @@ parity with GET), the registry agreement (the card's tools
 equal the tools/list answer), the split's absence, and the
 statement verbatim. No tool behavior changed; this is a new
 read-only GET route.
+
+## 2026-11-12 novice-friction pass (landing record)
+
+Source: the Cold-User Test lane ran the production server cold as Dana, a church office manager who does not know what NFC is (spec and evidence in the lane record, mcp-novice-friction). Eight items landed:
+
+- S1: get_discovery is intent-aware. A buyer intent (asks what it is, how it works, how to get it) leads with a buyer path in plain order after the pinned positioning line: what it is in one sentence, no app needed, see real examples, pick a direction, proof of your own design by email, approve, invoice, discs in 2 to 3 weeks. Design-led intents keep the standing shape. The buyer lead carries no pricing and none of the flagged undefined jargon.
+- S2: the designed-for-you path is stated verbatim at the top of get_artwork_spec and in the discovery steps ("No logo, or no design? Give the organization name and the team designs the disc and emails a proof. Nothing to upload, nothing to compose."), with its mechanism named in the same breath (organizationName plus a sourceNote on start_order_intent). get_order_questions gains an explicit artwork answer (question 8, artworkSource: we have artwork, or team designs it from our name). A recap with no artwork reads as the team-design route, not a gap.
+- S3: the metal decision aid (magnet test: metal chair backs, metal tables, appliances, metal doors count; wood, plastic, fabric, glass, drywall do not; nothing prints before the proof is approved, and the team confirms an unsure count before printing) rides the mounting topic in its phase-one-safe form with no price, and question 6 with the plain $1 per disc framing.
+- S4: get_recap runs without a contact email and returns the complete summary as an unbound recap, marked not placeable until a contact email is captured; create_order refuses an unbound recap by name. Bound recaps are unchanged.
+- S5: the status reference recovery is stated wherever the retired "shown once and cannot be recovered" claim stood on the discovery and order-status surfaces: the reference is in the invoice email, and emailing hello@tap.giving from the order email gets it re-sent. The not_found answer appends the same recovery.
+- S6: get_product accepts overview and general as aliases for the full summary.
+- S7: submit_artwork leads a raster acceptance with the plain verdict sentence ("Your file works for the proof. If a sharper file is needed for printing, the team asks by email; it never blocks your proof."); the print-file mechanics live in the structured export block only.
+- S8: discovery keeps one dashboard line ("A free dashboard lets you re-point any disc anytime"); the credential mechanics (address, username, password by email with the shipping notice) live at the recap and the placement answer.
+
+Verification: suite 109 of 109 (15 new tests in test/novice-friction.test.ts), typecheck clean, production re-run of the Dana cold calls in the test lane recorded with the landing.

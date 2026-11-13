@@ -12,6 +12,7 @@ import {
   SERVER_DESCRIPTION, SERVER_NAME, POSITIONING_LINE, PRESENTATION_SYNONYMS, TAX_NOTE, PRICE_RANGE_LINE,
   SAMPLES_LINE, SAMPLES_GUIDANCE_LINE, TAX_EXEMPT_LINE, TAX_EXEMPT_GUIDANCE_LINE, PAYMENT_GUIDANCE_LINE,
   PLAIN_NFC_LINE, QR_CONDITIONAL_LINE, VERSUS_PRINTED_CODES_LINE, DURABILITY_LINE, MOUNTING_SURFACE_GUIDE,
+  METAL_SURFACE_AID, STATUS_RECOVERY_LINE,
   PROTECTED_STRING, confirmationText, confirmationTextInvoicePending, confirmationTextInvoiceHeld, confirmationTextProofPending, confirmationTextCustomerEmailFailed, DESIGN_SHAPES, DESIGN_SHAPES_NOTE, COLOR_SPACE_STATEMENT,
   AGENT_PDF_CHECKLIST, QR_DESIGN_RULES, LOGO_RULES, GEOMETRY_GLOSSARY,
   VERIFY_AGAINST_EXAMPLE, VERIFY_AGAINST_EXAMPLE_TEXT } from "./facts.ts";
@@ -340,6 +341,7 @@ function artworkSpecObject(shape?: string): Record<string, unknown> {
   };
   const examples = examplesForShape(shape).map(exampleEntry);
   return {
+    designedForYou: DESIGNED_FOR_YOU,
     sizes: "100 mm (4 inch), round or square, are the self-serve orderable sizes. The design directions cover the full marketed set in designShapes; every other size is arranged by hand, never self-serve.",
     designShapes: DESIGN_SHAPES,
     designShapesNote: DESIGN_SHAPES_NOTE,
@@ -459,6 +461,41 @@ function intentAnswerLines(intent: string): string[] {
   return lines;
 }
 
+// Novice spec S1 (2026-11-12): an intent that reads as a buyer
+// (wants tap working at their organization, asks what it is or how
+// to get it) is led by the buyer path in plain order, not by the
+// design-tool framing; a design-led intent keeps the standing
+// shape. Deterministic patterns only, in the intentAnswerLines
+// style: buyer markers fire the lead, any design marker suppresses
+// it. The lead carries no pricing and none of the undefined jargon
+// (print-ready, spec, vendor-neutral) the novice run flagged.
+const BUYER_INTENT_PATTERN =
+  /\bno idea what (this|it) is\b|\bwhat (is|are) (it|this|these|nfc)\b|\bhow it works\b|\bhow (does|do) (it|this|they|the discs?) work\b|\bhow (do|would|can) we (get|start|set)\b|\bget (tap|this|it) (working|going|started)\b|\bwhat would we (actually )?(have|need) to do\b|\bnever heard of\b|\bgetting started\b/i;
+const DESIGN_INTENT_PATTERN =
+  /\blogo\b|\bartwork\b|\bdesign\b|\bvector\b|\bsvg\b|\bpdf\b|\bprint-ready\b|\bspec\b|\bcompose\b|\btemplate\b/i;
+export const BUYER_LEAD =
+  "Getting tap working at your organization, in plain order. A tap disc is a small disc fixed " +
+  "where your people already are: a visitor holds a phone near it and your page opens. No app " +
+  "is needed, and nothing has to be installed. See the real discs we have designed and " +
+  "delivered (call get_examples) and pick a direction you like. Then give the organization " +
+  "name, or a logo if you have one, and a proof of your own design comes back by email. " +
+  "No logo, or no design? Give the organization name and the team designs the disc and emails " +
+  "a proof. Nothing to upload, nothing to compose. Approve the proof, and the invoice follows " +
+  "by email; a person pays it on its hosted page. The discs arrive 2 to 3 weeks after you " +
+  "approve the proof.";
+
+// Novice spec S2 (2026-11-12): the designed-for-you path, stated
+// verbatim at the top of the artwork spec and as a discovery step,
+// with its mechanism named in the same breath: the name travels on
+// start_order_intent, and the order questions carry the choice as
+// an explicit artwork answer.
+export const DESIGNED_FOR_YOU_LINE =
+  "No logo, or no design? Give the organization name and the team designs the disc and emails a proof. Nothing to upload, nothing to compose.";
+export const DESIGNED_FOR_YOU_MECHANISM =
+  "The mechanism: the organization name travels on start_order_intent (organizationName, with a sourceNote asking for the design), " +
+  "and the order questions carry the same choice as the artwork answer (team designs it from our name).";
+const DESIGNED_FOR_YOU = { line: DESIGNED_FOR_YOU_LINE, mechanism: DESIGNED_FOR_YOU_MECHANISM };
+
 async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
   // F27, re-ruled 2026-11-08: an intent naming a disc count gets
   // guidance for that count, but totals live at the quote step
@@ -504,6 +541,13 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     ? (guidanceParts.length ? guidanceParts.join(" ") : `Noted intent: ${intentEcho}. Start with the shape choice, then get_artwork_spec.`)
     : null;
   const guidanceTextLine = answerLines[0] ?? (underMinimum !== null ? guidanceParts[0] : null) ?? intentTextLine;
+  // S1: the buyer lead, when the intent reads as a buyer. It leads
+  // the answer body (immediately after the positioning line, which
+  // stays the server's pinned first line) and rides structured
+  // content as its own field; the guidance assembly is untouched.
+  const buyerLead = intentRaw && BUYER_INTENT_PATTERN.test(intentRaw) && !DESIGN_INTENT_PATTERN.test(intentRaw)
+    ? BUYER_LEAD
+    : null;
   const structured: Record<string, unknown> = {
     server: { name: SERVER_NAME, endpoint: ENDPOINT, synonyms: PRESENTATION_SYNONYMS },
     introduction: {
@@ -534,7 +578,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     taxExempt: TAX_EXEMPT_LINE,
     plainLanguage: {
       nfc: PLAIN_NFC_LINE,
-      status: "There is no account, key, or login at any point. Order status is read with the one-time status reference create_order returns at placement; it is shown once and cannot be recovered, so keep it with the order confirmation.",
+      status: "There is no account, key, or login at any point. Order status is read with the status reference create_order returns at placement. " + STATUS_RECOVERY_LINE,
     },
     explainer: {
       note: "Stuck, or explaining this to someone else? The explainer resources walk through how it works, step by step.",
@@ -551,10 +595,13 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
       benefits: BENEFITS,
     },
     ...(guidance ? { guidance } : {}),
+    ...(buyerLead ? { buyerLead } : {}),
+    designedForYou: DESIGNED_FOR_YOU,
   };
   const text = [
     `${SERVER_NAME}`,
     POSITIONING_LINE,
+    ...(buyerLead ? [buyerLead] : []),
     ``,
     `What it is`,
     `A tap disc is a small physical disc a phone taps to open your page instantly. It carries a locked tap chip. It comes in one standardized 4-inch size (100 mm), in two shapes, and it is durable waterproof PVC.`,
@@ -567,6 +614,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     `1. Start with the shape, round or square.`,
     `2. Get the artwork spec and the design directions for that shape from get_artwork_spec. ${finishedExamplesPointer()}`,
     `3. Build the artwork from a direction with your own tools, adding the organization's logo or name.`,
+    DESIGNED_FOR_YOU_LINE,
     `4. Submit the finished file with submit_artwork and see it on the disc as a proof. The artwork is yours from here: take it to any printer, or order the discs from Tap.Giving.`,
     `5. Optional, only if you want the discs made: get the binding quote from get_quote.`,
     `6. Capture the contact email first (start_order_intent), then answer the order questions (get_order_questions). Prices are first stated at the order questions, in the order phase.`,
@@ -580,7 +628,7 @@ async function toolGetDiscovery(_ctx: Ctx, args: Record<string, unknown>): Promi
     ``,
     `Gates`,
     `Design approval, payment, and production release stay human: a person approves the final proof by email. ${PROTECTED_STRING}`,
-    `There is no account, key, or login at any point in using this server. Order status is read with the status reference create_order returns at placement; it is shown once and cannot be recovered. Stuck? The explainer resources (tapgiving://explainer/how-it-works and its topics) walk through where you are.`,
+    `There is no account, key, or login at any point in using this server. Order status is read with the status reference create_order returns at placement. ${STATUS_RECOVERY_LINE} Stuck? The explainer resources (tapgiving://explainer/how-it-works and its topics) walk through where you are.`,
     ...(guidanceTextLine ? [guidanceTextLine] : []),
     `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library (settings, tap moments, product details, mounting): show them whenever the person wants to see the disc in place.`,
   ].join("\n");
@@ -609,9 +657,13 @@ async function toolGetQuote(_ctx: Ctx, args: Record<string, unknown>): Promise<T
 }
 
 async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
-  const topic = optString(args, "topic", 40);
+  // Novice spec S6 (2026-11-12): "overview" and "general" are the
+  // words a cold caller reaches for first; both alias to the
+  // default all-topics summary instead of an invalid_input refusal.
+  const topicRaw = optString(args, "topic", 40);
+  const topic = topicRaw === "overview" || topicRaw === "general" ? undefined : topicRaw;
   if (topic !== undefined && !(PRODUCT_TOPICS as readonly string[]).includes(topic)) {
-    throw invalidInput(`Unknown topic "${topic}". Topics: ${PRODUCT_TOPICS.join(", ")}.`);
+    throw invalidInput(`Unknown topic "${topic}". Topics: ${PRODUCT_TOPICS.join(", ")}, or overview for the full summary.`);
   }
   const p = PRODUCT;
   const full: Record<string, unknown> = {
@@ -632,7 +684,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
     photos: productPhotoStructured(),
     stands: { products: p.stands, ordering: "Stands come from the Tap.Giving team, not through this server: email hello@tap.giving to add them to an order. Discs are the orderable product here." },
     badges: { products: p.badges, ordering: "Badges come from the Tap.Giving team, not through this server: email hello@tap.giving to add them to an order. Discs are the orderable product here." },
-    mounting: { options: MOUNTING_OPTIONS.map((o) => ({ value: o.value, text: o.text })), detail: p.mountingDetail, surfaceGuide: MOUNTING_SURFACE_GUIDE, metalCaveat: p.metalCaveat },
+    mounting: { options: MOUNTING_OPTIONS.map((o) => ({ value: o.value, text: o.text })), detail: p.mountingDetail, surfaceGuide: MOUNTING_SURFACE_GUIDE, metalCaveat: p.metalCaveat, metalAid: METAL_SURFACE_AID },
     shipping: { terms: p.shipping.terms },
     samples: { samples: samplesLine() },
     ordering: {
@@ -677,6 +729,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       ...MOUNTING_OPTIONS.map((o) => o.text),
       ...MOUNTING_SURFACE_GUIDE,
       p.metalCaveat,
+      METAL_SURFACE_AID,
       `The two explainer photos with this answer show the adhesive backing and the pre-drilled screw holes up close.`,
     ].join("\n"),
     shipping: `${p.shipping.terms}`,
@@ -694,7 +747,7 @@ async function toolGetProduct(_ctx: Ctx, args: Record<string, unknown>): Promise
       topicText.discs,
       topicText.stands,
       topicText.badges,
-      `Mounting: ${p.mountingDetail} ${p.metalCaveat}`,
+      `Mounting: ${p.mountingDetail} ${p.metalCaveat} ${METAL_SURFACE_AID}`,
       samplesLine(),
       `${p.shipping.terms}`,
       `The photo with this answer shows the disc in use: a phone tapping a disc on a chair back. The structured photos list the labeled photo set from the website library (settings, tap moments, product details, mounting): show them whenever the person wants to see the disc in place.`,
@@ -789,6 +842,8 @@ async function toolGetArtworkSpec(ctx: Ctx, args: Record<string, unknown>): Prom
   images.push(...mountingPhotoImages());
   const shapeWord = shape ?? "round and square";
   const text = [
+    DESIGNED_FOR_YOU_LINE,
+    DESIGNED_FOR_YOU_MECHANISM,
     `Artwork spec: 106 mm (about 4.2 inch) square artboard for both shapes; the cut disc is 100 mm (4 inch).`,
     `Round: cut radius 50 mm (about 2 inch), bleed radius 53 mm (about 2.1 inch), safe radius 45 mm (about 1.8 inch), centre (53, 53) mm.`,
     `Square: cut is a 100 mm (4 inch) box spanning 3 to 103 mm; bleed half-width 53 mm (about 2.1 inch); safe half-width 47 mm (about 1.85 inch).`,
@@ -986,7 +1041,11 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
   checks.decodable = true;
   const detectedType = sniff.detectedType!;
   if (detectedType === "png" || detectedType === "jpeg" || detectedType === "webp" || detectedType === "gif") {
-    findings.push("accepted; vector preferred for production");
+    // Novice spec S7 (2026-11-12): a plain verdict sentence, not the
+    // retired dangling fragment ("accepted; vector preferred for
+    // production") that left a PNG submitter unsure whether their
+    // file was fine or a problem.
+    findings.push("Your file works for the proof. If a sharper file is needed for printing, the team asks by email; it never blocks your proof.");
   }
 
   // Order binding checks, when an order is in play.
@@ -1146,7 +1205,10 @@ async function toolSubmitArtwork(ctx: Ctx, args: Record<string, unknown>): Promi
         ? `The on-disc render was unavailable in this call, so your submitted file is shown as-is. Nothing is emailed at this stage: no contact is captured yet.`
         : `Your file is on record; it could not be rendered to an image here. Nothing is emailed at this stage: no contact is captured yet.`,
     ...(fontNote ? [fontNote] : []),
-    `PRINT FILE: your own submitted file itself, fetchable at any time within 30 days at https://tap.giving${artworkDisplayPath(artworkRef)} (the reference is the capability). Your agent produces the print-ready PDF from the spec; this server never builds or returns one. PRINT RENDER (PNG): a full-resolution PNG rendered from that file, at https://tap.giving${artworkDisplayPath(artworkRef)}.png. The images with this answer are the ON-DISC PREVIEW, a mock composite; a preview is never the print file.`,
+    // S7: the print-file and capability mechanics live in the
+    // structured export block (structured.export) for agents; the
+    // human text keeps only the preview's honest label.
+    `The images with this answer are the ON-DISC PREVIEW, a mock composite; a preview is never the print file.`,
     VERIFY_AGAINST_EXAMPLE_TEXT,
   ].join("\n");
   return { structured, text, images: previewImages };
@@ -1376,7 +1438,7 @@ async function toolGetOrderQuestions(_ctx: Ctx, _args: Record<string, unknown>):
         order: 6, field: "antiMetalCount", question: "How many discs will sit on metal surfaces?",
         optional: true,
         input: { type: "integer", minimum: 0 },
-        note: "Discs on metal need the anti-metal shielding layer at $1.00 per shielded disc, decided before printing. Omit the count when it is unknown; an unknown count bills nothing.",
+        note: "Discs on metal need the anti-metal shielding layer at $1.00 per shielded disc, decided before printing because it cannot be added afterwards. In plain terms: $1 per disc that sits on metal. " + METAL_SURFACE_AID + " Omit the count when it is unknown; an unknown count bills nothing.",
       },
       {
         order: 7, field: "mounting", question: "How should we mount them?",
@@ -1386,7 +1448,20 @@ async function toolGetOrderQuestions(_ctx: Ctx, _args: Record<string, unknown>):
         })),
       },
       {
-        order: 8, field: "linkDestination", question: "Confirm where a tap should send people.",
+        // Novice spec S2 (2026-11-12): the artwork answer, explicit.
+        // Every order resolves its artwork one of these two ways;
+        // the second is the designed-for-you path, named here so a
+        // caller with no file hears a route, not a gap.
+        order: 8, field: "artworkSource", question: "What about the artwork?",
+        input: { type: "enum", values: ["we_have_artwork", "team_designs_it"] },
+        options: [
+          { value: "we_have_artwork", label: "We have artwork", meaning: "The design was composed in the design phase and submitted with submit_artwork; its artworkRef rides the recap and the order." },
+          { value: "team_designs_it", label: "Team designs it from our name", meaning: "No file to upload and nothing to compose: the organization name (question 2, and on start_order_intent with a sourceNote asking for the design) is all the team needs. They design the disc from the name and email the proof for approval before anything is printed." },
+        ],
+        note: "An order with no artworkRef is the team-design route, never a gap: the proof follows by email and is approved before printing, like any other proof.",
+      },
+      {
+        order: 9, field: "linkDestination", question: "Confirm where a tap should send people.",
         optional: true,
         confirmation: true,
         note: "A confirmation, not a fresh collection: the destination carried from the design (the designUrl entered in the design phase, stored on the artwork record). " +
@@ -1395,7 +1470,7 @@ async function toolGetOrderQuestions(_ctx: Ctx, _args: Record<string, unknown>):
         input: { type: "url", schemes: ["http", "https"] },
       },
       {
-        order: 9, field: "contactName", question: "Who is the contact for this order?",
+        order: 10, field: "contactName", question: "Who is the contact for this order?",
         input: { type: "text" },
         note: "Asked with the shipping block answers at create_order: contactName and contactPhone ride create_order itself.",
       },
@@ -1403,7 +1478,7 @@ async function toolGetOrderQuestions(_ctx: Ctx, _args: Record<string, unknown>):
     alsoRequiredAtCreateOrder: {
       recapRef: "Comes from get_recap over these same answers; run the recap before create_order.",
       idempotencyKey: "Mint one per intended order (8 to 128 characters) and reuse it on retries.",
-      artworkRef: "Optional but expected: the reference from submit_artwork.",
+      artworkRef: "Optional but expected on the we-have-artwork route: the reference from submit_artwork. Absent on the team-design route (question 8), where the team designs from the organization name.",
       contactPhone: "Collected with the shipping block (question 3) and passed to create_order; it also defaults into shipTo.phone.",
     },
     emailFirst: "The contact email is captured first in this phase (start_order_intent), before the questions: the order phase's first ask.",
@@ -1416,9 +1491,10 @@ async function toolGetOrderQuestions(_ctx: Ctx, _args: Record<string, unknown>):
     "3. Shipping address and phone: the contact phone is collected in this block and defaults into the shipping phone.",
     `4. Quantity: "How many tap discs?" (minimum ${MIN_QTY}).`,
     "5. Shape and size: round or square, both 100 mm (4 inch), at the same price.",
-    "6. Metal surfaces: how many discs sit on metal? Those need the $1.00 shielding layer, decided before printing; omit the count when unknown.",
+    `6. Metal surfaces: how many discs sit on metal? Those need the shielding layer, $1 per disc that sits on metal, decided before printing. ${METAL_SURFACE_AID} Omit the count when unknown.`,
     '7. Mounting: "How should we mount them?" The two photos with this answer show the options: adhesive backing, and pre-drilled holes for screws (screws not included).',
-    `8. Link destination, as a confirmation: the destination carried from the design. ${LINK_DESTINATION_NOTE}`,
+    "8. Artwork: we have artwork (the artworkRef from submit_artwork), or team designs it from our name: with no file, the team designs the disc from the organization name and emails the proof for approval before anything is printed.",
+    `9. Link destination, as a confirmation: the destination carried from the design. ${LINK_DESTINATION_NOTE}`,
     "The contact name rides create_order with these answers.",
     `${PRICE_RANGE_LINE} ${NO_FEES_LINE}`,
     "Shipping is free on every order, and every order is covered by our 30-day money-back guarantee.",
@@ -1440,6 +1516,9 @@ export interface RecapRecord {
   contactEmail?: string;
   organizationName?: string;
   intentRef?: string;
+  // S4: an unbound summary recap (made with no contact email) is a
+  // summary only; create_order refuses it by name.
+  unbound?: boolean;
 }
 
 // The keyless placement's organization slug: derived from the
@@ -1530,14 +1609,17 @@ async function readIntentForFlow(
 
 async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<ToolResult> {
   // The recap binds to the contact email (and the captured intent,
-  // when one exists) from the flow.
-  const inputs = await validateOrderShape(ctx, args);
+  // when one exists) from the flow. S4 (2026-11-12): it also runs
+  // with no contact email yet, as an unbound summary recap that
+  // create_order cannot place.
+  const inputs = await validateOrderShape(ctx, args, { recapSummary: true });
   const quote = quoteFor({
     qty: inputs.quantity as number,
     antiMetal: inputs.antiMetalCount as number | undefined,
     redirect: false,
   });
-  const contactEmailBound = inputs.contactEmail as string;
+  const contactEmailBound = inputs.contactEmail as string | undefined;
+  const unbound = !contactEmailBound;
   const intent = await readIntentForFlow(ctx.env, optString(args, "intentRef", 120), contactEmailBound);
   const orgNameBound = optString(args, "organizationName", 300) ?? optString(args, "church", 300)
     ?? intent?.organizationName;
@@ -1546,11 +1628,11 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
   const record: RecapRecord = {
     recapRef,
     orgSlug: null,
-    mode: laneFor(contactEmailBound, orgNameBound),
+    mode: laneFor(contactEmailBound ?? "", orgNameBound),
     inputs: canonicalOrderInputs(inputs),
     quoteGrandTotalCents: quote.grandTotalCents,
     createdAt: new Date().toISOString(),
-    ...(contactEmailBound ? { contactEmail: contactEmailBound } : {}),
+    ...(contactEmailBound ? { contactEmail: contactEmailBound } : { unbound: true }),
     ...(orgNameBound ? { organizationName: orgNameBound } : {}),
     ...(intent ? { intentRef: intent.intentRef } : {}),
   };
@@ -1592,9 +1674,12 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
     artwork,
     customer: {
       organization: orgNameBound ?? null,
-      contactEmail: contactEmailOut,
-      proofRecipientEmail: contactEmailOut,
-      binding: "This recap binds to the contact email collected in the flow (and the captured intent, when one exists).",
+      contactEmail: contactEmailBound ?? null,
+      proofRecipientEmail: contactEmailBound ?? null,
+      binding: unbound
+        ? "Unbound summary: no contact email has been captured, so this recap is not placeable until one is. Capture it with start_order_intent and re-run get_recap with the same email to bind the summary for placement."
+        : "This recap binds to the contact email collected in the flow (and the captured intent, when one exists).",
+      ...(unbound ? { unbound: true, placeable: false } : {}),
       ...(contactNameIn ? { contactName: contactNameIn } : {}),
       ...(contactPhoneIn ? { contactPhone: contactPhoneIn } : {}),
     },
@@ -1607,6 +1692,13 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
       note: givingUrlOut
         ? "Your discs start pointed at this page."
         : "No destination given: your discs ship pointed at your own Tap.Giving page (your free Redirect Dashboard), and you can set or change the destination anytime from the dashboard.",
+      // S8 (2026-11-12): the dashboard credential mechanics live
+      // here, at the recap, not in discovery.
+      dashboard: {
+        address: `https://go.tap.giving/${orgNameBound ? slugifyOrg(orgNameBound) : "your-organization-slug"}`,
+        username: orgNameBound ? slugifyOrg(orgNameBound) : "your organization slug",
+        password: "arrives by email with the shipping notice, before your discs arrive",
+      },
     },
     cost: quoteObj,
     priceHold: {
@@ -1629,11 +1721,15 @@ async function toolGetRecap(ctx: Ctx, args: Record<string, unknown>): Promise<To
   const shipTo = inputs.shipTo as Record<string, string>;
   const text = [
     `Recap ${recapRef}: ${inputs.quantity} discs, ${inputs.size}, mounting ${inputs.mounting}, for ${orgDisplay}.`,
-    artwork ? `Artwork: your design on the disc is shown with this recap. File: https://tap.giving${artworkDisplayPath(artworkRef!)}` : "Artwork: none attached.",
+    ...(unbound ? [`This is an unbound summary: it is not placeable until a contact email is captured.`] : []),
+    artwork ? `Artwork: your design on the disc is shown with this recap. File: https://tap.giving${artworkDisplayPath(artworkRef!)}` : "Artwork: none attached. That is the team-design route, not a gap: the team designs the disc from the organization name on this order and emails the proof for approval before anything is printed.",
     givingUrlOut
       ? `Tap destination: ${givingUrlOut}. Your discs start pointed at this page.`
       : "Tap destination: your own Tap.Giving page (your free Redirect Dashboard) until you set one; you can set or change it anytime from the dashboard.",
-    `Contact: ${contactNameIn ? `${contactNameIn}, ` : ""}${contactEmailOut}${contactPhoneIn ? `, phone ${contactPhoneIn}` : ""}. The final proof is emailed to this address for approval.`,
+    `Dashboard sign-in: go.tap.giving/${orgNameBound ? slugifyOrg(orgNameBound) : "your-organization-slug"}; the username is that slug, and the password arrives by email with the shipping notice, before your discs arrive.`,
+    contactEmailBound
+      ? `Contact: ${contactNameIn ? `${contactNameIn}, ` : ""}${contactEmailOut}${contactPhoneIn ? `, phone ${contactPhoneIn}` : ""}. The final proof is emailed to this address for approval.`
+      : `Contact: none captured yet. Capture the contact email with start_order_intent so the recap can be placed: the invoice and the design proof are emailed to that address, and capturing it starts no order and sends nothing else.`,
     `Ship to: ${shipTo.name}, ${shipTo.street}, ${shipTo.city}, ${shipTo.state} ${shipTo.postalCode}, ${shipTo.country}. Phone: ${shipTo.phone}.`,
     `Cost: ${dollars(quote.grandTotalCents)} total. Shipping: Free. ${TAX_NOTE}`,
     `First-order discount, when it applies: if this is ${orgDisplay}'s first order, code WELCOME10 takes 10 percent off discs on the invoice emailed at placement, making the total ${dollars(quote.discountedTotalCents)}. It applies to any first order placed within 7 days of this quote (${record.createdAt.slice(0, 10)}); if the 7 days pass, a fresh quote restarts the window.`,
@@ -1726,7 +1822,7 @@ export async function saveOrderRecord(env: Env, order: OrderRecord): Promise<voi
 // key (auth), the key's organization binds as before. Keyless
 // (P-15), the binding is the flow's own data: the contact email is
 // required and the artwork must be an unbound (keyless) submission.
-async function validateOrderShape(ctx: Ctx, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function validateOrderShape(ctx: Ctx, args: Record<string, unknown>, opts?: { recapSummary?: boolean }): Promise<Record<string, unknown>> {
   const quantity = reqInt(args, "quantity");
   if (quantity < MIN_QTY) {
     throw invalidInput(belowMinimumMessage(quantity), {
@@ -1759,10 +1855,14 @@ async function validateOrderShape(ctx: Ctx, args: Record<string, unknown>): Prom
     shipTo[f] = reqString(shipToRaw, f, 300);
   }
   const contactEmail = optString(args, "contactEmail", 200)?.toLowerCase();
-  if (!contactEmail) {
+  if (!contactEmail && !opts?.recapSummary) {
     throw invalidInput("contactEmail is required: a recap or order binds to the contact email collected in the flow. Capture it first with start_order_intent and use the same email here.");
   }
-  if (!contactEmail.includes("@")) throw invalidInput("contactEmail must be an email address.");
+  // Novice spec S4 (2026-11-12): get_recap alone may run without a
+  // contact email (opts.recapSummary), producing an unbound summary
+  // recap; create_order never passes the option and still requires
+  // the email, and it refuses an unbound recap by name.
+  if (contactEmail && !contactEmail.includes("@")) throw invalidInput("contactEmail must be an email address.");
   const linkDestination = screenDestination(optString(args, "linkDestination", 500) ?? optString(args, "givingUrl", 500), "linkDestination");
   const artworkRef = optString(args, "artworkRef", 120);
   if (artworkRef) {
@@ -1863,7 +1963,14 @@ async function toolCreateOrder(ctx: Ctx, args: Record<string, unknown>): Promise
   if (recap.orgSlug !== null && recap.orgSlug !== undefined) {
     throw new ToolError("forbidden", "That recap was made under an organization key, which this server no longer uses. Run a fresh recap.", { retryable: false });
   }
-  if (!recap.contactEmail || recap.contactEmail !== contactEmail) {
+  if (recap.unbound || !recap.contactEmail) {
+    // S4: an unbound summary recap is a summary only, never a
+    // placeable order; name it and its cure.
+    throw new ToolError("conflict",
+      "That recap is an unbound summary: it was made before a contact email was captured, so it cannot be placed. " +
+      "Capture the contact email with start_order_intent and re-run get_recap with the same email and inputs, then place the order from that bound recap.", { retryable: false });
+  }
+  if (recap.contactEmail !== contactEmail) {
     throw new ToolError("conflict",
       "That recap binds to a different contact email than this order. Re-run get_recap with the order's contact email, " +
       "so the recap the person saw and the order placed are the same.", { retryable: false });
@@ -2342,6 +2449,13 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     invreqKey: order.invreqKey,
     quote: quoteObj,
     exit: order.exit,
+    // S8: the dashboard credential mechanics ride placement, where
+    // the order they belong to exists.
+    dashboard: {
+      address: `https://go.tap.giving/${order.orgSlug}`,
+      username: order.orgSlug,
+      password: "arrives by email with the shipping notice, before your discs arrive",
+    },
     confirmation,
     orderEmail: order.orderEmail ?? { sent: false, seat: ORDER_EMAIL_SEAT },
     invoice: order.invoice
@@ -2362,6 +2476,7 @@ async function createOrderResult(ctx: Ctx, order: OrderRecord, replayed: boolean
     `Order placed: ${order.orderRef}.`,
     confirmation,
     `Total: ${dollars(order.quote.grandTotalCents)} for ${order.quantity} discs. Shipping: Free.`,
+    `Dashboard sign-in: go.tap.giving/${order.orgSlug}; the username is that slug, and the password arrives by email with the shipping notice, before your discs arrive.`,
     emailLine,
     order.invoice
       ? `Invoice ${order.invoice.invoiceNumber ?? order.invoice.invoiceId}: ${dollars(order.invoice.totalCents)}, payable on its hosted page: ${order.invoice.hostedInvoiceUrl}`
@@ -2384,13 +2499,13 @@ async function toolGetOrderStatus(ctx: Ctx, args: Record<string, unknown>): Prom
   // unknown reference, and there is no enumeration surface.
   const statusRef = optString(args, "statusRef", 200);
   if (!statusRef) {
-    throw invalidInput("Give the statusRef create_order returned at placement. It is shown once, at placement and in the customer email, and cannot be recovered.");
+    throw invalidInput("Give the statusRef create_order returned at placement. It is also in the invoice email. " + STATUS_RECOVERY_LINE);
   }
   const hash = await sha256Hex(statusRef);
   const orderRef = await ctx.env.MCP_KEYS.get(`STATUS:${hash}`);
   const order = orderRef ? await readOrderRecord(ctx.env, orderRef) : null;
   if (!order || order.statusRefHash !== hash) {
-    throw new ToolError("not_found", "That status reference is not one this server knows.");
+    throw new ToolError("not_found", "That status reference is not one this server knows. " + STATUS_RECOVERY_LINE);
   }
 
   // Live invoice state from Stripe, when an invoice exists.
@@ -2541,7 +2656,7 @@ export const TOOLS: ToolDef[] = [
       "Pass the optional topic argument to return only one block. Call this for product facts alone; for a first orientation call get_discovery, and for the price at a quantity call get_quote.",
     inputSchema: {
       type: "object",
-      properties: { topic: { type: "string", enum: [...PRODUCT_TOPICS], description: "Optional: return only this one product block (discs, stands, badges, mounting, shipping, samples, or ordering). Omit it to return every block." } },
+      properties: { topic: { type: "string", enum: [...PRODUCT_TOPICS, "overview", "general"], description: "Optional: return only this one product block (discs, stands, badges, mounting, shipping, samples, or ordering), or overview (also general) for the full summary. Omit it to return every block." } },
     },
     annotations: READ,
     run: toolGetProduct,
@@ -2636,7 +2751,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: "get_order_questions",
     description:
-      "The order questions as structured data, returned in the exact order to ask them: the contact email first (captured through start_order_intent), then the organization name, the shipping address and phone, quantity, shape, the metal count, mounting with the picture assets, and the link destination as a confirmation of the destination carried from the design. The contact name and phone ride create_order. " +
+      "The order questions as structured data, returned in the exact order to ask them: the contact email first (captured through start_order_intent), then the organization name, the shipping address and phone, quantity, shape, the metal count, mounting with the picture assets, the artwork answer (we have artwork, or the team designs it from the organization name), and the link destination as a confirmation of the destination carried from the design. The contact name and phone ride create_order. " +
       "Prices are first stated here, in the order phase: the price range and the no-fees line ride this answer. Call this when the person is ready to order; for a first orientation, call get_discovery.",
     inputSchema: { type: "object", properties: {} },
     annotations: READ,
@@ -2646,7 +2761,7 @@ export const TOOLS: ToolDef[] = [
     name: "get_recap",
     description:
       "The full recap, the last thing before the exits: it validates the same order inputs create_order will carry (quantity from 100 to 7000, one of the two built-in sizes, adhesive or screws mounting, a complete shipping address) and returns the submitted artwork (displayUrl plus image content where renderable), the quantity, the shipping address as entered, " +
-      "the exact cost from get_quote, and both required notes. Returns a recapRef; create_order carries it, and an order whose inputs differ from the recap is refused as a conflict. No key needed.",
+      "the exact cost from get_quote, and both required notes. Returns a recapRef; create_order carries it, and an order whose inputs differ from the recap is refused as a conflict. Without a contactEmail the same complete summary returns as an unbound summary, marked not placeable until a contact email is captured; create_order refuses an unbound recap. No key needed.",
     inputSchema: {
       type: "object",
       required: ["quantity", "size", "mounting", "shipTo"],
@@ -2718,7 +2833,7 @@ export const TOOLS: ToolDef[] = [
     inputSchema: {
       type: "object",
       required: ["statusRef"],
-      properties: { statusRef: { type: "string", description: "The status reference create_order returned at placement. Shown once; it cannot be recovered if lost." } },
+      properties: { statusRef: { type: "string", description: "The status reference create_order returned at placement. It is also carried in the invoice email; if it cannot be found, email hello@tap.giving from the order email and the team re-sends it." } },
     },
     annotations: READ,
     run: toolGetOrderStatus,

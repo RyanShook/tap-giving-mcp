@@ -228,7 +228,7 @@ test("P-12: the export fetch returns the file as submitted and its PNG render, k
   }, fetchFn);
   const exp = (sub.structured as unknown as { export: { printFile: { url: string; label: string }; printRenderPng: { url: string } } }).export;
   assert.equal(exp.printFile.label, "PRINT FILE");
-  assert.ok(sub.text.includes("PRINT FILE: your own submitted file itself"), "print file labeled in the submit text");
+  assert.ok(!sub.text.includes("PRINT FILE:"), "S7 (2026-11-12): the print-file mechanics are not in the submit text; the structured export carries them");
   assert.ok(sub.text.includes("ON-DISC PREVIEW, a mock composite"), "preview labeled as the mock it is");
 
   const original = await worker.fetch(new Request(`https://tap.giving${new URL(exp.printFile.url).pathname}`), env);

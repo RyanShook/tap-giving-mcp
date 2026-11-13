@@ -160,8 +160,8 @@ test("get_order_questions returns the static question set in the settled order, 
   assert.equal(s.organization, undefined, "no organization block: there is no key to bind one to");
   assert.deepEqual(
     s.questions.map((q) => q.field),
-    ["contactEmail", "organizationName", "shipTo", "quantity", "size", "antiMetalCount", "mounting", "linkDestination", "contactName"],
-    "the settled collection order (Ryan, 2026-11-09): email, organization, ship-to with phone, quantity, size, anti-metal, mounting, destination confirmation, contact name",
+    ["contactEmail", "organizationName", "shipTo", "quantity", "size", "antiMetalCount", "mounting", "artworkSource", "linkDestination", "contactName"],
+    "the settled collection order (Ryan, 2026-11-09; artwork answer added by the novice spec, 2026-11-12): email, organization, ship-to with phone, quantity, size, anti-metal, mounting, artwork source, destination confirmation, contact name",
   );
 });
 
