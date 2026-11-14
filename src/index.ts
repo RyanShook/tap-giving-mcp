@@ -15,7 +15,7 @@
 // business repo; the published copy is docs/spec.md in this repo.
 
 import type { Env } from "./env.ts";
-import { ENDPOINT, GATES, POSITIONING_LINE, PROTECTED_STRING, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME, STATUS_RECOVERY_LINE } from "./facts.ts";
+import { ENDPOINT, GATES, PROTECTED_STRING, REPO_URL, SERVER_DESCRIPTION, SERVER_NAME, STATUS_RECOVERY_LINE } from "./facts.ts";
 import { EXPLAINER_TOPICS, explainerResourceUri, findExplainerTopic } from "./explainer.ts";
 import { PRODUCT_PHOTOS, TOOLS, artworkBytesKey, readArtworkRecord, runTool } from "./tools.ts";
 import { buildTemplateSvg, renderArtworkFileToPng } from "./preview.ts";
@@ -58,8 +58,6 @@ function selfDescription(): string {
   const toolLines = TOOLS.map((t) => `- ${t.name}: ${t.description.split(". ")[0]}.`).join("\n");
   return [
     `# ${SERVER_NAME}`,
-    ``,
-    POSITIONING_LINE,
     ``,
     SERVER_DESCRIPTION,
     ``,

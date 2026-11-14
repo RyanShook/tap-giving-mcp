@@ -143,6 +143,7 @@ test("phase one carries zero pricing; pricing first appears at the order questio
   scanPhaseOne("GET self-description", getText, "");
   assert.ok(getText.includes(POSITIONING_LINE), "GET carries the positioning line");
   assert.ok(getText.indexOf(POSITIONING_LINE) < getText.indexOf("## Tools"), "positioning sits in the GET opening, before the tool list");
+  assert.equal(getText.split(POSITIONING_LINE).length - 1, 1, "GET carries the positioning line exactly once: no standalone duplicate ahead of the server description");
   const initRes = await worker.fetch(new Request("https://tap.giving/mcp", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
